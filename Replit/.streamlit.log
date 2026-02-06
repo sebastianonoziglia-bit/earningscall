@@ -1,0 +1,511 @@
+
+Collecting usage statistics. To deactivate, set browser.gatherUsageStats to False.
+
+
+  You can now view your Streamlit app in your browser.
+
+  URL: http://localhost:8506
+
+  For better performance, install the Watchdog module:
+
+  $ xcode-select --install
+  $ pip install watchdog
+            
+WARNING:utils.state_management:No API keys found for AI services
+INFO:utils.state_management:Initializing optimized data loader
+INFO:utils.optimized_data_loader:OptimizedDataLoader initialized
+/Users/sebbo/Desktop/Replit revival/Replit/.venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:utils.optimized_data_loader:Data processor initialized in 13.15 seconds
+INFO:utils.components:Logo file exists for Apple: attached_assets/8.png
+INFO:utils.components:Logo file exists for Microsoft: attached_assets/msft.png
+INFO:utils.components:Logo file exists for Alphabet: attached_assets/10.png
+INFO:utils.components:Logo file exists for Netflix: attached_assets/9.png
+INFO:utils.components:Logo file exists for Meta Platforms: attached_assets/12.png
+INFO:utils.components:Logo file exists for WhatsApp: attached_assets/Whatsapp.png
+INFO:utils.components:Logo file exists for Instagram: attached_assets/Instagram.png
+INFO:utils.components:Logo file exists for Facebook: attached_assets/Facebook.png
+INFO:utils.components:Logo file exists for Amazon: attached_assets/Amazon_icon.png
+INFO:utils.components:Logo file exists for Disney: attached_assets/icons8-logo-disney-240.png
+INFO:utils.components:Logo file exists for Roku: attached_assets/rokudef.png
+INFO:utils.components:Logo file exists for Spotify: attached_assets/11.png
+INFO:utils.components:Logo file exists for Comcast: attached_assets/6.png
+INFO:utils.components:Logo file exists for Paramount: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Paramount Global: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Warner Bros. Discovery: attached_assets/adadad.png
+INFO:utils.components:Logo file exists for Warner Bros Discovery: attached_assets/adadad.png
+INFO:utils.components:Successfully loaded logo for Apple
+INFO:utils.components:Successfully loaded logo for Microsoft
+INFO:utils.components:Successfully loaded logo for Alphabet
+INFO:utils.components:Successfully loaded logo for Netflix
+INFO:utils.components:Successfully loaded logo for Meta Platforms
+INFO:utils.components:Successfully loaded logo for WhatsApp
+INFO:utils.components:Successfully loaded logo for Instagram
+INFO:utils.components:Successfully loaded logo for Facebook
+INFO:utils.components:Successfully loaded logo for Amazon
+INFO:utils.components:Successfully loaded logo for Disney
+INFO:utils.components:Successfully loaded logo for Roku
+INFO:utils.components:Successfully loaded logo for Spotify
+INFO:utils.components:Successfully loaded logo for Comcast
+INFO:utils.components:Successfully loaded logo for Paramount
+INFO:utils.components:Successfully loaded logo for Paramount Global
+INFO:utils.components:Successfully loaded logo for Warner Bros. Discovery
+INFO:utils.components:Successfully loaded logo for Warner Bros Discovery
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+INFO:utils.components:Logo file exists for Apple: attached_assets/8.png
+INFO:utils.components:Logo file exists for Microsoft: attached_assets/msft.png
+INFO:utils.components:Logo file exists for Alphabet: attached_assets/10.png
+INFO:utils.components:Logo file exists for Netflix: attached_assets/9.png
+INFO:utils.components:Logo file exists for Meta Platforms: attached_assets/12.png
+INFO:utils.components:Logo file exists for WhatsApp: attached_assets/Whatsapp.png
+INFO:utils.components:Logo file exists for Instagram: attached_assets/Instagram.png
+INFO:utils.components:Logo file exists for Facebook: attached_assets/Facebook.png
+INFO:utils.components:Logo file exists for Amazon: attached_assets/Amazon_icon.png
+INFO:utils.components:Logo file exists for Disney: attached_assets/icons8-logo-disney-240.png
+INFO:utils.components:Logo file exists for Roku: attached_assets/rokudef.png
+INFO:utils.components:Logo file exists for Spotify: attached_assets/11.png
+INFO:utils.components:Logo file exists for Comcast: attached_assets/6.png
+INFO:utils.components:Logo file exists for Paramount: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Paramount Global: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Warner Bros. Discovery: attached_assets/adadad.png
+INFO:utils.components:Logo file exists for Warner Bros Discovery: attached_assets/adadad.png
+INFO:utils.components:Successfully loaded logo for Apple
+INFO:utils.components:Successfully loaded logo for Microsoft
+INFO:utils.components:Successfully loaded logo for Alphabet
+INFO:utils.components:Successfully loaded logo for Netflix
+INFO:utils.components:Successfully loaded logo for Meta Platforms
+INFO:utils.components:Successfully loaded logo for WhatsApp
+INFO:utils.components:Successfully loaded logo for Instagram
+INFO:utils.components:Successfully loaded logo for Facebook
+INFO:utils.components:Successfully loaded logo for Amazon
+INFO:utils.components:Successfully loaded logo for Disney
+INFO:utils.components:Successfully loaded logo for Roku
+INFO:utils.components:Successfully loaded logo for Spotify
+INFO:utils.components:Successfully loaded logo for Comcast
+INFO:utils.components:Successfully loaded logo for Paramount
+INFO:utils.components:Successfully loaded logo for Paramount Global
+INFO:utils.components:Successfully loaded logo for Warner Bros. Discovery
+INFO:utils.components:Successfully loaded logo for Warner Bros Discovery
+2026-02-05 14:50:37.504 `label` got an empty value. This is discouraged for accessibility reasons and may be disallowed in the future by raising an exception. Please provide a non-empty label and hide it with label_visibility if needed.
+/Users/sebbo/Desktop/Replit revival/Replit/pages/01_Earnings.py:1519: DeprecationWarning:
+
+DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
+
+/Users/sebbo/Desktop/Replit revival/Replit/pages/01_Earnings.py:3747: FutureWarning:
+
+DataFrame.applymap has been deprecated. Use DataFrame.map instead.
+
+/Users/sebbo/Desktop/Replit revival/Replit/pages/01_Earnings.py:3773: FutureWarning:
+
+DataFrame.applymap has been deprecated. Use DataFrame.map instead.
+
+2026-02-05 14:58:30.020 `label` got an empty value. This is discouraged for accessibility reasons and may be disallowed in the future by raising an exception. Please provide a non-empty label and hide it with label_visibility if needed.
+/Users/sebbo/Desktop/Replit revival/Replit/pages/01_Earnings.py:3747: FutureWarning:
+
+DataFrame.applymap has been deprecated. Use DataFrame.map instead.
+
+/Users/sebbo/Desktop/Replit revival/Replit/pages/01_Earnings.py:3773: FutureWarning:
+
+DataFrame.applymap has been deprecated. Use DataFrame.map instead.
+
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+INFO:utils.components:Logo file exists for Apple: attached_assets/8.png
+INFO:utils.components:Logo file exists for Microsoft: attached_assets/msft.png
+INFO:utils.components:Logo file exists for Alphabet: attached_assets/10.png
+INFO:utils.components:Logo file exists for Netflix: attached_assets/9.png
+INFO:utils.components:Logo file exists for Meta Platforms: attached_assets/12.png
+INFO:utils.components:Logo file exists for WhatsApp: attached_assets/Whatsapp.png
+INFO:utils.components:Logo file exists for Instagram: attached_assets/Instagram.png
+INFO:utils.components:Logo file exists for Facebook: attached_assets/Facebook.png
+INFO:utils.components:Logo file exists for Amazon: attached_assets/Amazon_icon.png
+INFO:utils.components:Logo file exists for Disney: attached_assets/icons8-logo-disney-240.png
+INFO:utils.components:Logo file exists for Roku: attached_assets/rokudef.png
+INFO:utils.components:Logo file exists for Spotify: attached_assets/11.png
+INFO:utils.components:Logo file exists for Comcast: attached_assets/6.png
+INFO:utils.components:Logo file exists for Paramount: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Paramount Global: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Warner Bros. Discovery: attached_assets/adadad.png
+INFO:utils.components:Logo file exists for Warner Bros Discovery: attached_assets/adadad.png
+INFO:utils.components:Successfully loaded logo for Apple
+INFO:utils.components:Successfully loaded logo for Microsoft
+INFO:utils.components:Successfully loaded logo for Alphabet
+INFO:utils.components:Successfully loaded logo for Netflix
+INFO:utils.components:Successfully loaded logo for Meta Platforms
+INFO:utils.components:Successfully loaded logo for WhatsApp
+INFO:utils.components:Successfully loaded logo for Instagram
+INFO:utils.components:Successfully loaded logo for Facebook
+INFO:utils.components:Successfully loaded logo for Amazon
+INFO:utils.components:Successfully loaded logo for Disney
+INFO:utils.components:Successfully loaded logo for Roku
+INFO:utils.components:Successfully loaded logo for Spotify
+INFO:utils.components:Successfully loaded logo for Comcast
+INFO:utils.components:Successfully loaded logo for Paramount
+INFO:utils.components:Successfully loaded logo for Paramount Global
+INFO:utils.components:Successfully loaded logo for Warner Bros. Discovery
+INFO:utils.components:Successfully loaded logo for Warner Bros Discovery
+WARNING:utils.state_management:No API keys found for AI services
+INFO:utils.components:Logo file exists for Apple: attached_assets/8.png
+INFO:utils.components:Logo file exists for Microsoft: attached_assets/msft.png
+INFO:utils.components:Logo file exists for Alphabet: attached_assets/10.png
+INFO:utils.components:Logo file exists for Netflix: attached_assets/9.png
+INFO:utils.components:Logo file exists for Meta Platforms: attached_assets/12.png
+INFO:utils.components:Logo file exists for WhatsApp: attached_assets/Whatsapp.png
+INFO:utils.components:Logo file exists for Instagram: attached_assets/Instagram.png
+INFO:utils.components:Logo file exists for Facebook: attached_assets/Facebook.png
+INFO:utils.components:Logo file exists for Amazon: attached_assets/Amazon_icon.png
+INFO:utils.components:Logo file exists for Disney: attached_assets/icons8-logo-disney-240.png
+INFO:utils.components:Logo file exists for Roku: attached_assets/rokudef.png
+INFO:utils.components:Logo file exists for Spotify: attached_assets/11.png
+INFO:utils.components:Logo file exists for Comcast: attached_assets/6.png
+INFO:utils.components:Logo file exists for Paramount: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Paramount Global: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Warner Bros. Discovery: attached_assets/adadad.png
+INFO:utils.components:Logo file exists for Warner Bros Discovery: attached_assets/adadad.png
+INFO:utils.components:Successfully loaded logo for Apple
+INFO:utils.components:Successfully loaded logo for Microsoft
+INFO:utils.components:Successfully loaded logo for Alphabet
+INFO:utils.components:Successfully loaded logo for Netflix
+INFO:utils.components:Successfully loaded logo for Meta Platforms
+INFO:utils.components:Successfully loaded logo for WhatsApp
+INFO:utils.components:Successfully loaded logo for Instagram
+INFO:utils.components:Successfully loaded logo for Facebook
+INFO:utils.components:Successfully loaded logo for Amazon
+INFO:utils.components:Successfully loaded logo for Disney
+INFO:utils.components:Successfully loaded logo for Roku
+INFO:utils.components:Successfully loaded logo for Spotify
+INFO:utils.components:Successfully loaded logo for Comcast
+INFO:utils.components:Successfully loaded logo for Paramount
+INFO:utils.components:Successfully loaded logo for Paramount Global
+INFO:utils.components:Successfully loaded logo for Warner Bros. Discovery
+INFO:utils.components:Successfully loaded logo for Warner Bros Discovery
+WARNING:utils.state_management:No API keys found for AI services
+INFO:utils.components:Logo file exists for Apple: attached_assets/8.png
+INFO:utils.components:Logo file exists for Microsoft: attached_assets/msft.png
+INFO:utils.components:Logo file exists for Alphabet: attached_assets/10.png
+INFO:utils.components:Logo file exists for Netflix: attached_assets/9.png
+INFO:utils.components:Logo file exists for Meta Platforms: attached_assets/12.png
+INFO:utils.components:Logo file exists for WhatsApp: attached_assets/Whatsapp.png
+INFO:utils.components:Logo file exists for Instagram: attached_assets/Instagram.png
+INFO:utils.components:Logo file exists for Facebook: attached_assets/Facebook.png
+INFO:utils.components:Logo file exists for Amazon: attached_assets/Amazon_icon.png
+INFO:utils.components:Logo file exists for Disney: attached_assets/icons8-logo-disney-240.png
+INFO:utils.components:Logo file exists for Roku: attached_assets/rokudef.png
+INFO:utils.components:Logo file exists for Spotify: attached_assets/11.png
+INFO:utils.components:Logo file exists for Comcast: attached_assets/6.png
+INFO:utils.components:Logo file exists for Paramount: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Paramount Global: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Warner Bros. Discovery: attached_assets/adadad.png
+INFO:utils.components:Logo file exists for Warner Bros Discovery: attached_assets/adadad.png
+INFO:utils.components:Successfully loaded logo for Apple
+INFO:utils.components:Successfully loaded logo for Microsoft
+INFO:utils.components:Successfully loaded logo for Alphabet
+INFO:utils.components:Successfully loaded logo for Netflix
+INFO:utils.components:Successfully loaded logo for Meta Platforms
+INFO:utils.components:Successfully loaded logo for WhatsApp
+INFO:utils.components:Successfully loaded logo for Instagram
+INFO:utils.components:Successfully loaded logo for Facebook
+INFO:utils.components:Successfully loaded logo for Amazon
+INFO:utils.components:Successfully loaded logo for Disney
+INFO:utils.components:Successfully loaded logo for Roku
+INFO:utils.components:Successfully loaded logo for Spotify
+INFO:utils.components:Successfully loaded logo for Comcast
+INFO:utils.components:Successfully loaded logo for Paramount
+INFO:utils.components:Successfully loaded logo for Paramount Global
+INFO:utils.components:Successfully loaded logo for Warner Bros. Discovery
+INFO:utils.components:Successfully loaded logo for Warner Bros Discovery
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+INFO:utils.components:Logo file exists for Apple: attached_assets/8.png
+INFO:utils.components:Logo file exists for Microsoft: attached_assets/msft.png
+INFO:utils.components:Logo file exists for Alphabet: attached_assets/10.png
+INFO:utils.components:Logo file exists for Netflix: attached_assets/9.png
+INFO:utils.components:Logo file exists for Meta Platforms: attached_assets/12.png
+INFO:utils.components:Logo file exists for WhatsApp: attached_assets/Whatsapp.png
+INFO:utils.components:Logo file exists for Instagram: attached_assets/Instagram.png
+INFO:utils.components:Logo file exists for Facebook: attached_assets/Facebook.png
+INFO:utils.components:Logo file exists for Amazon: attached_assets/Amazon_icon.png
+INFO:utils.components:Logo file exists for Disney: attached_assets/icons8-logo-disney-240.png
+INFO:utils.components:Logo file exists for Roku: attached_assets/rokudef.png
+INFO:utils.components:Logo file exists for Spotify: attached_assets/11.png
+INFO:utils.components:Logo file exists for Comcast: attached_assets/6.png
+INFO:utils.components:Logo file exists for Paramount: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Paramount Global: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Warner Bros. Discovery: attached_assets/adadad.png
+INFO:utils.components:Logo file exists for Warner Bros Discovery: attached_assets/adadad.png
+INFO:utils.components:Successfully loaded logo for Apple
+INFO:utils.components:Successfully loaded logo for Microsoft
+INFO:utils.components:Successfully loaded logo for Alphabet
+INFO:utils.components:Successfully loaded logo for Netflix
+INFO:utils.components:Successfully loaded logo for Meta Platforms
+INFO:utils.components:Successfully loaded logo for WhatsApp
+INFO:utils.components:Successfully loaded logo for Instagram
+INFO:utils.components:Successfully loaded logo for Facebook
+INFO:utils.components:Successfully loaded logo for Amazon
+INFO:utils.components:Successfully loaded logo for Disney
+INFO:utils.components:Successfully loaded logo for Roku
+INFO:utils.components:Successfully loaded logo for Spotify
+INFO:utils.components:Successfully loaded logo for Comcast
+INFO:utils.components:Successfully loaded logo for Paramount
+INFO:utils.components:Successfully loaded logo for Paramount Global
+INFO:utils.components:Successfully loaded logo for Warner Bros. Discovery
+INFO:utils.components:Successfully loaded logo for Warner Bros Discovery
+WARNING:utils.state_management:No API keys found for AI services
+INFO:utils.components:Logo file exists for Apple: attached_assets/8.png
+INFO:utils.components:Logo file exists for Microsoft: attached_assets/msft.png
+INFO:utils.components:Logo file exists for Alphabet: attached_assets/10.png
+INFO:utils.components:Logo file exists for Netflix: attached_assets/9.png
+INFO:utils.components:Logo file exists for Meta Platforms: attached_assets/12.png
+INFO:utils.components:Logo file exists for WhatsApp: attached_assets/Whatsapp.png
+INFO:utils.components:Logo file exists for Instagram: attached_assets/Instagram.png
+INFO:utils.components:Logo file exists for Facebook: attached_assets/Facebook.png
+INFO:utils.components:Logo file exists for Amazon: attached_assets/Amazon_icon.png
+INFO:utils.components:Logo file exists for Disney: attached_assets/icons8-logo-disney-240.png
+INFO:utils.components:Logo file exists for Roku: attached_assets/rokudef.png
+INFO:utils.components:Logo file exists for Spotify: attached_assets/11.png
+INFO:utils.components:Logo file exists for Comcast: attached_assets/6.png
+INFO:utils.components:Logo file exists for Paramount: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Paramount Global: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Warner Bros. Discovery: attached_assets/adadad.png
+INFO:utils.components:Logo file exists for Warner Bros Discovery: attached_assets/adadad.png
+INFO:utils.components:Successfully loaded logo for Apple
+INFO:utils.components:Successfully loaded logo for Microsoft
+INFO:utils.components:Successfully loaded logo for Alphabet
+INFO:utils.components:Successfully loaded logo for Netflix
+INFO:utils.components:Successfully loaded logo for Meta Platforms
+INFO:utils.components:Successfully loaded logo for WhatsApp
+INFO:utils.components:Successfully loaded logo for Instagram
+INFO:utils.components:Successfully loaded logo for Facebook
+INFO:utils.components:Successfully loaded logo for Amazon
+INFO:utils.components:Successfully loaded logo for Disney
+INFO:utils.components:Successfully loaded logo for Roku
+INFO:utils.components:Successfully loaded logo for Spotify
+INFO:utils.components:Successfully loaded logo for Comcast
+INFO:utils.components:Successfully loaded logo for Paramount
+INFO:utils.components:Successfully loaded logo for Paramount Global
+INFO:utils.components:Successfully loaded logo for Warner Bros. Discovery
+INFO:utils.components:Successfully loaded logo for Warner Bros Discovery
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+2026-02-06 12:39:03.965 Uncaught app exception
+Traceback (most recent call last):
+  File "/Users/sebbo/Desktop/Replit revival/Replit/.venv/lib/python3.9/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 535, in _run_script
+    exec(code, module.__dict__)
+  File "/Users/sebbo/Desktop/Replit revival/Replit/pages/00_Overview.py", line 1100, in <module>
+    if continent_geojson:
+NameError: name 'continent_geojson' is not defined
+2026-02-06 12:45:45.575 Uncaught app exception
+Traceback (most recent call last):
+  File "/Users/sebbo/Desktop/Replit revival/Replit/.venv/lib/python3.9/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 535, in _run_script
+    exec(code, module.__dict__)
+  File "/Users/sebbo/Desktop/Replit revival/Replit/pages/00_Overview.py", line 25, in <module>
+    _html_block(
+NameError: name '_html_block' is not defined
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+INFO:utils.components:Logo file exists for Apple: attached_assets/8.png
+INFO:utils.components:Logo file exists for Microsoft: attached_assets/msft.png
+INFO:utils.components:Logo file exists for Alphabet: attached_assets/10.png
+INFO:utils.components:Logo file exists for Netflix: attached_assets/9.png
+INFO:utils.components:Logo file exists for Meta Platforms: attached_assets/12.png
+INFO:utils.components:Logo file exists for WhatsApp: attached_assets/Whatsapp.png
+INFO:utils.components:Logo file exists for Instagram: attached_assets/Instagram.png
+INFO:utils.components:Logo file exists for Facebook: attached_assets/Facebook.png
+INFO:utils.components:Logo file exists for Amazon: attached_assets/Amazon_icon.png
+INFO:utils.components:Logo file exists for Disney: attached_assets/icons8-logo-disney-240.png
+INFO:utils.components:Logo file exists for Roku: attached_assets/rokudef.png
+INFO:utils.components:Logo file exists for Spotify: attached_assets/11.png
+INFO:utils.components:Logo file exists for Comcast: attached_assets/6.png
+INFO:utils.components:Logo file exists for Paramount: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Paramount Global: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Warner Bros. Discovery: attached_assets/adadad.png
+INFO:utils.components:Logo file exists for Warner Bros Discovery: attached_assets/adadad.png
+INFO:utils.components:Successfully loaded logo for Apple
+INFO:utils.components:Successfully loaded logo for Microsoft
+INFO:utils.components:Successfully loaded logo for Alphabet
+INFO:utils.components:Successfully loaded logo for Netflix
+INFO:utils.components:Successfully loaded logo for Meta Platforms
+INFO:utils.components:Successfully loaded logo for WhatsApp
+INFO:utils.components:Successfully loaded logo for Instagram
+INFO:utils.components:Successfully loaded logo for Facebook
+INFO:utils.components:Successfully loaded logo for Amazon
+INFO:utils.components:Successfully loaded logo for Disney
+INFO:utils.components:Successfully loaded logo for Roku
+INFO:utils.components:Successfully loaded logo for Spotify
+INFO:utils.components:Successfully loaded logo for Comcast
+INFO:utils.components:Successfully loaded logo for Paramount
+INFO:utils.components:Successfully loaded logo for Paramount Global
+INFO:utils.components:Successfully loaded logo for Warner Bros. Discovery
+INFO:utils.components:Successfully loaded logo for Warner Bros Discovery
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+INFO:utils.components:Logo file exists for Apple: attached_assets/8.png
+INFO:utils.components:Logo file exists for Microsoft: attached_assets/msft.png
+INFO:utils.components:Logo file exists for Alphabet: attached_assets/10.png
+INFO:utils.components:Logo file exists for Netflix: attached_assets/9.png
+INFO:utils.components:Logo file exists for Meta Platforms: attached_assets/12.png
+INFO:utils.components:Logo file exists for WhatsApp: attached_assets/Whatsapp.png
+INFO:utils.components:Logo file exists for Instagram: attached_assets/Instagram.png
+INFO:utils.components:Logo file exists for Facebook: attached_assets/Facebook.png
+INFO:utils.components:Logo file exists for Amazon: attached_assets/Amazon_icon.png
+INFO:utils.components:Logo file exists for Disney: attached_assets/icons8-logo-disney-240.png
+INFO:utils.components:Logo file exists for Roku: attached_assets/rokudef.png
+INFO:utils.components:Logo file exists for Spotify: attached_assets/11.png
+INFO:utils.components:Logo file exists for Comcast: attached_assets/6.png
+INFO:utils.components:Logo file exists for Paramount: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Paramount Global: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Warner Bros. Discovery: attached_assets/adadad.png
+INFO:utils.components:Logo file exists for Warner Bros Discovery: attached_assets/adadad.png
+INFO:utils.components:Successfully loaded logo for Apple
+INFO:utils.components:Successfully loaded logo for Microsoft
+INFO:utils.components:Successfully loaded logo for Alphabet
+INFO:utils.components:Successfully loaded logo for Netflix
+INFO:utils.components:Successfully loaded logo for Meta Platforms
+INFO:utils.components:Successfully loaded logo for WhatsApp
+INFO:utils.components:Successfully loaded logo for Instagram
+INFO:utils.components:Successfully loaded logo for Facebook
+INFO:utils.components:Successfully loaded logo for Amazon
+INFO:utils.components:Successfully loaded logo for Disney
+INFO:utils.components:Successfully loaded logo for Roku
+INFO:utils.components:Successfully loaded logo for Spotify
+INFO:utils.components:Successfully loaded logo for Comcast
+INFO:utils.components:Successfully loaded logo for Paramount
+INFO:utils.components:Successfully loaded logo for Paramount Global
+INFO:utils.components:Successfully loaded logo for Warner Bros. Discovery
+INFO:utils.components:Successfully loaded logo for Warner Bros Discovery
+WARNING:utils.state_management:No API keys found for AI services
+2026-02-06 14:43:04.221 `label` got an empty value. This is discouraged for accessibility reasons and may be disallowed in the future by raising an exception. Please provide a non-empty label and hide it with label_visibility if needed.
+/Users/sebbo/Desktop/Replit revival/Replit/pages/01_Earnings.py:3747: FutureWarning:
+
+DataFrame.applymap has been deprecated. Use DataFrame.map instead.
+
+/Users/sebbo/Desktop/Replit revival/Replit/pages/01_Earnings.py:3773: FutureWarning:
+
+DataFrame.applymap has been deprecated. Use DataFrame.map instead.
+
+ERROR:utils.data_loader:Error getting filters: '<' not supported between instances of 'float' and 'str'
+ERROR:utils.data_loader:Critical failure loading advertising data
+INFO:root:Loaded data frame with shape: (150, 6)
+INFO:root:Loaded Revenue for Alphabet in 2024: 350020.0
+INFO:root:Loaded Revenue for Alphabet in 2023: 307390.0
+INFO:root:Loaded Revenue for Alphabet in 2022: 282840.0
+INFO:root:Loaded Revenue for Alphabet in 2021: 257640.0
+INFO:root:Loaded Revenue for Alphabet in 2020: 182530.0
+INFO:root:Loaded Revenue for Alphabet in 2019: 161860.0
+INFO:root:Loaded Revenue for Alphabet in 2018: 136820.0
+INFO:root:Loaded Revenue for Alphabet in 2017: 110850.0
+INFO:root:Loaded Revenue for Alphabet in 2016: 90270.0
+INFO:root:Loaded Revenue for Alphabet in 2015: 74540.0
+INFO:root:Loaded Revenue for Alphabet in 2014: 66000.0
+INFO:root:Loaded Revenue for Alphabet in 2013: 55520.0
+INFO:root:Loaded Revenue for Alphabet in 2012: 46000.0
+INFO:root:Loaded Revenue for Alphabet in 2011: 38000.0
+INFO:root:Loaded Revenue for Alphabet in 2010: 29300.0
+WARNING:utils.enhanced_chat_interface:OpenAI API key not found in environment variables or config file
+ERROR:utils.enhanced_chat_interface:Error rendering enhanced chat interface: The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable
+2026-02-06 14:44:07.505 `label` got an empty value. This is discouraged for accessibility reasons and may be disallowed in the future by raising an exception. Please provide a non-empty label and hide it with label_visibility if needed.
+/Users/sebbo/Desktop/Replit revival/Replit/pages/01_Earnings.py:3747: FutureWarning:
+
+DataFrame.applymap has been deprecated. Use DataFrame.map instead.
+
+/Users/sebbo/Desktop/Replit revival/Replit/pages/01_Earnings.py:3773: FutureWarning:
+
+DataFrame.applymap has been deprecated. Use DataFrame.map instead.
+
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+INFO:utils.components:Logo file exists for Apple: attached_assets/8.png
+INFO:utils.components:Logo file exists for Microsoft: attached_assets/msft.png
+INFO:utils.components:Logo file exists for Alphabet: attached_assets/10.png
+INFO:utils.components:Logo file exists for Netflix: attached_assets/9.png
+INFO:utils.components:Logo file exists for Meta Platforms: attached_assets/12.png
+INFO:utils.components:Logo file exists for WhatsApp: attached_assets/Whatsapp.png
+INFO:utils.components:Logo file exists for Instagram: attached_assets/Instagram.png
+INFO:utils.components:Logo file exists for Facebook: attached_assets/Facebook.png
+INFO:utils.components:Logo file exists for Amazon: attached_assets/Amazon_icon.png
+INFO:utils.components:Logo file exists for Disney: attached_assets/icons8-logo-disney-240.png
+INFO:utils.components:Logo file exists for Roku: attached_assets/rokudef.png
+INFO:utils.components:Logo file exists for Spotify: attached_assets/11.png
+INFO:utils.components:Logo file exists for Comcast: attached_assets/6.png
+INFO:utils.components:Logo file exists for Paramount: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Paramount Global: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Warner Bros. Discovery: attached_assets/adadad.png
+INFO:utils.components:Logo file exists for Warner Bros Discovery: attached_assets/adadad.png
+INFO:utils.components:Successfully loaded logo for Apple
+INFO:utils.components:Successfully loaded logo for Microsoft
+INFO:utils.components:Successfully loaded logo for Alphabet
+INFO:utils.components:Successfully loaded logo for Netflix
+INFO:utils.components:Successfully loaded logo for Meta Platforms
+INFO:utils.components:Successfully loaded logo for WhatsApp
+INFO:utils.components:Successfully loaded logo for Instagram
+INFO:utils.components:Successfully loaded logo for Facebook
+INFO:utils.components:Successfully loaded logo for Amazon
+INFO:utils.components:Successfully loaded logo for Disney
+INFO:utils.components:Successfully loaded logo for Roku
+INFO:utils.components:Successfully loaded logo for Spotify
+INFO:utils.components:Successfully loaded logo for Comcast
+INFO:utils.components:Successfully loaded logo for Paramount
+INFO:utils.components:Successfully loaded logo for Paramount Global
+INFO:utils.components:Successfully loaded logo for Warner Bros. Discovery
+INFO:utils.components:Successfully loaded logo for Warner Bros Discovery
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+WARNING:utils.state_management:No API keys found for AI services
+INFO:utils.components:Logo file exists for Apple: attached_assets/8.png
+INFO:utils.components:Logo file exists for Microsoft: attached_assets/msft.png
+INFO:utils.components:Logo file exists for Alphabet: attached_assets/10.png
+INFO:utils.components:Logo file exists for Netflix: attached_assets/9.png
+INFO:utils.components:Logo file exists for Meta Platforms: attached_assets/12.png
+INFO:utils.components:Logo file exists for WhatsApp: attached_assets/Whatsapp.png
+INFO:utils.components:Logo file exists for Instagram: attached_assets/Instagram.png
+INFO:utils.components:Logo file exists for Facebook: attached_assets/Facebook.png
+INFO:utils.components:Logo file exists for Amazon: attached_assets/Amazon_icon.png
+INFO:utils.components:Logo file exists for Disney: attached_assets/icons8-logo-disney-240.png
+INFO:utils.components:Logo file exists for Roku: attached_assets/rokudef.png
+INFO:utils.components:Logo file exists for Spotify: attached_assets/11.png
+INFO:utils.components:Logo file exists for Comcast: attached_assets/6.png
+INFO:utils.components:Logo file exists for Paramount: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Paramount Global: attached_assets/Paramount.png
+INFO:utils.components:Logo file exists for Warner Bros. Discovery: attached_assets/adadad.png
+INFO:utils.components:Logo file exists for Warner Bros Discovery: attached_assets/adadad.png
+INFO:utils.components:Successfully loaded logo for Apple
+INFO:utils.components:Successfully loaded logo for Microsoft
+INFO:utils.components:Successfully loaded logo for Alphabet
+INFO:utils.components:Successfully loaded logo for Netflix
+INFO:utils.components:Successfully loaded logo for Meta Platforms
+INFO:utils.components:Successfully loaded logo for WhatsApp
+INFO:utils.components:Successfully loaded logo for Instagram
+INFO:utils.components:Successfully loaded logo for Facebook
+INFO:utils.components:Successfully loaded logo for Amazon
+INFO:utils.components:Successfully loaded logo for Disney
+INFO:utils.components:Successfully loaded logo for Roku
+INFO:utils.components:Successfully loaded logo for Spotify
+INFO:utils.components:Successfully loaded logo for Comcast
+INFO:utils.components:Successfully loaded logo for Paramount
+INFO:utils.components:Successfully loaded logo for Paramount Global
+INFO:utils.components:Successfully loaded logo for Warner Bros. Discovery
+INFO:utils.components:Successfully loaded logo for Warner Bros Discovery

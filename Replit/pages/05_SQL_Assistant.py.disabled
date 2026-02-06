@@ -1,0 +1,416 @@
+"""
+SQL Assistant - Query the database in natural language
+"""
+import streamlit as st
+import pandas as pd
+import os
+import json
+import sys
+import logging
+from utils.database_service import get_schema, execute_query, get_schema_as_string
+from utils.language import get_translation
+from utils.header import display_header
+from utils.page_transition import apply_page_transition_fix
+
+# Apply fix for page transitions to prevent background bleed-through
+apply_page_transition_fix()
+
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Add the main path to sys.path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import the new API key manager
+from utils.api_key_manager import check_api_key, render_api_key_input, save_api_key, load_api_key
+
+# Note: Page config is now handled in the Streamlit config file
+# to prevent multiple set_page_config errors
+
+# Display the header with language selector
+display_header()
+
+# Translations
+title = get_translation("sql_assistant", "SQL Assistant")
+description = get_translation("sql_assistant_desc", "Query the database in natural language")
+input_label = get_translation("query_input", "Describe in natural language the query you want to execute")
+generate_btn = get_translation("generate_btn", "Generate SQL")
+execute_btn = get_translation("execute_btn", "Execute Query")
+api_key_label = get_translation("api_key_label", "Enter your OpenAI API key")
+api_key_placeholder = get_translation("api_key_placeholder", "sk-...")
+api_key_save = get_translation("api_key_save", "Save API key")
+sql_generated = get_translation("sql_generated", "Generated SQL Query")
+no_query = get_translation("no_query", "No query generated")
+results_title = get_translation("results_title", "Results")
+no_results = get_translation("no_results", "No results available")
+loading_text = get_translation("loading_text", "Processing...")
+setup_tab = get_translation("setup_tab", "Setup")
+query_tab = get_translation("query_tab", "Query")
+results_tab = get_translation("results_tab", "Results")
+schema_title = get_translation("schema_title", "Database Schema")
+ask_natural_language = get_translation("ask_natural_language", "Ask in Natural Language")
+use_sample_query = get_translation("use_sample_query", "Use sample query")
+copy_sql = get_translation("copy_sql", "Copy")
+download_csv = get_translation("download_csv", "Download CSV")
+connection_status = get_translation("connection_status", "Connected")
+
+# Sample queries in multiple languages
+SAMPLE_QUERIES = {
+    'en': [
+        "Show me all companies with revenue greater than 50 billion in 2023",
+        "What are the top 5 companies by market capitalization in 2024?",
+        "Compare the segment distribution for Apple between 2022 and 2023",
+        "List all countries with advertising data sorted by total ad spend in 2022"
+    ],
+    'it': [
+        "Mostrami tutte le aziende con un fatturato superiore a 50 miliardi nel 2023",
+        "Quali sono le 5 principali aziende per capitalizzazione di mercato nel 2024?",
+        "Confronta la distribuzione dei segmenti di Apple tra il 2022 e il 2023",
+        "Elenca tutti i paesi con dati pubblicitari ordinati per spesa pubblicitaria totale nel 2022"
+    ],
+    'es': [
+        "Muéstrame todas las empresas con ingresos superiores a 50 mil millones en 2023",
+        "¿Cuáles son las 5 principales empresas por capitalización de mercado en 2024?",
+        "Compara la distribución de segmentos de Apple entre 2022 y 2023",
+        "Lista todos los países con datos publicitarios ordenados por gasto publicitario total en 2022"
+    ]
+}
+
+def display_schema_info():
+    """Display database schema information"""
+    st.subheader(schema_title)
+    
+    try:
+        # Get schema information
+        schema = get_schema()
+        
+        # Display schema as expandable sections
+        for table_name, table_data in schema["tables"].items():
+            with st.expander(f"📄 {table_name}"):
+                # Create a DataFrame for columns
+                columns_data = []
+                for column_name, column_info in table_data["columns"].items():
+                    columns_data.append({
+                        "Column": column_name,
+                        "Type": column_info["data_type"],
+                        "Nullable": "Unknown"  # Nullable information not available in current schema format
+                    })
+                
+                # Display columns as a table
+                if columns_data:
+                    st.dataframe(pd.DataFrame(columns_data), use_container_width=True)
+                else:
+                    st.info("No columns found for this table.")
+    
+    except Exception as e:
+        st.error(f"Error loading database schema: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
+
+def display_query_interface():
+    """Display the natural language query interface"""
+    st.subheader(ask_natural_language)
+    
+    # Check if there's a sample query to display
+    if "sample_query_selected" in st.session_state:
+        # Use the sample query as the default value
+        default_query = st.session_state.sample_query_selected
+        # Clear it after using it once
+        del st.session_state.sample_query_selected
+    else:
+        default_query = st.session_state.query_input if "query_input" in st.session_state else ""
+    
+    # Text area for query input with placeholder
+    query_input = st.text_area(
+        "",
+        value=default_query,
+        height=150,
+        key="query_input",
+        placeholder="Example: Show me all companies with revenue greater than 100 billion in 2024"
+    )
+    
+    # Sample query suggestion
+    lang = st.session_state.language if "language" in st.session_state else "en"
+    sample_queries = SAMPLE_QUERIES.get(lang, SAMPLE_QUERIES["en"])
+    
+    # Create columns for buttons
+    col1, col2, col3 = st.columns([1, 1, 2])
+    
+    # Function to generate SQL and execute it in one step
+    def generate_and_execute_sql():
+        if not query_input.strip():
+            st.error("Please enter a query in natural language.")
+            return
+        
+        # Check if the input is a simple greeting or conversational phrase
+        input_lower = query_input.lower().strip()
+        greetings = ['hello', 'hi', 'hey', 'ciao', 'hola', 'salut', 'buongiorno', 'buenos dias', 
+                     'good morning', 'good afternoon', 'good evening']
+        
+        if any(input_lower == greeting for greeting in greetings):
+            # Handle as a greeting rather than a query
+            lang = st.session_state.language if "language" in st.session_state else "en"
+            if lang == "it":
+                greeting_response = f"Ciao! Sono il tuo assistente SQL. Come posso aiutarti oggi? Puoi chiedermi informazioni sui dati finanziari delle aziende, segmenti di business, o dati pubblicitari globali."
+            elif lang == "es":
+                greeting_response = f"¡Hola! Soy tu asistente SQL. ¿Cómo puedo ayudarte hoy? Puedes preguntarme sobre datos financieros de empresas, segmentos de negocio o datos publicitarios globales."
+            else:  # Default to English
+                greeting_response = f"Hello! I'm your SQL Assistant. How can I help you today? You can ask me about company financial data, business segments, or global advertising data."
+            
+            st.info(greeting_response)
+            return
+        
+        with st.spinner(loading_text):
+            try:
+                # 1. Get database schema
+                schema_str = get_schema_as_string()
+                
+                # Import function here to avoid errors if the API key is not configured
+                from utils.openai_service import generate_sql_query
+                
+                # Get API key using our API key manager
+                api_key = load_api_key()
+                
+                # 2. Generate SQL query
+                sql = generate_sql_query(query_input, schema_str, api_key)
+                st.session_state.generated_sql = sql
+                
+                # 3. Check if this is an insight question that needs text response
+                is_insight_question = any(keyword in query_input.lower() 
+                                       for keyword in ['explain', 'why', 'how', 'insight', 
+                                                      'analysis', 'trend', 'describe', 'summary'])
+                
+                # 4. Execute the SQL automatically
+                try:
+                    results = execute_query(sql)
+                    st.session_state.query_results = results
+                    
+                    # 5. For insight questions, flag for generation
+                    if is_insight_question and results["rows"] and len(results["rows"]) > 0:
+                        st.session_state.generate_insights = True
+                        st.session_state.insights_data = results
+                    
+                except Exception as e:
+                    st.error(f"Error executing query: {str(e)}")
+                
+            except Exception as e:
+                st.error(f"Error generating SQL: {str(e)}")
+                
+    # Function to handle sample query selection
+    def use_sample_query_handler():
+        import random
+        # Select a random sample query
+        random_query = random.choice(sample_queries)
+        # Store the sample query
+        st.session_state.sample_query_selected = random_query
+        # Show a message to the user
+        st.success(f"Sample query selected: {random_query}")
+        st.rerun()
+    
+    with col1:
+        # Our single button now generates AND executes SQL
+        st.button("Generate & Execute", key="generate_button", 
+                 on_click=generate_and_execute_sql, use_container_width=True)
+    
+    with col2:
+        st.button(use_sample_query, key="sample_query_button", 
+                 on_click=use_sample_query_handler, use_container_width=True)
+    
+    # SQL query is now hidden from users as a technical implementation detail
+    # We'll store it in session state but not display it
+
+def display_results():
+    """Display query results with natural language insights"""
+    if "query_results" in st.session_state and st.session_state.query_results:
+        st.subheader(results_title)
+        
+        results = st.session_state.query_results
+        
+        if not results["columns"] or len(results["columns"]) == 0:
+            if "rowCount" in results and results["rowCount"] > 0:
+                st.success(f"Query executed successfully. Rows modified: {results['rowCount']}")
+            else:
+                st.info(no_results)
+        else:
+            # Convert results to DataFrame
+            df = pd.DataFrame(results["rows"])
+            
+            # Check if this might be an insight question
+            is_insight_question = "generate_insights" in st.session_state and st.session_state.generate_insights
+            
+            # For insight questions, provide a natural language summary of the results
+            if is_insight_question and len(df) > 0:
+                st.markdown("### Insight Summary")
+                
+                # Get the query that was used to generate this result
+                query = st.session_state.query_input if "query_input" in st.session_state else ""
+                
+                try:
+                    # Generate a summary based on the data
+                    if len(df) == 1:
+                        # For single result queries
+                        summary = f"Based on the data, "
+                        for column, value in df.iloc[0].items():
+                            if isinstance(value, (int, float)):
+                                if value > 1000000000:
+                                    value_str = f"${value/1000000000:.1f} billion"
+                                elif value > 1000000:
+                                    value_str = f"${value/1000000:.1f} million"
+                                else:
+                                    value_str = f"${value:,.2f}"
+                                summary += f"the {column} is {value_str}. "
+                            else:
+                                summary += f"the {column} is {value}. "
+                    
+                    elif len(df) <= 5:
+                        # For small result sets, give detailed info
+                        summary = f"Analysis of {len(df)} results:\n\n"
+                        
+                        # Find the main value column (numeric)
+                        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+                        if numeric_cols:
+                            primary_metric = numeric_cols[0]
+                            # Find max and min values
+                            max_row = df.loc[df[primary_metric].idxmax()]
+                            min_row = df.loc[df[primary_metric].idxmin()]
+                            
+                            # Format the summary
+                            main_col = df.columns[0] if primary_metric != df.columns[0] else df.columns[1]
+                            
+                            summary += f"• Highest {primary_metric}: {max_row[primary_metric]:,.2f} ({max_row[main_col]})\n"
+                            summary += f"• Lowest {primary_metric}: {min_row[primary_metric]:,.2f} ({min_row[main_col]})\n"
+                            summary += f"• Average {primary_metric}: {df[primary_metric].mean():,.2f}\n"
+                        
+                        # List all results in a readable format
+                        summary += "\nDetails:\n"
+                        for idx, row in df.iterrows():
+                            item_summary = ""
+                            for col in df.columns:
+                                if isinstance(row[col], (int, float)) and row[col] > 1000000:
+                                    value_str = f"${row[col]/1000000:.1f}M"
+                                else:
+                                    value_str = str(row[col])
+                                item_summary += f"{col}: {value_str}, "
+                            summary += f"• {item_summary[:-2]}\n"
+                    
+                    else:
+                        # For larger result sets, provide a statistical summary
+                        summary = f"Analysis of {len(df)} results:\n\n"
+                        
+                        # Find numeric columns for statistical summary
+                        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+                        
+                        if numeric_cols:
+                            for col in numeric_cols[:2]:  # Limit to first 2 numeric columns
+                                summary += f"• {col}:\n"
+                                summary += f"  - Average: {df[col].mean():,.2f}\n"
+                                summary += f"  - Maximum: {df[col].max():,.2f}\n"
+                                summary += f"  - Minimum: {df[col].min():,.2f}\n\n"
+                        
+                        # Add information about top results
+                        if len(df) > 3 and numeric_cols:
+                            primary_metric = numeric_cols[0]
+                            sorted_df = df.sort_values(by=primary_metric, ascending=False)
+                            main_col = df.columns[0] if primary_metric != df.columns[0] else df.columns[1]
+                            
+                            summary += "Top 3 results:\n"
+                            for idx, row in sorted_df.head(3).iterrows():
+                                summary += f"• {row[main_col]}: {row[primary_metric]:,.2f}\n"
+                    
+                    # Display the generated summary with better formatting
+                    st.markdown(summary)
+                    
+                    # Add a divider before showing the raw data
+                    st.markdown("---")
+                    st.markdown("### Raw Data")
+                    
+                except Exception as e:
+                    import traceback
+                    st.error(f"Error generating insight summary: {str(e)}")
+                    st.error(traceback.format_exc())
+                    # If we fail to generate insights, just show the raw data
+                
+                # Clear the insights flag
+                st.session_state.generate_insights = False
+            
+            # Display results as a table
+            st.dataframe(df, use_container_width=True)
+            
+            # Add option to download results as CSV
+            csv = df.to_csv(index=False)
+            st.download_button(
+                label=download_csv,
+                data=csv,
+                file_name="query_results.csv",
+                mime="text/csv",
+            )
+    else:
+        st.info(no_results)
+
+def main():
+    """Main function for the SQL Assistant page."""
+    # Page header
+    st.markdown(f"<h1 style='font-size: 2rem;'>🤖 {title}</h1>", unsafe_allow_html=True)
+    
+    # Connection status indicator
+    st.markdown(
+        f"""
+        <div style="display: flex; align-items: center; margin-bottom: 1rem;">
+            <p style="margin: 0;">{description}</p>
+            <div style="margin-left: auto; display: flex; align-items: center; background-color: #f0f8f4; padding: 0.3rem 0.8rem; border-radius: 20px;">
+                <span style="height: 10px; width: 10px; background-color: #28a745; border-radius: 50%; display: inline-block; margin-right: 8px;"></span>
+                <span style="color: #28a745; font-weight: 500;">{connection_status}</span>
+            </div>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    
+    # No longer using session state for tabs as we're using the built-in tabs feature
+    
+    # Initialize session state for generated SQL and results
+    if "generated_sql" not in st.session_state:
+        st.session_state.generated_sql = ""
+    if "query_results" not in st.session_state:
+        st.session_state.query_results = None
+    
+    # Check OpenAI API key
+    if not check_api_key():
+        st.warning("You need an OpenAI API key to use this feature.")
+        
+        # Save the API key provided by the user
+        if render_api_key_input(api_key_label, api_key_save):
+            # If the API key was saved successfully, reload the page
+            st.rerun()
+            
+        # Special handling for the API key provided directly by the user
+        if 'openai_api_key_input' in st.session_state:
+            direct_key = st.session_state.openai_api_key_input
+            if direct_key.strip().startswith("sk-"):
+                if save_api_key(direct_key):
+                    st.success("API key saved successfully!")
+                    st.rerun()
+                    
+        return
+    
+    # Using native Streamlit tabs - no custom CSS needed
+    
+    # Use native Streamlit tabs instead of custom HTML tabs to avoid recursion
+    tab1, tab2, tab3 = st.tabs([f"🔧 {setup_tab}", f"🔍 {query_tab}", f"📊 {results_tab}"])
+    
+    # Show content based on selected tab
+    with tab1:
+        display_schema_info()
+    
+    with tab2:
+        display_query_interface()
+    
+    with tab3:
+        display_results()
+    
+    # No need for additional content - the tabs above handle everything
+
+if __name__ == "__main__":
+    main()
