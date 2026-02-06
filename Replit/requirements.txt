@@ -9,7 +9,7 @@ requests
 pandas
 pillow
 plotly
-psycopg2-binary
+psycopg[binary]
 streamlit
 openpyxl
 pandas
