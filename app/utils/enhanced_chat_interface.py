@@ -12,8 +12,8 @@ import pandas as pd
 from datetime import datetime
 import time
 from openai import OpenAI
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 import re
 
 # Configure logging
@@ -63,7 +63,7 @@ class EnhancedChatInterface:
     def initialize_database(self):
         """Initialize database connection"""
         try:
-            self.db_conn = psycopg2.connect(
+            self.db_conn = psycopg.connect(
                 dbname=os.getenv('PGDATABASE'),
                 user=os.getenv('PGUSER'),
                 password=os.getenv('PGPASSWORD'),
@@ -136,15 +136,13 @@ class EnhancedChatInterface:
                     return [{"error": "Database connection failed"}]
             
             # Create cursor with dictionary results
-            cursor = self.db_conn.cursor(cursor_factory=RealDictCursor)
+            cursor = self.db_conn.cursor(row_factory=dict_row)
             cursor.execute(query)
             results = cursor.fetchall()
             cursor.close()
             
             # Convert results to list of dictionaries
-            results_list = []
-            for row in results:
-                results_list.append(dict(row))
+            results_list = [dict(row) for row in results]
                 
             # Return an empty list if no results
             if not results_list:

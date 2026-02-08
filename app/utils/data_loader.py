@@ -172,7 +172,7 @@ def get_available_filters():
         st.session_state.ad_filters = default_filters
         return default_filters
 
-import psycopg2
+import psycopg
 import os
 from decimal import Decimal
 
@@ -238,7 +238,7 @@ def import_advertising_data(df):
     """Import advertising data from DataFrame into database"""
     try:
         # Connect to database
-        conn = psycopg2.connect(
+        conn = psycopg.connect(
             dbname=os.getenv('PGDATABASE'),
             user=os.getenv('PGUSER'),
             password=os.getenv('PGPASSWORD'),

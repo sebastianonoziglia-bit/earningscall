@@ -2,7 +2,7 @@
 Database service module for connecting to PostgreSQL
 """
 import os
-import psycopg2
+import psycopg
 import logging
 import pandas as pd
 
@@ -13,7 +13,7 @@ def get_connection():
     Get a connection to the PostgreSQL database
     
     Returns:
-        psycopg2.extensions.connection: Database connection object
+        psycopg.Connection: Database connection object
     """
     try:
         # Get database URL from environment variables
@@ -22,7 +22,7 @@ def get_connection():
             raise ValueError("DATABASE_URL environment variable not set")
         
         # Create a connection to the database
-        conn = psycopg2.connect(db_url)
+        conn = psycopg.connect(db_url)
         return conn
     except Exception as e:
         logger.error(f"Error connecting to database: {str(e)}")

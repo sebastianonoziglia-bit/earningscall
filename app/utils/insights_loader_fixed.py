@@ -1,12 +1,12 @@
 import os
-import psycopg2
+import psycopg
 import streamlit as st
 from collections import defaultdict
 
 # Helper function for database connections
 def get_db_connection():
     """Get a database connection with proper SSL settings"""
-    return psycopg2.connect(os.environ.get('DATABASE_URL'))
+    return psycopg.connect(os.environ.get('DATABASE_URL'))
 
 def ensure_segment_performance_insights(company, year, db_insights=None):
     """

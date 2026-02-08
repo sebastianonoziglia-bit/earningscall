@@ -1,7 +1,7 @@
 import os
 from functools import lru_cache
 
-import psycopg2
+import psycopg
 import pandas as pd
 import numpy as np
 # Import from helpers module
@@ -347,7 +347,7 @@ class FinancialDataProcessor:
             return sorted(self.df_metrics['company'].dropna().unique().tolist())
 
         try:
-            conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+            conn = psycopg.connect(os.environ.get('DATABASE_URL'))
             cur = conn.cursor()
             cur.execute("SELECT DISTINCT company FROM company_metrics WHERE company IS NOT NULL ORDER BY company")
             companies = [row[0] for row in cur.fetchall()]
@@ -375,7 +375,7 @@ class FinancialDataProcessor:
             return sorted([int(y) for y in years], reverse=True)
 
         try:
-            conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+            conn = psycopg.connect(os.environ.get('DATABASE_URL'))
             cur = conn.cursor()
             cur.execute("SELECT DISTINCT year FROM company_metrics WHERE company = %s AND year IS NOT NULL ORDER BY year DESC", (company,))
             years = [row[0] for row in cur.fetchall()]
@@ -536,7 +536,7 @@ class FinancialDataProcessor:
                     return employee_count
             
         try:
-            conn = psycopg2.connect(**self.db_params)
+            conn = psycopg.connect(**self.db_params)
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT employee_count FROM employee_counts WHERE company = %s AND year = %s",
@@ -705,7 +705,7 @@ class FinancialDataProcessor:
                 return self.get_advertising_revenue(company, year)
 
         try:
-            conn = psycopg2.connect(**self.db_params)
+            conn = psycopg.connect(**self.db_params)
             cur = conn.cursor()
 
             query = """
@@ -777,7 +777,7 @@ class FinancialDataProcessor:
             return metrics_dict
 
         try:
-            conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+            conn = psycopg.connect(os.environ.get('DATABASE_URL'))
             cur = conn.cursor()
             cur.execute("SELECT metric_name, value FROM company_metrics WHERE company = %s AND year = %s", (clean_company, year))
             results = cur.fetchall()
@@ -840,7 +840,7 @@ class FinancialDataProcessor:
                 return {'labels': labels, 'values': values, 'colors': colors[:len(labels)]}
 
         try:
-            conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+            conn = psycopg.connect(os.environ.get('DATABASE_URL'))
             cur = conn.cursor()
             cur.execute("SELECT segment_name, revenue FROM company_segments WHERE company = %s AND year = %s AND segment_name != 'Total Revenue'", (company, year))
             results = cur.fetchall()

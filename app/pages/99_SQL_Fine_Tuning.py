@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 import os
 import plotly.graph_objects as go
 from datetime import datetime
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 def get_connection():
     """Get a database connection"""
-    return psycopg2.connect(
+    return psycopg.connect(
         dbname=os.getenv('PGDATABASE'),
         user=os.getenv('PGUSER'),
         password=os.getenv('PGPASSWORD'),
@@ -35,11 +35,8 @@ def execute_query(query):
     """Execute a SQL query and return results as a DataFrame"""
     try:
         conn = get_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor = conn.cursor(row_factory=dict_row)
         cursor.execute(query)
-        
-        # Get column names from cursor description
-        columns = [desc[0] for desc in cursor.description] if cursor.description else []
         
         # Fetch all rows and convert to DataFrame
         results = cursor.fetchall()

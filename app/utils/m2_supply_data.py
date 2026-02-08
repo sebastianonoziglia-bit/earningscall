@@ -4,7 +4,7 @@ These functions provide interfaces for retrieving and visualizing M2 data.
 """
 
 import os
-import psycopg2
+import psycopg
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
@@ -71,7 +71,7 @@ def _load_m2_from_excel() -> pd.DataFrame:
 
 def get_connection():
     """Get a database connection"""
-    return psycopg2.connect(
+    return psycopg.connect(
         dbname=os.getenv('PGDATABASE'),
         user=os.getenv('PGUSER'),
         password=os.getenv('PGPASSWORD'),

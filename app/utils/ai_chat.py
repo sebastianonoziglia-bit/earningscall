@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import logging
 import pandas as pd
-import psycopg2
+import psycopg
 from utils.data_loader import load_advertising_data, get_available_filters
 from openai import OpenAI
 import json
@@ -58,7 +58,7 @@ class DashboardAIChat:
     def initialize_database(self):
         """Initialize database connection"""
         try:
-            self.db_conn = psycopg2.connect(
+            self.db_conn = psycopg.connect(
                 dbname=os.getenv('PGDATABASE'),
                 user=os.getenv('PGUSER'),
                 password=os.getenv('PGPASSWORD'),
