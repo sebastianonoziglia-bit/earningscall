@@ -1,20 +1,18 @@
 ---
 title: Earningscall
-emoji: 🚀
-colorFrom: red
-colorTo: red
+emoji: 🟦
+colorFrom: indigo
+colorTo: blue
 sdk: docker
-app_port: 8501
+app_port: 7860
 tags:
 - streamlit
 pinned: false
-short_description: earningscall big tech
+short_description: Global media economy dashboard
 license: apache-2.0
 ---
 
-# Welcome to Streamlit!
+# Earningscall
 
-Edit `/src/streamlit_app.py` to customize this app to your heart's desire. :heart:
-
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
+Interactive dashboard for global media, advertising, and market intelligence.  
+Built with Streamlit and deployed via Docker.
