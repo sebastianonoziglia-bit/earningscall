@@ -509,3 +509,4 @@ INFO:utils.components:Successfully loaded logo for Paramount
 INFO:utils.components:Successfully loaded logo for Paramount Global
 INFO:utils.components:Successfully loaded logo for Warner Bros. Discovery
 INFO:utils.components:Successfully loaded logo for Warner Bros Discovery
+WARNING:utils.state_management:No API keys found for AI services

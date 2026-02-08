@@ -1,3 +1,5 @@
 import runpy
+import sys
 
-runpy.run_path("Replit/Welcome.py")
+sys.path.insert(0, "app")
+runpy.run_path("app/Welcome.py")

@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-APP_DIR="/Users/sebbo/Desktop/Replit revival/Replit"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_DIR="$SCRIPT_DIR/app"
 PID_FILE="$APP_DIR/.streamlit.pid"
 PORT_FILE="$APP_DIR/.streamlit.port"
 LOG_FILE="$APP_DIR/.streamlit.log"

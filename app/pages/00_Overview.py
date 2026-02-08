@@ -75,7 +75,7 @@ st.markdown(
 
         body.overview-dark .ov-map-summary {
             position: absolute;
-            top: 140px;
+            top: 228px;
             left: 18px;
             z-index: 6;
             max-width: min(340px, 40vw);
@@ -123,6 +123,14 @@ st.markdown(
             font-size: 0.78rem;
             color: #94A3B8;
             padding-left: 10px;
+        }
+
+        body.overview-dark .ov-macro-label {
+            margin: 4px 0 8px;
+            font-size: 0.8rem;
+            color: #94A3B8;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
         }
 
         body.overview-dark .ov-map-wrap {
@@ -1136,7 +1144,7 @@ if not country_ad_df.empty:
     view_mode = "By country" if show_by_country else "By region"
 
     region_options = ["Europe", "North America", "Asia Pacific", "South America", "Middle East & Africa"]
-    region_col, _ = st.columns([0.42, 0.58])
+    region_col, _ = st.columns([0.3, 0.7])
     with region_col:
         region_choice = st.selectbox(
             "Region",
@@ -1146,7 +1154,7 @@ if not country_ad_df.empty:
         )
 
     metric_types = sorted(country_ad_df["Metric_type"].dropna().unique().tolist())
-    metric_col, _ = st.columns([0.48, 0.52])
+    metric_col, _ = st.columns([0.34, 0.66])
     with metric_col:
         metric_choice = st.selectbox(
             "Advertising metric",
@@ -1181,6 +1189,11 @@ if not country_ad_df.empty:
         macro_rows.append((macro, yoy))
 
     if macro_rows:
+        if macro_prev_year is not None:
+            macro_label = f"Macro YoY ({year_for_map} vs {macro_prev_year})"
+        else:
+            macro_label = f"Macro YoY ({year_for_map})"
+        st.markdown(f"<div class='ov-macro-label'>{macro_label}</div>", unsafe_allow_html=True)
         macro_html = "<div class='ov-macro-row'>"
         for macro, yoy in macro_rows:
             if yoy is None:
@@ -1611,7 +1624,7 @@ if not country_ad_df.empty:
                   }}
                   .ov-map-summary {{
                     position: absolute;
-                    top: 214px;
+                    top: 228px;
                     left: 18px;
                     z-index: 6;
                     max-width: min(340px, 40vw);

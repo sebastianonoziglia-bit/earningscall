@@ -1,5 +1,5 @@
 """
-Utility functions for managing Replit workflows
+Utility functions for managing local workflows.
 """
 
 import os
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def restart_workflow(workflow_name):
     """
-    Restart a Replit workflow
+    Restart a workflow
     
     Args:
         workflow_name: Name of the workflow to restart
@@ -21,7 +21,7 @@ def restart_workflow(workflow_name):
         bool: True if successful, False otherwise
     """
     try:
-        # In a real implementation, this would use Replit-specific APIs
+        # In a real implementation, this would use a provider-specific API
         # For now, we'll mock the behavior
         logger.info(f"Restarting workflow: {workflow_name}")
         
