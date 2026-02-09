@@ -25,73 +25,7 @@ if target_param and str(target_param).lower() in {"earnings", "01_earnings"}:
         pass
     st.switch_page("pages/01_Earnings.py")
 
-# Full-page loading overlay to avoid visible jumpy renders on first load.
-st.markdown(
-    """
-    <style>
-      #app-loading {
-        position: fixed;
-        inset: 0;
-        background: var(--app-bg, #0B1220);
-        color: var(--app-text, #F8FAFC);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 14px;
-        z-index: 99999;
-        pointer-events: all;
-        transition: opacity 0.25s ease;
-      }
-      #app-loading .spinner {
-        width: 46px;
-        height: 46px;
-        border: 3px solid rgba(148, 163, 184, 0.35);
-        border-top-color: var(--app-accent, #3B82F6);
-        border-radius: 50%;
-        animation: appSpin 0.9s linear infinite;
-      }
-      #app-loading .label {
-        font-family: "Montserrat", sans-serif;
-        font-size: 0.95rem;
-        letter-spacing: 0.02em;
-      }
-      @keyframes appSpin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
-    </style>
-    <div id="app-loading">
-      <div class="spinner"></div>
-      <div class="label">Loading Insight360…</div>
-    </div>
-    <script>
-      (function () {
-        const hideOverlay = () => {
-          const el = document.getElementById("app-loading");
-          if (!el) return;
-          el.style.opacity = "0";
-          el.style.pointerEvents = "none";
-          setTimeout(() => el.remove(), 400);
-        };
-
-        const waitForHero = () => {
-          if (document.querySelector(".hero-shell")) {
-            hideOverlay();
-          } else {
-            requestAnimationFrame(waitForHero);
-          }
-        };
-
-        // Start immediately (the load event may already have fired in Streamlit).
-        requestAnimationFrame(waitForHero);
-        // Hard fallback: never leave the overlay stuck.
-        setTimeout(hideOverlay, 4000);
-      })();
-    </script>
-    """,
-    unsafe_allow_html=True,
-)
+# Note: removed the full-page overlay to avoid client-side flicker loops.
 
 
 # Custom CSS for sidebar navigation items - particularly Financial Genie
@@ -770,29 +704,8 @@ with st.expander(get_text('editorial'), expanded=False):
         st.markdown('<a href="#" onclick="scrollToLogin(); return false;">Go to Editorial →</a>', unsafe_allow_html=True)
 
 # Genie Page with SPECIAL badge
-with st.expander("🧞 Financial Genie", expanded=False):
-    # Add orange (SPECIAL) text right after the title
+with st.expander("🧞 Financial Genie (SPECIAL)", expanded=False):
     st.markdown("<div style='margin-top: -15px; margin-bottom: 10px;'><span style='color: #FF4204; font-weight: bold; font-size: 0.9em;'>(SPECIAL)</span></div>", unsafe_allow_html=True)
-
-    # Add JavaScript to color the SPECIAL text
-    st.markdown("""
-    <script>
-    // Find all expander headers containing "Financial Genie"
-    document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(function() {
-            const headers = document.querySelectorAll('.streamlit-expanderHeader');
-            headers.forEach(header => {
-                if (header.textContent.includes('Financial Genie')) {
-                    // Modify the text to include the orange SPECIAL text
-                    header.innerHTML = header.innerHTML.replace('Financial Genie', 'Financial Genie <span style="color:#FF4204;">(SPECIAL)</span>');
-                }
-            });
-        }, 1000); // Delay to ensure elements are loaded
-    });
-    </script>
-    """, unsafe_allow_html=True)
-    # Add a div with the special class to enable styling
-    st.markdown('<div class="dashboard-financial-genie-special" style="display:none;"></div>', unsafe_allow_html=True)
     st.markdown(f"""
     {get_text('genie_desc')}
     - Multi-company comparisons
@@ -854,13 +767,7 @@ with st.expander("🔍 SQL Assistant"):
     """, unsafe_allow_html=True)
 
 # Add JavaScript for scrolling to login section when clicking protected links
-st.markdown("""
-<script>
-    function scrollToLogin() {
-        document.getElementById('login-section').scrollIntoView({ behavior: 'smooth' });
-    }
-</script>
-""", unsafe_allow_html=True)
+# Removed scrollToLogin script to avoid client-side DOM manipulation.
 
 # Add company logos section
 st.markdown("---")
