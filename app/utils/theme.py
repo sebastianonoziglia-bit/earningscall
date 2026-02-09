@@ -266,13 +266,14 @@ def apply_theme():
         .stRadio [data-baseweb="radio"] div[role="radio"] {
             border-color: var(--app-border) !important;
             background: transparent !important;
+            box-shadow: none !important;
+            width: 16px !important;
+            height: 16px !important;
+            border-radius: 999px !important;
         }
         .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"] {
             border-color: var(--app-accent) !important;
-        }
-        .stRadio [data-baseweb="radio"] div[role="radio"] {
-            background: transparent !important;
-            box-shadow: none !important;
+            background: radial-gradient(circle, var(--app-accent) 0 45%, transparent 46%) !important;
         }
         .stCheckbox [data-baseweb="checkbox"] > div {
             border-color: var(--app-border) !important;

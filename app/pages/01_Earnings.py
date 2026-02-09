@@ -2865,7 +2865,7 @@ if not segment_insights_filtered.empty:
         if not segment_color:
             segment_color = COMPANY_COLORS.get(canonical_company, "#111827")
         segment_insight_map[segment_name] = (
-            f"<div class=\"segment-insight-card\" style=\"background: {segment_color}; width: 100%;\">"
+            f"<div class=\"segment-insight-card\" style=\"background: {segment_color}; color: #ffffff; width: 100%;\">"
             f"<div class=\"segment-insight-title\">{html.escape(segment_name)}</div>"
             f"<ul class=\"segment-insight-list\">{insight_items}</ul>"
             "</div>"
@@ -2933,7 +2933,7 @@ with composition_cols[0]:
                         colorMapLower[trimmed.toLowerCase()] ||
                         "#111827";
                     return (
-                        `<div class="segment-insight-card" style="background: ${{bg}}; width: 100%; opacity: 0.92;">` +
+                        `<div class="segment-insight-card" style="background: ${{bg}}; color: #ffffff; width: 100%; opacity: 0.92;">` +
                         `<div class="segment-insight-title">${{escapeHtml(trimmed)}}</div>` +
                         `<div style="font-size:0.84rem; line-height:1.45; color:#ffffff;">No insights available for this segment.</div>` +
                         `</div>`
