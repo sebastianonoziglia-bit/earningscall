@@ -140,34 +140,36 @@ def load_common_styles():
     }
 
     .stSlider [data-baseweb="slider"] div[role="slider"] {
-        background-color: #ffffff !important;
-        border-color: #0073ff !important;
-        box-shadow: 0 0 0 2px rgba(17, 24, 39, 0.08) !important;
+        background-color: var(--app-surface, #ffffff) !important;
+        border-color: var(--app-accent, #0073ff) !important;
+        box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.12) !important;
     }
 
     /* Select and multiselect styling */
     div[data-baseweb="select"] > div {
-        border-color: #d1d5db !important;
+        border-color: var(--app-border, #d1d5db) !important;
+        background-color: var(--app-surface, #ffffff) !important;
+        color: var(--app-text, #0f172a) !important;
     }
 
     div[data-baseweb="select"] > div:focus-within {
-        border-color: #0073ff !important;
+        border-color: var(--app-accent, #0073ff) !important;
         box-shadow: 0 0 0 1px rgba(0, 115, 255, 0.25) !important;
     }
 
     .stMultiSelect [data-baseweb="tag"] {
-        background-color: #f3f4f6 !important;
-        color: #111827 !important;
+        background-color: var(--app-surface-alt, #f3f4f6) !important;
+        color: var(--app-text, #111827) !important;
         border: 1px solid rgba(0, 115, 255, 0.45) !important;
     }
 
     input[type="checkbox"], input[type="radio"] {
-        accent-color: #0073ff !important;
+        accent-color: var(--app-accent, #0073ff) !important;
     }
 
     label[data-baseweb="radio"] input:checked + div {
-        border-color: #0073ff !important;
-        background-color: #ffffff !important;
+        border-color: var(--app-accent, #0073ff) !important;
+        background-color: transparent !important;
     }
 
     /* Main layout styles */
@@ -889,33 +891,35 @@ def get_page_style():
     }
 
     .stSlider [data-baseweb="slider"] div[role="slider"] {
-        background-color: #ffffff !important;
-        border-color: #0073ff !important;
-        box-shadow: 0 0 0 2px rgba(17, 24, 39, 0.08) !important;
+        background-color: var(--app-surface, #ffffff) !important;
+        border-color: var(--app-accent, #0073ff) !important;
+        box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.12) !important;
     }
 
     div[data-baseweb="select"] > div {
-        border-color: #d1d5db !important;
+        border-color: var(--app-border, #d1d5db) !important;
+        background-color: var(--app-surface, #ffffff) !important;
+        color: var(--app-text, #0f172a) !important;
     }
 
     div[data-baseweb="select"] > div:focus-within {
-        border-color: #0073ff !important;
+        border-color: var(--app-accent, #0073ff) !important;
         box-shadow: 0 0 0 1px rgba(0, 115, 255, 0.25) !important;
     }
 
     .stMultiSelect [data-baseweb="tag"] {
-        background-color: #f3f4f6 !important;
-        color: #111827 !important;
+        background-color: var(--app-surface-alt, #f3f4f6) !important;
+        color: var(--app-text, #111827) !important;
         border: 1px solid rgba(0, 115, 255, 0.45) !important;
     }
 
     input[type="checkbox"], input[type="radio"] {
-        accent-color: #0073ff !important;
+        accent-color: var(--app-accent, #0073ff) !important;
     }
 
     label[data-baseweb="radio"] input:checked + div {
-        border-color: #0073ff !important;
-        background-color: #ffffff !important;
+        border-color: var(--app-accent, #0073ff) !important;
+        background-color: transparent !important;
     }
 
     .main-content {

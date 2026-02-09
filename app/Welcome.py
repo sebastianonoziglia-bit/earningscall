@@ -404,8 +404,6 @@ def render_hero(logos_html="", show_spinner=False):
     hero_placeholder.markdown(hero_html, unsafe_allow_html=True)
 
 
-render_hero(show_spinner=False)
-
 # Load company logos (avoid heavy data processor on Welcome)
 try:
     company_logos = load_company_logos()

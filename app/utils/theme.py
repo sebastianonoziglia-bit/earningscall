@@ -202,6 +202,14 @@ def apply_theme():
         .stRadio label, .stCheckbox label {
             color: var(--app-text) !important;
         }
+        .stRadio label,
+        .stRadio label > div,
+        .stRadio label > div > div,
+        .stCheckbox label,
+        .stCheckbox label > div,
+        .stCheckbox label > div > div {
+            background: transparent !important;
+        }
         .stRadio [data-baseweb="radio"],
         .stCheckbox [data-baseweb="checkbox"] {
             background: transparent !important;
@@ -224,6 +232,10 @@ def apply_theme():
         .stCheckbox [data-baseweb="checkbox"] > div {
             border-color: var(--app-border) !important;
             background: var(--app-surface) !important;
+        }
+        .stRadio [data-baseweb="radio"] div[role="radio"] + div,
+        .stCheckbox [data-baseweb="checkbox"] div[role="checkbox"] + div {
+            color: var(--app-text) !important;
         }
 
         /* Buttons */
@@ -251,6 +263,20 @@ def apply_theme():
         .replace("__ACCENT_TEXT__", accent_text)
     )
     st.markdown(css, unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <script>
+        (function() {{
+          const mode = "{mode}";
+          document.body.classList.remove("theme-dark", "overview-dark");
+          if (mode === "dark") {{
+            document.body.classList.add("theme-dark");
+          }}
+        }})();
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
 
 def format_company_insights(insights_text):
     """

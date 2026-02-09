@@ -78,7 +78,7 @@ st.markdown(
 
         body.theme-dark .ov-map-summary {
             position: absolute;
-            top: 228px;
+            top: 258px;
             left: 18px;
             z-index: 6;
             max-width: min(340px, 40vw);
@@ -1140,7 +1140,7 @@ st.markdown(
 theme_mode = get_theme_mode()
 dark_mode = theme_mode == "dark"
 map_bg = "#0B1220" if dark_mode else "#F8FAFC"
-land_color = "#111827" if dark_mode else "#E2E8F0"
+land_color = "#1E293B" if dark_mode else "#E2E8F0"
 ocean_color = "#0B1220" if dark_mode else "#FFFFFF"
 border_color = "rgba(15,23,42,0.12)" if dark_mode else "rgba(15,23,42,0.18)"
 label_text_color = "#F8FAFC" if dark_mode else "#0F172A"
@@ -1161,7 +1161,7 @@ if not country_ad_df.empty:
     view_mode = "By country" if show_by_country else "By region"
 
     region_options = ["Europe", "North America", "Asia Pacific", "South America", "Middle East & Africa"]
-    region_col, _ = st.columns([0.3, 0.7])
+    region_col, _ = st.columns([0.22, 0.78])
     with region_col:
         region_choice = st.selectbox(
             "Region",
@@ -1171,7 +1171,7 @@ if not country_ad_df.empty:
         )
 
     metric_types = sorted(country_ad_df["Metric_type"].dropna().unique().tolist())
-    metric_col, _ = st.columns([0.34, 0.66])
+    metric_col, _ = st.columns([0.22, 0.78])
     with metric_col:
         metric_choice = st.selectbox(
             "Advertising metric",
@@ -1500,7 +1500,7 @@ if not country_ad_df.empty:
                 map_fig.update_layout(annotations=annotations)
         map_fig.update_geos(
             projection_type="natural earth",
-            projection_scale=1.1,
+            projection_scale=1.0,
             center=dict(lon=0, lat=0),
             showcoastlines=False,
             showcountries=True,
@@ -1618,13 +1618,13 @@ if not country_ad_df.empty:
             default_height=680,
         )
         overlay_html = summary_html if summary_html else ""
-        summary_bg = "rgba(11, 18, 32, 0.6)" if dark_mode else "rgba(255, 255, 255, 0.92)"
-        summary_border = "rgba(148, 163, 184, 0.22)" if dark_mode else "rgba(15, 23, 42, 0.12)"
+        summary_bg = "rgba(11, 18, 32, 0.74)" if dark_mode else "rgba(255, 255, 255, 0.92)"
+        summary_border = "rgba(255, 255, 255, 0.55)" if dark_mode else "rgba(15, 23, 42, 0.18)"
         summary_title_color = "#94A3B8" if dark_mode else "#475569"
         summary_value_color = "#F8FAFC" if dark_mode else "#0F172A"
         summary_text_color = "#E2E8F0" if dark_mode else "#0F172A"
         summary_sub_color = "#94A3B8" if dark_mode else "#64748B"
-        summary_sticky_bg = "rgba(11, 18, 32, 0.9)" if dark_mode else "rgba(255, 255, 255, 0.95)"
+        summary_sticky_bg = "rgba(11, 18, 32, 0.94)" if dark_mode else "rgba(255, 255, 255, 0.95)"
         components.html(
             _html_block(
                 f"""
@@ -1648,7 +1648,7 @@ if not country_ad_df.empty:
                   }}
                   .ov-map-summary {{
                     position: absolute;
-                    top: 228px;
+                    top: 258px;
                     left: 18px;
                     z-index: 6;
                     max-width: min(340px, 40vw);
