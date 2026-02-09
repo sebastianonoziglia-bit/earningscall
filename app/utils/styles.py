@@ -108,27 +108,7 @@ def load_common_styles():
 	        filter: drop-shadow(0 12px 24px rgba(15, 23, 42, 0.18));
 	    }
 
-        /* Modern Plotly typography */
-        .js-plotly-plot, .js-plotly-plot * {
-            font-family: var(--chart-font) !important;
-        }
-		    .js-plotly-plot .gtitle text,
-		    .js-plotly-plot .barlayer .text text,
-		    .js-plotly-plot .treemaplayer text {
-		        font-weight: 800 !important;
-		        letter-spacing: 0 !important;
-		    }
-        .js-plotly-plot .xtick text,
-        .js-plotly-plot .ytick text,
-        .js-plotly-plot .legend text {
-            font-weight: 600 !important;
-        }
-
-        /* Rounded-looking bars (simulate corner radius via thick stroke + round joins) */
-        .js-plotly-plot .barlayer .bars path {
-            stroke-linejoin: round;
-            stroke-linecap: round;
-        }
+        /* Plotly typography handled by Plotly defaults to avoid CSS conflicts */
 
     /* Slider styling */
     .stSlider [data-baseweb="slider"] > div {
