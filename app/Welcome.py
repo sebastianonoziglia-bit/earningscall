@@ -19,14 +19,27 @@ page_param = _first_param(query_params.get("page")) if query_params else None
 company_param = _first_param(query_params.get("company")) if query_params else None
 
 target_param = nav_param or go_param or page_param
-if target_param and str(target_param).lower() in {"earnings", "01_earnings"}:
-    if company_param:
-        st.session_state["prefill_company"] = company_param
-    try:
-        st.query_params.clear()
-    except Exception:
-        pass
-    st.switch_page("pages/01_Earnings.py")
+if target_param:
+    target_key = str(target_param).strip().lower()
+    page_map = {
+        "overview": "pages/00_Overview.py",
+        "earnings": "pages/01_Earnings.py",
+        "01_earnings": "pages/01_Earnings.py",
+        "stocks": "pages/02_Stocks.py",
+        "editorial": "pages/03_Editorial.py",
+        "genie": "pages/04_Genie.py",
+        "financial_genie": "pages/04_Genie.py",
+        "financial-genie": "pages/04_Genie.py",
+    }
+    if target_key in page_map:
+        if target_key.startswith("earnings") or target_key == "01_earnings":
+            if company_param:
+                st.session_state["prefill_company"] = company_param
+        try:
+            st.query_params.clear()
+        except Exception:
+            pass
+        st.switch_page(page_map[target_key])
 
 # Note: removed the full-page overlay to avoid client-side flicker loops.
 
@@ -590,102 +603,57 @@ else:
     # No Executive Summary content here - moved to Overview page
 
 # Dashboard Pages Section
-st.subheader(get_text('dashboard_pages'))
+st.subheader("Dashboard Pages")
 
-# Overview Page
-with st.expander(get_text('overview'), expanded=False):
-    st.markdown(f"""
-    {get_text('overview_desc')}
-    - Company market capitalizations comparison
-    - Visual performance indicators
-    - Key market trends
-    """)
-    if st.session_state.get('logged_in', False):
-        if st.button(
-            f"{get_text('go_to')} {get_text('overview').replace('📊 ', '')} →",
-            key="go_overview",
-            use_container_width=False,
-        ):
-            st.switch_page("pages/00_Overview.py")
-    else:
-        st.markdown('<a href="#" onclick="scrollToLogin(); return false;">Go to Overview →</a>', unsafe_allow_html=True)
+st.markdown("""
+<style>
+/* Hide sidebar nav on Welcome */
+section[data-testid="stSidebar"],
+[data-testid="stSidebarNav"],
+[data-testid="stSidebarCollapsedControl"] {
+    display: none !important;
+}
 
-# Earnings Page
-with st.expander(get_text('earnings'), expanded=False):
-    st.markdown(f"""
-    {get_text('earnings_desc')}
-    - Revenue segment analysis
-    - Historical segment comparisons
-    - Interactive pie charts and trend analysis
-    """)
-    if st.session_state.get('logged_in', False):
-        if st.button(
-            f"{get_text('go_to')} {get_text('earnings').replace('💰 ', '')} →",
-            key="go_earnings",
-            use_container_width=False,
-        ):
-            st.switch_page("pages/01_Earnings.py")
-    else:
-        st.markdown('<a href="#" onclick="scrollToLogin(); return false;">Go to Earnings →</a>', unsafe_allow_html=True)
+.welcome-nav {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin: 12px 0 24px;
+}
+.welcome-nav .nav-btn {
+    display: block;
+    text-align: center;
+    padding: 12px 16px;
+    background: #1d4ed8;
+    color: #ffffff !important;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: 600;
+    border: 1px solid #1d4ed8;
+}
+.welcome-nav .nav-btn:hover {
+    background: #2563eb;
+    border-color: #2563eb;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# Stocks Page
-with st.expander(get_text('stocks'), expanded=False):
-    st.markdown(f"""
-    {get_text('stocks_desc')}
-    - Real-time stock tracking
-    - Historical price trends
-    - Volume analysis
-    """)
-    if st.session_state.get('logged_in', False):
-        if st.button(
-            f"{get_text('go_to')} {get_text('stocks').replace('📈 ', '')} →",
-            key="go_stocks",
-            use_container_width=False,
-        ):
-            st.switch_page("pages/02_Stocks.py")
-    else:
-        st.markdown('<a href="#" onclick="scrollToLogin(); return false;">Go to Stocks →</a>', unsafe_allow_html=True)
-
-
-# Editorial Page
-with st.expander(get_text('editorial'), expanded=False):
-    st.markdown(f"""
-    {get_text('editorial_desc')}
-    - Professional insights
-    - Market commentary
-    - Performance analysis
-    """)
-    if st.session_state.get('logged_in', False):
-        if st.button(
-            f"{get_text('go_to')} {get_text('editorial').replace('📝 ', '')} →",
-            key="go_editorial",
-            use_container_width=False,
-        ):
-            st.switch_page("pages/03_Editorial.py")
-    else:
-        st.markdown('<a href="#" onclick="scrollToLogin(); return false;">Go to Editorial →</a>', unsafe_allow_html=True)
-
-# Genie Page with SPECIAL badge
-with st.expander("🧞 Financial Genie (SPECIAL)", expanded=False):
-    st.markdown("<div style='margin-top: -15px; margin-bottom: 10px;'><span style='color: #FF4204; font-weight: bold; font-size: 0.9em;'>(SPECIAL)</span></div>", unsafe_allow_html=True)
-    st.markdown(f"""
-    {get_text('genie_desc')}
-    - Multi-company comparisons
-    - Inflation-adjusted metrics
-    - Interactive visualization tools
-    """)
-    if st.session_state.get('logged_in', False):
-        if st.button(
-            f"{get_text('go_to')} {get_text('genie').replace('🧞 ', '')} →",
-            key="go_genie",
-            use_container_width=False,
-        ):
-            st.switch_page("pages/04_Genie.py")
-    else:
-        st.markdown('<a href="#" onclick="scrollToLogin(); return false;">Go to Financial Genie →</a>', unsafe_allow_html=True)
+st.markdown("""
+<div class="welcome-nav">
+  <a class="nav-btn" href="?nav=overview">Overview</a>
+  <a class="nav-btn" href="?nav=earnings">Earnings</a>
+  <a class="nav-btn" href="?nav=stocks">Stocks</a>
+  <a class="nav-btn" href="?nav=editorial">Editorial</a>
+  <a class="nav-btn" href="?nav=genie">Financial Genie (SPECIAL)</a>
+  <a class="nav-btn" href="#glossary-section">Glossary</a>
+  <a class="nav-btn" href="#sources-section">Sources</a>
+  <a class="nav-btn" href="#sql-section">SQL Assistant</a>
+</div>
+""", unsafe_allow_html=True)
 
 # Add Glossary section
-with st.expander(get_text('glossary')):
+st.markdown('<div id="glossary-section"></div>', unsafe_allow_html=True)
+with st.expander("Glossary"):
     st.markdown("""
     - **Adjust by USD Purchasing Power**: Modifies values based on the U.S. dollar's purchasing power to account for inflation effects over time (Bureau of Labor Statistics data).
     - **ATH**: The highest market price an asset has ever achieved.
@@ -711,7 +679,8 @@ with st.expander(get_text('glossary')):
     """)
 
 # Add Sources section
-with st.expander(get_text('sources')):
+st.markdown('<div id="sources-section"></div>', unsafe_allow_html=True)
+with st.expander("Sources"):
     st.markdown("""
     Our financial data is sourced from:
     - Company Earnings Reports
@@ -720,7 +689,8 @@ with st.expander(get_text('sources')):
     """)
 
 # Add SQL Assistant description
-with st.expander("🔍 SQL Assistant"):
+st.markdown('<div id="sql-section"></div>', unsafe_allow_html=True)
+with st.expander("SQL Assistant"):
     st.markdown("""
     <div style="padding: 10px 0;">
         <p>Access our database using natural language through the SQL Assistant in the side menu.</p>
