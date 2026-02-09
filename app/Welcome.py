@@ -41,6 +41,7 @@ st.markdown(
         gap: 14px;
         z-index: 99999;
         pointer-events: all;
+        transition: opacity 0.25s ease;
       }
       #app-loading .spinner {
         width: 46px;
@@ -65,10 +66,28 @@ st.markdown(
       <div class="label">Loading Insight360…</div>
     </div>
     <script>
-      window.addEventListener("load", () => {
-        const el = document.getElementById("app-loading");
-        if (el) el.style.display = "none";
-      });
+      (function () {
+        const hideOverlay = () => {
+          const el = document.getElementById("app-loading");
+          if (!el) return;
+          el.style.opacity = "0";
+          el.style.pointerEvents = "none";
+          setTimeout(() => el.remove(), 400);
+        };
+
+        const waitForHero = () => {
+          if (document.querySelector(".hero-shell")) {
+            hideOverlay();
+          } else {
+            requestAnimationFrame(waitForHero);
+          }
+        };
+
+        // Start immediately (the load event may already have fired in Streamlit).
+        requestAnimationFrame(waitForHero);
+        // Hard fallback: never leave the overlay stuck.
+        setTimeout(hideOverlay, 4000);
+      })();
     </script>
     """,
     unsafe_allow_html=True,
