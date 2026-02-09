@@ -19,6 +19,8 @@ RUN pip install -r app/requirements.txt
 EXPOSE 7860
 ENV STREAMLIT_SERVER_PORT=7860
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
+ENV STREAMLIT_SERVER_RUN_ON_SAVE=false
+ENV STREAMLIT_SERVER_FILEWATCHER_TYPE=none
 
 # Run the app
 CMD ["streamlit", "run", "Welcome.py", "--server.port=7860", "--server.address=0.0.0.0"]

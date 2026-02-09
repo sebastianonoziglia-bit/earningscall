@@ -185,12 +185,10 @@ section[data-testid="stSidebar"] a[href*="Genie"]::after {
 import logging
 import os
 import base64
-import time
 import textwrap
 from datetime import datetime
 from urllib.parse import quote
-from utils.time_utils import render_floating_clock
-from utils.language import init_language, get_text, get_greeting_translated
+from utils.language import get_text, get_greeting_translated
 from utils.header import display_header
 from utils.logos import load_company_logos
 # Note: avoid transition animation on Welcome to reduce visual flicker.
@@ -214,42 +212,6 @@ def get_greeting():
         return "Good afternoon"
     else:
         return "Good evening"
-
-@st.cache_data(show_spinner=False)
-def load_company_logos():
-    """Load and cache company logos"""
-    try:
-        logo_files = {
-            'Apple': os.path.join(ASSETS_DIR, "8.png"),
-            'Microsoft': os.path.join(ASSETS_DIR, "msft.png"),
-            'Alphabet': os.path.join(ASSETS_DIR, "10.png"),
-            'Netflix': os.path.join(ASSETS_DIR, "9.png"),
-            'Meta Platforms': os.path.join(ASSETS_DIR, "12.png"),
-            'Amazon': os.path.join(ASSETS_DIR, "Amazon_icon.png"),
-            'Disney': os.path.join(ASSETS_DIR, "icons8-logo-disney-240.png"),
-            'Roku': os.path.join(ASSETS_DIR, "rokudef.png"),
-            'Spotify': os.path.join(ASSETS_DIR, "11.png"),
-            'Comcast': os.path.join(ASSETS_DIR, "6.png"),
-            'Paramount': os.path.join(ASSETS_DIR, "Paramount.png"),
-            'Paramount Global': os.path.join(ASSETS_DIR, "Paramount.png"),
-            'Warner Bros Discovery': os.path.join(ASSETS_DIR, "adadad.png"),
-            'Warner Bros. Discovery': os.path.join(ASSETS_DIR, "adadad.png"),
-            'More': os.path.join(ASSETS_DIR, "Coming soon.png"),
-        }
-
-        logos = {}
-        for company, path in logo_files.items():
-            if os.path.exists(path):
-                try:
-                    with open(path, "rb") as img_file:
-                        logos[company] = base64.b64encode(img_file.read()).decode()
-                except Exception as e:
-                    logger.error(f"Error loading logo for {company}: {str(e)}")
-                    continue
-        return logos
-    except Exception as e:
-        logger.error(f"Error in load_company_logos: {str(e)}")
-        return {}
 
 # Initialize session state - no password authentication
 if 'initialized' not in st.session_state:
@@ -636,11 +598,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Render the floating clock
-current_year = render_floating_clock()
-
-# Don't show SQL Assistant on the Welcome page
-
 # Dynamic welcome message with translation
 greeting = get_greeting_translated()
 st.markdown(f"<div class='welcome-message'>{greeting}! 👋</div>", unsafe_allow_html=True)
@@ -674,7 +631,6 @@ if st.session_state.first_time_user and st.session_state.logged_in:
         """, unsafe_allow_html=True)
         if st.button("Got it! Don't show again"):
             st.session_state.first_time_user = False
-            st.rerun()
 
 # Stats Dashboard 
 st.markdown(f"""

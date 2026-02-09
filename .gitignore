@@ -1,2 +1,5 @@
 .venv
 .DS_Store
+app/.streamlit.log
+app/.streamlit.pid
+app/.streamlit.port
