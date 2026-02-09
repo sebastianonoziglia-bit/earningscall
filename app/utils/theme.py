@@ -235,6 +235,11 @@ def apply_theme():
         .stRadio [data-baseweb="radio"] > div * {
             background: transparent !important;
         }
+        div[data-testid="stRadio"] label,
+        div[data-testid="stRadio"] div,
+        div[data-testid="stRadio"] span {
+            background: transparent !important;
+        }
         .stRadio [data-baseweb="radio"],
         .stCheckbox [data-baseweb="checkbox"] {
             background: transparent !important;
