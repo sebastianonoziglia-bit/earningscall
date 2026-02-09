@@ -5,6 +5,7 @@ st.set_page_config(page_title="Coming Soon", page_icon="🔮", layout="wide")
 
 from utils.auth import check_password
 from utils.styles import get_page_style
+from utils.header import display_header
 from utils.components import render_ai_assistant
 from utils.time_utils import render_floating_clock
 from utils.page_transition import apply_page_transition_fix
@@ -14,6 +15,7 @@ apply_page_transition_fix()
 
 # Apply shared styles
 st.markdown(get_page_style(), unsafe_allow_html=True)
+display_header()
 
 # Check if user is logged in
 # Always authenticated - no password check needed

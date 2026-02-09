@@ -19,9 +19,12 @@ from utils.state_management import get_data_processor, initialize_session_state
 from utils.animation_helper import update_chart_layout, create_consistent_frame, get_dynamic_tick_values, create_animation_buttons
 from utils.styles import get_page_style
 from utils.components import load_company_logos
+from utils.header import display_header
 from utils.data_loader import CONTINENT_MAPPINGS, AD_MACRO_CATEGORIES
+from utils.theme import get_theme_mode
 
 st.markdown(get_page_style(), unsafe_allow_html=True)
+display_header()
 
 # Streamlit markdown can treat indented HTML as a code block. Normalize HTML blocks to avoid that.
 def _html_block(html: str) -> str:
@@ -32,48 +35,48 @@ st.markdown(
     _html_block(
         """
         <style>
-        body.overview-dark .stApp,
-        body.overview-dark [data-testid="stAppViewContainer"],
-        body.overview-dark section.main,
-        body.overview-dark .block-container {
+        body.theme-dark .stApp,
+        body.theme-dark [data-testid="stAppViewContainer"],
+        body.theme-dark section.main,
+        body.theme-dark .block-container {
             background: #0B1220 !important;
             color: #F8FAFC !important;
         }
 
-        body.overview-dark [data-testid="stMarkdownContainer"],
-        body.overview-dark [data-testid="stMarkdownContainer"] p,
-        body.overview-dark [data-testid="stMarkdownContainer"] li,
-        body.overview-dark [data-testid="stMarkdownContainer"] span,
-        body.overview-dark [data-testid="stMarkdownContainer"] strong {
+        body.theme-dark [data-testid="stMarkdownContainer"],
+        body.theme-dark [data-testid="stMarkdownContainer"] p,
+        body.theme-dark [data-testid="stMarkdownContainer"] li,
+        body.theme-dark [data-testid="stMarkdownContainer"] span,
+        body.theme-dark [data-testid="stMarkdownContainer"] strong {
             color: #E2E8F0 !important;
         }
 
-        body.overview-dark h1,
-        body.overview-dark h2,
-        body.overview-dark h3,
-        body.overview-dark h4,
-        body.overview-dark h5,
-        body.overview-dark h6,
-        body.overview-dark .stMarkdown h1,
-        body.overview-dark .stMarkdown h2,
-        body.overview-dark .stMarkdown h3,
-        body.overview-dark .stMarkdown h4,
-        body.overview-dark .stMarkdown h5,
-        body.overview-dark .stMarkdown h6 {
+        body.theme-dark h1,
+        body.theme-dark h2,
+        body.theme-dark h3,
+        body.theme-dark h4,
+        body.theme-dark h5,
+        body.theme-dark h6,
+        body.theme-dark .stMarkdown h1,
+        body.theme-dark .stMarkdown h2,
+        body.theme-dark .stMarkdown h3,
+        body.theme-dark .stMarkdown h4,
+        body.theme-dark .stMarkdown h5,
+        body.theme-dark .stMarkdown h6 {
             color: #F8FAFC !important;
         }
 
-        body.overview-dark .overview-summary-card {
+        body.theme-dark .overview-summary-card {
             background: #111827 !important;
             color: #F8FAFC !important;
             box-shadow: 0 14px 28px rgba(2, 6, 23, 0.35) !important;
         }
 
-        body.overview-dark .overview-summary-card * {
+        body.theme-dark .overview-summary-card * {
             color: inherit !important;
         }
 
-        body.overview-dark .ov-map-summary {
+        body.theme-dark .ov-map-summary {
             position: absolute;
             top: 228px;
             left: 18px;
@@ -88,26 +91,26 @@ st.markdown(
             pointer-events: auto;
         }
 
-        body.overview-dark .ov-map-summary-title {
+        body.theme-dark .ov-map-summary-title {
             font-size: 0.95rem;
             color: #94A3B8;
             margin-bottom: 6px;
         }
 
-        body.overview-dark .ov-map-summary-value {
+        body.theme-dark .ov-map-summary-value {
             font-size: 1.75rem;
             font-weight: 700;
             color: #F8FAFC;
             margin-bottom: 12px;
         }
 
-        body.overview-dark .ov-map-summary-list {
+        body.theme-dark .ov-map-summary-list {
             display: flex;
             flex-direction: column;
             gap: 8px;
         }
 
-        body.overview-dark .ov-map-summary-row {
+        body.theme-dark .ov-map-summary-row {
             display: flex;
             justify-content: space-between;
             gap: 8px;
@@ -116,7 +119,7 @@ st.markdown(
             color: #E2E8F0;
         }
 
-        body.overview-dark .ov-map-summary-sub {
+        body.theme-dark .ov-map-summary-sub {
             display: flex;
             justify-content: space-between;
             gap: 8px;
@@ -125,7 +128,7 @@ st.markdown(
             padding-left: 10px;
         }
 
-        body.overview-dark .ov-macro-label {
+        body.theme-dark .ov-macro-label {
             margin: 4px 0 8px;
             font-size: 0.8rem;
             color: #94A3B8;
@@ -133,19 +136,19 @@ st.markdown(
             text-transform: uppercase;
         }
 
-        body.overview-dark .ov-map-wrap {
+        body.theme-dark .ov-map-wrap {
             position: relative;
             min-height: 700px;
         }
 
-        body.overview-dark .ov-macro-row {
+        body.theme-dark .ov-macro-row {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
             margin: 10px 0 14px 0;
         }
 
-        body.overview-dark .ov-macro-pill {
+        body.theme-dark .ov-macro-pill {
             padding: 6px 10px;
             border-radius: 999px;
             background: rgba(15, 23, 42, 0.6);
@@ -158,50 +161,50 @@ st.markdown(
             font-weight: 600;
         }
 
-        body.overview-dark .ov-macro-pill.positive {
+        body.theme-dark .ov-macro-pill.positive {
             border-color: rgba(34, 197, 94, 0.45);
             color: #BBF7D0;
         }
 
-        body.overview-dark .ov-macro-pill.negative {
+        body.theme-dark .ov-macro-pill.negative {
             border-color: rgba(248, 113, 113, 0.5);
             color: #FECACA;
         }
 
-        body.overview-dark div[data-baseweb="select"] > div,
-        body.overview-dark div[data-baseweb="select"] > div > div,
-        body.overview-dark input,
-        body.overview-dark textarea {
+        body.theme-dark div[data-baseweb="select"] > div,
+        body.theme-dark div[data-baseweb="select"] > div > div,
+        body.theme-dark input,
+        body.theme-dark textarea {
             background: #0F172A !important;
             color: #F8FAFC !important;
             border-color: rgba(148, 163, 184, 0.35) !important;
         }
 
-        body.overview-dark .stMultiSelect [data-baseweb="tag"] {
+        body.theme-dark .stMultiSelect [data-baseweb="tag"] {
             background: #0F172A !important;
             color: #F8FAFC !important;
             border: 1px solid rgba(59, 130, 246, 0.45) !important;
         }
 
-        body.overview-dark label,
-        body.overview-dark .stRadio label,
-        body.overview-dark .stCheckbox label {
+        body.theme-dark label,
+        body.theme-dark .stRadio label,
+        body.theme-dark .stCheckbox label {
             color: #E2E8F0 !important;
         }
 
-        body.overview-dark .js-plotly-plot .xtick text,
-        body.overview-dark .js-plotly-plot .ytick text,
-        body.overview-dark .js-plotly-plot .gtitle text,
-        body.overview-dark .js-plotly-plot .legend text,
-        body.overview-dark .js-plotly-plot .colorbar text {
+        body.theme-dark .js-plotly-plot .xtick text,
+        body.theme-dark .js-plotly-plot .ytick text,
+        body.theme-dark .js-plotly-plot .gtitle text,
+        body.theme-dark .js-plotly-plot .legend text,
+        body.theme-dark .js-plotly-plot .colorbar text {
             fill: #E2E8F0 !important;
         }
 
-        body.overview-dark .js-plotly-plot .bglayer .bg {
+        body.theme-dark .js-plotly-plot .bglayer .bg {
             fill: rgba(0, 0, 0, 0) !important;
         }
 
-        body.overview-dark .js-plotly-plot .gridlayer path {
+        body.theme-dark .js-plotly-plot .gridlayer path {
             stroke: rgba(148, 163, 184, 0.12) !important;
         }
 
@@ -211,7 +214,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 components.html(
-    "<script>window.parent.document.body.classList.add('overview-dark');</script>",
+    "",
     height=0,
 )
 
@@ -1134,6 +1137,20 @@ st.markdown(
     "Hover countries to view values.",
 )
 
+theme_mode = get_theme_mode()
+dark_mode = theme_mode == "dark"
+map_bg = "#0B1220" if dark_mode else "#F8FAFC"
+land_color = "#111827" if dark_mode else "#E2E8F0"
+ocean_color = "#0B1220" if dark_mode else "#FFFFFF"
+border_color = "rgba(15,23,42,0.12)" if dark_mode else "rgba(15,23,42,0.18)"
+label_text_color = "#F8FAFC" if dark_mode else "#0F172A"
+annotation_bg = "rgba(15, 23, 42, 0.92)" if dark_mode else "rgba(255,255,255,0.96)"
+annotation_border = "#FFFFFF" if dark_mode else "rgba(15,23,42,0.18)"
+hover_bg = "rgba(15, 23, 42, 0.92)" if dark_mode else "rgba(255,255,255,0.98)"
+hover_border = "rgba(255,255,255,0.12)" if dark_mode else "rgba(15,23,42,0.15)"
+hover_font_color = "#FFFFFF" if dark_mode else "#0F172A"
+colorbar_font = "rgba(226, 232, 240, 0.8)" if dark_mode else "rgba(15, 23, 42, 0.6)"
+
 country_ad_df = _load_country_advertising_df()
 if not country_ad_df.empty:
     show_by_country = st.checkbox(
@@ -1403,7 +1420,7 @@ if not country_ad_df.empty:
                     locationmode="country names",
                     text=default_texts,
                     mode="text",
-                    textfont=dict(size=default_sizes, color="rgba(15, 23, 42, 0.9)", family="Poppins, system-ui, sans-serif"),
+                    textfont=dict(size=default_sizes, color=label_text_color, family="Poppins, system-ui, sans-serif"),
                     hoverinfo="skip",
                     showlegend=False,
                 )
@@ -1415,7 +1432,7 @@ if not country_ad_df.empty:
                         lat=override_lats,
                         text=override_texts,
                         mode="text",
-                        textfont=dict(size=override_sizes, color="rgba(15, 23, 42, 0.9)", family="Poppins, system-ui, sans-serif"),
+                        textfont=dict(size=override_sizes, color=label_text_color, family="Poppins, system-ui, sans-serif"),
                         hoverinfo="skip",
                         showlegend=False,
                         name="country-label-overrides",
@@ -1470,11 +1487,11 @@ if not country_ad_df.empty:
                         yanchor="middle",
                         font=dict(
                             size=11,
-                            color="#F8FAFC",
+                            color=label_text_color,
                             family="Poppins, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
                         ),
-                        bgcolor="rgba(15, 23, 42, 0.92)",
-                        bordercolor="#FFFFFF",
+                        bgcolor=annotation_bg,
+                        bordercolor=annotation_border,
                         borderwidth=1,
                         borderpad=6,
                     )
@@ -1487,30 +1504,30 @@ if not country_ad_df.empty:
             center=dict(lon=0, lat=0),
             showcoastlines=False,
             showcountries=True,
-            countrycolor="rgba(15,23,42,0.12)",
+            countrycolor=border_color,
             showframe=False,
             showland=True,
-            landcolor="#111827",
-            oceancolor="#0B1220",
-            lakecolor="#0B1220",
+            landcolor=land_color,
+            oceancolor=ocean_color,
+            lakecolor=ocean_color,
             bgcolor="rgba(0,0,0,0)",
         )
         map_fig.update_layout(
             height=680,
             margin=dict(l=0, r=0, t=0, b=0),
-            paper_bgcolor="#0B1220",
-            plot_bgcolor="#0B1220",
+            paper_bgcolor=map_bg,
+            plot_bgcolor=map_bg,
             coloraxis_colorbar=dict(
-                tickfont=dict(color="rgba(226, 232, 240, 0.8)"),
-                title=dict(text="", font=dict(color="rgba(226, 232, 240, 0.8)")),
+                tickfont=dict(color=colorbar_font),
+                title=dict(text="", font=dict(color=colorbar_font)),
             ),
             font=dict(family="Poppins, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif"),
             dragmode=False,
             hoverlabel=dict(
-                bgcolor="rgba(15, 23, 42, 0.92)",
-                bordercolor="rgba(255,255,255,0.12)",
+                bgcolor=hover_bg,
+                bordercolor=hover_border,
                 font=dict(
-                    color="#FFFFFF",
+                    color=hover_font_color,
                     size=12,
                     family="Poppins, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
                 ),
@@ -1601,6 +1618,13 @@ if not country_ad_df.empty:
             default_height=680,
         )
         overlay_html = summary_html if summary_html else ""
+        summary_bg = "rgba(11, 18, 32, 0.6)" if dark_mode else "rgba(255, 255, 255, 0.92)"
+        summary_border = "rgba(148, 163, 184, 0.22)" if dark_mode else "rgba(15, 23, 42, 0.12)"
+        summary_title_color = "#94A3B8" if dark_mode else "#475569"
+        summary_value_color = "#F8FAFC" if dark_mode else "#0F172A"
+        summary_text_color = "#E2E8F0" if dark_mode else "#0F172A"
+        summary_sub_color = "#94A3B8" if dark_mode else "#64748B"
+        summary_sticky_bg = "rgba(11, 18, 32, 0.9)" if dark_mode else "rgba(255, 255, 255, 0.95)"
         components.html(
             _html_block(
                 f"""
@@ -1616,7 +1640,7 @@ if not country_ad_df.empty:
                     position: relative;
                     width: 100%;
                     height: 680px;
-                    background: #0B1220;
+                    background: {map_bg};
                   }}
                   .ov-map-wrap .js-plotly-plot {{
                     width: 100%;
@@ -1629,20 +1653,20 @@ if not country_ad_df.empty:
                     z-index: 6;
                     max-width: min(340px, 40vw);
                     height: clamp(300px, 48vh, 460px);
-                    background: rgba(11, 18, 32, 0.6);
+                    background: {summary_bg};
                     border-radius: 12px;
                     padding: 10px 12px;
-                    border: 1px solid rgba(148, 163, 184, 0.22);
+                    border: 1px solid {summary_border};
                     overflow-y: auto;
                     pointer-events: auto;
-                    color: #E2E8F0;
+                    color: {summary_text_color};
                   }}
                   .ov-map-summary-title {{
                     position: sticky;
                     top: 0;
                     z-index: 2;
                     padding: 6px 0 8px 0;
-                    background: rgba(11, 18, 32, 0.9);
+                    background: {summary_sticky_bg};
                     backdrop-filter: blur(6px);
                   }}
                   .ov-map-summary-value {{
@@ -1650,18 +1674,18 @@ if not country_ad_df.empty:
                     top: 32px;
                     z-index: 2;
                     padding-bottom: 10px;
-                    background: rgba(11, 18, 32, 0.9);
+                    background: {summary_sticky_bg};
                     backdrop-filter: blur(6px);
                   }}
                   .ov-map-summary-title {{
                     font-size: 0.95rem;
-                    color: #94A3B8;
+                    color: {summary_title_color};
                     margin-bottom: 6px;
                   }}
                   .ov-map-summary-value {{
                     font-size: 1.75rem;
                     font-weight: 700;
-                    color: #F8FAFC;
+                    color: {summary_value_color};
                     margin-bottom: 12px;
                   }}
                   .ov-map-summary-list {{
@@ -1675,14 +1699,14 @@ if not country_ad_df.empty:
                     gap: 8px;
                     font-size: 0.9rem;
                     font-weight: 600;
-                    color: #E2E8F0;
+                    color: {summary_text_color};
                   }}
                   .ov-map-summary-sub {{
                     display: flex;
                     justify-content: space-between;
                     gap: 8px;
                     font-size: 0.78rem;
-                    color: #94A3B8;
+                    color: {summary_sub_color};
                     padding-left: 10px;
                   }}
                 </style>

@@ -1,8 +1,6 @@
 # Set page config must be the first Streamlit command
 import streamlit as st
 st.set_page_config(page_title="Welcome", page_icon="📊", layout="wide")
-from utils.theme import apply_theme
-apply_theme()
 
 # Handle logo navigation via query params
 query_params = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
@@ -152,6 +150,9 @@ from utils.page_transition import apply_page_transition_fix
 # Apply fix for page transitions to prevent background bleed-through
 apply_page_transition_fix()
 
+# Global header (language + theme toggle)
+display_header()
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -226,6 +227,9 @@ if os.path.exists(background_path):
         logger.error(f"Error loading hero background: {str(e)}")
 
 hero_placeholder = st.empty()
+
+if "hero_loaded" not in st.session_state:
+    st.session_state.hero_loaded = False
 
 
 def render_hero(logos_html="", show_spinner=False):
@@ -406,7 +410,8 @@ def render_hero(logos_html="", show_spinner=False):
     hero_placeholder.markdown(hero_html, unsafe_allow_html=True)
 
 
-render_hero(show_spinner=True)
+if not st.session_state.hero_loaded:
+    render_hero(show_spinner=True)
 
 # Initialize data processing with optimized loading
 try:
@@ -463,6 +468,7 @@ for company in logo_order:
 
 logos_html = "".join(logo_links)
 render_hero(logos_html=logos_html, show_spinner=False)
+st.session_state.hero_loaded = True
 
 # Add custom CSS and branding
 st.markdown("""
@@ -600,14 +606,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Initialize language and render the common header with language selector
-init_language()
-
 # Render the floating clock
 current_year = render_floating_clock()
-
-# Render the common header with language selector
-display_header()
 
 # Don't show SQL Assistant on the Welcome page
 

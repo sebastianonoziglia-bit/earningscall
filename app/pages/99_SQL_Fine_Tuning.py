@@ -15,7 +15,9 @@ st.set_page_config(page_title="SQL Manager", page_icon="🔧", layout="wide")
 
 # Apply shared page styles
 from utils.styles import get_page_style
+from utils.header import display_header
 st.markdown(get_page_style(), unsafe_allow_html=True)
+display_header()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

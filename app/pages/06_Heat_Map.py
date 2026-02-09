@@ -14,8 +14,10 @@ from utils.page_transition import apply_page_transition_fix
 apply_page_transition_fix()
 
 from utils.styles import apply_plotly_theme, load_common_styles
+from utils.header import display_header
 load_common_styles()
 apply_plotly_theme()
+display_header()
 
 from utils.auth import check_password
 import pandas as pd

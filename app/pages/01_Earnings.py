@@ -20,6 +20,7 @@ from utils import format_number
 from utils.auth import check_password
 from utils.state_management import get_data_processor
 from utils.styles import get_page_style
+from utils.header import display_header
 
 # Page config must be the first Streamlit command
 st.set_page_config(page_title="Earnings", page_icon="E", layout="wide")
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 check_password()
 st.markdown(get_page_style(), unsafe_allow_html=True)
+display_header()
 st.markdown(
     """
     <style>

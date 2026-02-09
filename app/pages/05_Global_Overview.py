@@ -19,6 +19,7 @@ from datetime import datetime
 from utils.auth import check_password
 from utils.data_loader import load_advertising_data, get_available_filters
 from utils.styles import get_page_style
+from utils.header import display_header
 from utils.insights import get_ad_spend_insight, get_cagr_insight, get_aggregated_ad_spend_insight
 from utils.inflation_calculator import create_inflation_analysis_box, add_inflation_selector
 from utils.components import render_ai_assistant
@@ -53,6 +54,7 @@ def get_company_color(company_name):
 
 # Apply shared styles
 st.markdown(get_page_style(), unsafe_allow_html=True)
+display_header()
 
 # Add header with language selector
 from utils.header import render_header
