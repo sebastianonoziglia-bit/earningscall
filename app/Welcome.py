@@ -145,7 +145,6 @@ import textwrap
 from datetime import datetime
 from urllib.parse import quote
 from utils.time_utils import render_floating_clock
-from utils.state_management import get_data_processor
 from utils.language import init_language, get_text, get_greeting_translated
 from utils.header import display_header
 from utils.sql_assistant_sidebar import render_sql_assistant_sidebar

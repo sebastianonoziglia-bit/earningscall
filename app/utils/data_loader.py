@@ -8,13 +8,12 @@ from functools import lru_cache
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global session state for data caching - properly initialize
-if 'data_cache' not in st.session_state:
-    st.session_state.data_cache = {}
-
-# Keep track of initialization attempts to prevent repeated failures
-if 'data_loader_init_attempted' not in st.session_state:
-    st.session_state.data_loader_init_attempted = False
+def _ensure_loader_state():
+    """Initialize loader-related session state safely."""
+    if 'data_cache' not in st.session_state:
+        st.session_state.data_cache = {}
+    if 'data_loader_init_attempted' not in st.session_state:
+        st.session_state.data_loader_init_attempted = False
 
 # Define macro categories and their components
 AD_MACRO_CATEGORIES = {
@@ -33,6 +32,7 @@ AD_MACRO_CATEGORIES = {
 @st.cache_data(ttl=3600*24)
 def read_excel_data():
     """Cache the Excel data to avoid repeated reads"""
+    _ensure_loader_state()
     cache_key = 'excel_data'
 
     if cache_key in st.session_state.data_cache:
@@ -110,6 +110,7 @@ def load_advertising_data(filters):
 @st.cache_data(ttl=3600)
 def get_available_filters():
     """Cache the available filters"""
+    _ensure_loader_state()
     # Define default filters in case of error
     default_filters = {
         'countries': ['Italy', 'United States', 'Global', 'United Kingdom', 'Japan', 'Germany', 'France', 'China'],

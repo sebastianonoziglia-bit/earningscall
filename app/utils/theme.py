@@ -229,6 +229,12 @@ def apply_theme():
         .stRadio div[role="radiogroup"] > div {
             background: transparent !important;
         }
+        .stRadio [data-baseweb="radio"] > div {
+            background: transparent !important;
+        }
+        .stRadio [data-baseweb="radio"] > div * {
+            background: transparent !important;
+        }
         .stRadio [data-baseweb="radio"],
         .stCheckbox [data-baseweb="checkbox"] {
             background: transparent !important;
