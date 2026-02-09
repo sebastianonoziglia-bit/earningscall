@@ -168,6 +168,15 @@ def apply_theme():
             fill: var(--app-text) !important;
         }
 
+        /* Ensure Plotly SVGs remain visible (avoid inherited opacity/visibility) */
+        .js-plotly-plot,
+        .js-plotly-plot .plotly,
+        .js-plotly-plot svg,
+        .js-plotly-plot .plotly .main-svg {
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+
         /* Theme toggle styling */
         .theme-toggle-label {
             font-size: 0.75rem;
