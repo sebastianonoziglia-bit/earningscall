@@ -42,7 +42,7 @@ def read_excel_data():
         'FINANCIAL_DATA_XLSX',
         os.path.join('attached_assets', 'Earnings + stocks  copy.xlsx')
     )
-    csv_path = os.path.join('attached_assets', 'Country_Advertising_Data_FullVi.csv')
+    csv_path = os.path.join('/tmp', 'advertising_cache.csv')
     sheet_name = 'Country_Advertising_Data_FullVi'
 
     try:
@@ -50,7 +50,10 @@ def read_excel_data():
             df = pd.read_csv(csv_path)
         else:
             df = pd.read_excel(excel_path, sheet_name=sheet_name)
-            df.to_csv(csv_path, index=False)
+            try:
+                df.to_csv(csv_path, index=False)
+            except Exception:
+                logger.warning("Unable to write advertising cache to /tmp; continuing without cache.")
     except Exception as e:
         logger.warning(f"Error reading CSV, falling back to Excel: {str(e)}")
         df = pd.read_excel(excel_path, sheet_name=sheet_name)

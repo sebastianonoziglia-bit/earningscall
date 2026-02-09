@@ -192,7 +192,7 @@ from urllib.parse import quote
 from utils.time_utils import render_floating_clock
 from utils.language import init_language, get_text, get_greeting_translated
 from utils.header import display_header
-from utils.sql_assistant_sidebar import render_sql_assistant_sidebar
+from utils.logos import load_company_logos
 # Note: avoid transition animation on Welcome to reduce visual flicker.
 
 # Global header (language + theme toggle)
