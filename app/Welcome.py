@@ -406,20 +406,12 @@ def render_hero(logos_html="", show_spinner=False):
 
 render_hero(show_spinner=False)
 
-# Initialize data processing with optimized loading
+# Load company logos (avoid heavy data processor on Welcome)
 try:
-    # Initialize the data processor using optimized loader
-    data_processor = get_data_processor()
-
-    # For better performance, preload frequently accessed data
-    if not st.session_state.get('data_preloaded', False):
-        st.session_state.data_preloaded = True
-
-    # Load company logos
     company_logos = load_company_logos()
     st.session_state.initialized = True
 except Exception as e:
-    logger.error(f"Error initializing application: {str(e)}")
+    logger.error(f"Error loading application data: {str(e)}")
     st.error("Error loading application data. Please try refreshing the page.")
 
 logo_order = [

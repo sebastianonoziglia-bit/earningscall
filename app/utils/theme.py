@@ -143,6 +143,7 @@ def apply_theme():
         }
 
         /* App background + text */
+        body,
         .stApp,
         [data-testid="stAppViewContainer"],
         section.main,
@@ -156,6 +157,11 @@ def apply_theme():
         [data-testid="stMarkdownContainer"] li,
         [data-testid="stMarkdownContainer"] span,
         [data-testid="stMarkdownContainer"] strong {
+            color: var(--app-text) !important;
+        }
+
+        label {
+            background: transparent !important;
             color: var(--app-text) !important;
         }
 
@@ -202,6 +208,10 @@ def apply_theme():
         }
         .stRadio [data-baseweb="radio"] label,
         .stCheckbox [data-baseweb="checkbox"] label {
+            background: transparent !important;
+        }
+        .stRadio [data-baseweb="radio"] label > div:last-child,
+        .stCheckbox [data-baseweb="checkbox"] label > div:last-child {
             background: transparent !important;
         }
         .stRadio [data-baseweb="radio"] div[role="radio"] {
