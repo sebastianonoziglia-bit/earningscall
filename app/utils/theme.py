@@ -40,7 +40,7 @@ def apply_theme():
     - Improves general typography and spacing
     """
     mode = get_theme_mode()
-    st.markdown(textwrap.dedent(f"""
+    css = textwrap.dedent("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=block');
 
@@ -174,12 +174,20 @@ def apply_theme():
             color: #0F172A !important;
         }
     </style>
-    <script>
-        const body = window.parent.document.body;
-        body.classList.remove('theme-dark', 'theme-light', 'overview-dark');
-        body.classList.add('theme-{mode}');
-    </script>
-    """), unsafe_allow_html=True)
+    """)
+    st.markdown(css, unsafe_allow_html=True)
+    st.markdown(
+        textwrap.dedent(
+            f"""
+            <script>
+                const body = window.parent.document.body;
+                body.classList.remove('theme-dark', 'theme-light', 'overview-dark');
+                body.classList.add('theme-{mode}');
+            </script>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
 
 def format_company_insights(insights_text):
     """
