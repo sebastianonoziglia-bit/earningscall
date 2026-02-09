@@ -1824,10 +1824,59 @@ def get_segment_color_map(df_segments, company):
     return color_map
 
 
-def format_metric_value(value):
+def format_compact_value(value):
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return "N/A"
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return "N/A"
+    abs_val = abs(value)
+    if abs_val >= 1_000_000_000_000:
+        scaled = value / 1_000_000_000_000
+        suffix = "T"
+    elif abs_val >= 1_000_000_000:
+        scaled = value / 1_000_000_000
+        suffix = "B"
+    elif abs_val >= 1_000_000:
+        scaled = value / 1_000_000
+        suffix = "M"
+    elif abs_val >= 1_000:
+        scaled = value / 1_000
+        suffix = "K"
+    else:
+        scaled = value
+        suffix = ""
+
+    if abs(scaled) >= 100:
+        formatted = f"{scaled:.0f}"
+    elif abs(scaled) >= 10:
+        formatted = f"{scaled:.1f}"
+    else:
+        formatted = f"{scaled:.2f}"
+    formatted = formatted.replace(".00", "").replace(".0", "")
+    return f"{formatted}{suffix}"
+
+
+def format_metric_value(value, scale="millions"):
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "N/A"
+    if scale == "raw":
+        return format_compact_value(value)
     return format_number(value)
+
+
+def infer_metric_scale(df):
+    if df is None or df.empty:
+        return "millions"
+    try:
+        values = pd.to_numeric(pd.Series(df.to_numpy().ravel()), errors="coerce").dropna()
+    except Exception:
+        return "millions"
+    if values.empty:
+        return "millions"
+    max_abs = values.abs().max()
+    return "raw" if max_abs >= 1e7 else "millions"
 
 
 def get_metric_history(metrics_df, company, metric_key, available_years, window=5):
@@ -1919,6 +1968,7 @@ def compute_heatmap_change(pivot_df):
     ordered = pivot_df.copy()
     ordered = ordered.reindex(columns=list(ordered.columns))
     change = ordered.pct_change(axis=1) * 100
+    change = change.replace([np.inf, -np.inf], np.nan)
     return change
 
 
@@ -3746,7 +3796,8 @@ def render_heatmap_figure(heatmap_df, heatmap_value_kind, heatmap_freq, y_title)
     if heatmap_value_kind == "stock":
         value_display = heatmap_df.applymap(format_stock_value)
     else:
-        value_display = heatmap_df.applymap(format_metric_value)
+        value_scale = infer_metric_scale(heatmap_df)
+        value_display = heatmap_df.applymap(lambda v: format_metric_value(v, scale=value_scale))
 
     x_labels = [str(col) for col in heatmap_df.columns.tolist()]
     y_labels = heatmap_df.index.tolist()

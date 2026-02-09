@@ -139,8 +139,10 @@ import logging
 import os
 import base64
 import textwrap
+import io
 from datetime import datetime
 from urllib.parse import quote
+from PIL import Image
 from utils.language import get_text, get_greeting_translated
 from utils.header import display_header
 from utils.logos import load_company_logos
@@ -176,15 +178,43 @@ if 'initialized' not in st.session_state:
 # Define company_logos variable at the global scope
 company_logos = {}
 
-# Hero image with loading state
-background_path = os.path.join(ASSETS_DIR, "FAQ MFE.png")
-background_b64 = ""
-if os.path.exists(background_path):
+@st.cache_data(show_spinner=False)
+def get_hero_background_b64(path, max_width=2000, quality=85):
+    if not path or not os.path.exists(path):
+        return "", "image/png"
     try:
-        with open(background_path, "rb") as img_file:
-            background_b64 = base64.b64encode(img_file.read()).decode()
+        with Image.open(path) as img:
+            has_alpha = img.mode in ("RGBA", "LA") or (
+                img.mode == "P" and "transparency" in img.info
+            )
+            target = img
+            if max_width and img.width > max_width:
+                ratio = max_width / float(img.width)
+                new_size = (int(img.width * ratio), int(img.height * ratio))
+                target = img.resize(new_size, Image.LANCZOS)
+            buffer = io.BytesIO()
+            if has_alpha:
+                if target.mode != "RGBA":
+                    target = target.convert("RGBA")
+                target.save(buffer, format="PNG", optimize=True)
+                mime = "image/png"
+            else:
+                if target.mode != "RGB":
+                    target = target.convert("RGB")
+                target.save(buffer, format="JPEG", quality=quality, optimize=True)
+                mime = "image/jpeg"
+            return base64.b64encode(buffer.getvalue()).decode(), mime
     except Exception as e:
         logger.error(f"Error loading hero background: {str(e)}")
+        try:
+            with open(path, "rb") as img_file:
+                return base64.b64encode(img_file.read()).decode(), "image/png"
+        except Exception:
+            return "", "image/png"
+
+# Hero image with loading state
+background_path = os.path.join(ASSETS_DIR, "FAQ MFE.png")
+background_b64, background_mime = get_hero_background_b64(background_path)
 
 hero_placeholder = st.empty()
 
@@ -224,7 +254,7 @@ def render_hero(logos_html="", show_spinner=False):
         aspect-ratio: 16 / 9;
         min-height: 320px;
         border-radius: 18px;
-        background-image: url("data:image/png;base64,{background_b64}");
+        background-image: url("data:{background_mime};base64,{background_b64}");
         background-repeat: no-repeat;
         background-size: cover;
         background-position: center center;
