@@ -228,9 +228,6 @@ if os.path.exists(background_path):
 
 hero_placeholder = st.empty()
 
-if "hero_loaded" not in st.session_state:
-    st.session_state.hero_loaded = False
-
 
 def render_hero(logos_html="", show_spinner=False):
     if not background_b64:
@@ -410,8 +407,7 @@ def render_hero(logos_html="", show_spinner=False):
     hero_placeholder.markdown(hero_html, unsafe_allow_html=True)
 
 
-if not st.session_state.hero_loaded:
-    render_hero(show_spinner=True)
+render_hero(show_spinner=False)
 
 # Initialize data processing with optimized loading
 try:
@@ -468,7 +464,6 @@ for company in logo_order:
 
 logos_html = "".join(logo_links)
 render_hero(logos_html=logos_html, show_spinner=False)
-st.session_state.hero_loaded = True
 
 # Add custom CSS and branding
 st.markdown("""

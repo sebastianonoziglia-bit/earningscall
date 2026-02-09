@@ -9,11 +9,11 @@ def get_theme_mode():
     Return the current theme mode ('light' or 'dark').
     Defaults to light if unset.
     """
-    mode = st.session_state.get("theme_mode")
-    if mode not in {"light", "dark"}:
-        mode = "light"
-        st.session_state["theme_mode"] = mode
-    return mode
+    mode = st.session_state.get("theme_mode", "Light")
+    if isinstance(mode, str) and mode.lower() in {"light", "dark"}:
+        return mode.lower()
+    st.session_state["theme_mode"] = "Light"
+    return "light"
 
 def render_theme_toggle():
     """
@@ -22,15 +22,16 @@ def render_theme_toggle():
     current = get_theme_mode()
     options = ["Light", "Dark"]
     index = 0 if current == "light" else 1
-    selection = st.radio(
+    if "theme_mode" not in st.session_state:
+        st.session_state["theme_mode"] = "Light"
+    st.radio(
         "Theme",
         options,
         index=index,
         horizontal=True,
         label_visibility="collapsed",
-        key="theme_mode_toggle",
+        key="theme_mode",
     )
-    st.session_state["theme_mode"] = selection.lower()
 
 def apply_theme():
     """
@@ -40,18 +41,46 @@ def apply_theme():
     - Improves general typography and spacing
     """
     mode = get_theme_mode()
+    if mode == "dark":
+        bg = "#0B1220"
+        text = "#F8FAFC"
+        muted = "#E2E8F0"
+        border = "rgba(148, 163, 184, 0.35)"
+        surface = "rgba(15, 23, 42, 0.85)"
+        surface_alt = "rgba(15, 23, 42, 0.65)"
+        accent = "#3B82F6"
+        accent_text = "#F8FAFC"
+    else:
+        bg = "#FFFFFF"
+        text = "#0F172A"
+        muted = "#475569"
+        border = "rgba(15, 23, 42, 0.12)"
+        surface = "#F8FAFC"
+        surface_alt = "#F1F5F9"
+        accent = "#2563EB"
+        accent_text = "#FFFFFF"
+
     css = textwrap.dedent("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=block');
+
+        :root {
+            --app-bg: __BG__;
+            --app-text: __TEXT__;
+            --app-muted: __MUTED__;
+            --app-border: __BORDER__;
+            --app-surface: __SURFACE__;
+            --app-surface-alt: __SURFACE_ALT__;
+            --app-accent: __ACCENT__;
+            --app-accent-text: __ACCENT_TEXT__;
+        }
 
         /* Base styles - apply to everything */
         html, body, p, div, h1, h2, h3, h4, h5, h6, li, span, button, input, select, textarea, .stApp {
             font-family: 'Montserrat', sans-serif !important;
         }
 
-        h1 {
-            color: #0073ff !important;
-        }
+        h1 { color: var(--app-accent) !important; }
         
         /* Streamlit elements */
         .css-1kyxreq, .st-ae, .st-af, .st-ag, .st-ah, .st-ai, .st-aj, .st-ak, .st-al, 
@@ -109,85 +138,97 @@ def apply_theme():
         /* Theme toggle styling */
         .theme-toggle-label {
             font-size: 0.75rem;
-            color: #94A3B8;
+            color: var(--app-muted);
             margin-bottom: 2px;
         }
 
-        /* Dark theme */
-        body.theme-dark .stApp,
-        body.theme-dark [data-testid="stAppViewContainer"],
-        body.theme-dark section.main,
-        body.theme-dark .block-container {
-            background: #0B1220 !important;
-            color: #F8FAFC !important;
+        /* App background + text */
+        .stApp,
+        [data-testid="stAppViewContainer"],
+        section.main,
+        .block-container {
+            background: var(--app-bg) !important;
+            color: var(--app-text) !important;
         }
 
-        body.theme-dark [data-testid="stMarkdownContainer"],
-        body.theme-dark [data-testid="stMarkdownContainer"] p,
-        body.theme-dark [data-testid="stMarkdownContainer"] li,
-        body.theme-dark [data-testid="stMarkdownContainer"] span,
-        body.theme-dark [data-testid="stMarkdownContainer"] strong {
-            color: #E2E8F0 !important;
+        [data-testid="stMarkdownContainer"],
+        [data-testid="stMarkdownContainer"] p,
+        [data-testid="stMarkdownContainer"] li,
+        [data-testid="stMarkdownContainer"] span,
+        [data-testid="stMarkdownContainer"] strong {
+            color: var(--app-text) !important;
         }
 
-        body.theme-dark h1, body.theme-dark h2, body.theme-dark h3,
-        body.theme-dark h4, body.theme-dark h5, body.theme-dark h6 {
-            color: #F8FAFC !important;
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--app-text) !important;
         }
 
-        body.theme-dark section[data-testid="stSidebar"] {
-            background: #0F172A !important;
-            color: #E2E8F0 !important;
+        section[data-testid="stSidebar"] {
+            background: var(--app-bg) !important;
+            color: var(--app-text) !important;
+            border-right: 1px solid var(--app-border);
         }
 
-        body.theme-dark div[data-baseweb="select"] > div,
-        body.theme-dark div[data-baseweb="select"] > div > div,
-        body.theme-dark input,
-        body.theme-dark textarea {
-            background: rgba(15, 23, 42, 0.85) !important;
-            color: #F8FAFC !important;
-            border-color: rgba(148, 163, 184, 0.35) !important;
+        /* Inputs / selects */
+        div[data-baseweb="select"] > div,
+        div[data-baseweb="select"] > div > div,
+        input,
+        textarea,
+        .stNumberInput input {
+            background: var(--app-surface) !important;
+            color: var(--app-text) !important;
+            border-color: var(--app-border) !important;
         }
 
-        body.theme-dark .stMultiSelect [data-baseweb="tag"] {
-            background: rgba(148, 163, 184, 0.2) !important;
-            color: #E2E8F0 !important;
+        .stMultiSelect [data-baseweb="tag"] {
+            background: var(--app-surface-alt) !important;
+            color: var(--app-text) !important;
         }
 
-        body.theme-dark .stButton button,
-        body.theme-dark .stDownloadButton button {
-            background: rgba(15, 23, 42, 0.8) !important;
-            color: #F8FAFC !important;
-            border: 1px solid rgba(148, 163, 184, 0.4) !important;
+        /* Radio + checkbox */
+        .stRadio label, .stCheckbox label {
+            color: var(--app-text) !important;
+        }
+        .stRadio [data-baseweb="radio"] {
+            background: transparent !important;
+        }
+        .stRadio [data-baseweb="radio"] div[role="radio"] {
+            border-color: var(--app-border) !important;
+            background: transparent !important;
+        }
+        .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"] {
+            border-color: var(--app-accent) !important;
+        }
+        .stCheckbox [data-baseweb="checkbox"] > div {
+            border-color: var(--app-border) !important;
+            background: var(--app-surface) !important;
         }
 
-        body.theme-dark .js-plotly-plot text {
-            fill: #E2E8F0 !important;
+        /* Buttons */
+        .stButton button,
+        .stDownloadButton button {
+            background: var(--app-surface) !important;
+            color: var(--app-text) !important;
+            border: 1px solid var(--app-border) !important;
         }
 
-        /* Light theme (explicit resets for clarity) */
-        body.theme-light .stApp,
-        body.theme-light [data-testid="stAppViewContainer"],
-        body.theme-light section.main,
-        body.theme-light .block-container {
-            background: #FFFFFF !important;
-            color: #0F172A !important;
+        /* Plotly text */
+        .js-plotly-plot text {
+            fill: var(--app-text) !important;
         }
     </style>
     """)
-    st.markdown(css, unsafe_allow_html=True)
-    st.markdown(
-        textwrap.dedent(
-            f"""
-            <script>
-                const body = window.parent.document.body;
-                body.classList.remove('theme-dark', 'theme-light', 'overview-dark');
-                body.classList.add('theme-{mode}');
-            </script>
-            """
-        ),
-        unsafe_allow_html=True,
+    css = (
+        css.replace("__BG__", bg)
+        .replace("__TEXT__", text)
+        .replace("__MUTED__", muted)
+        .replace("__BORDER__", border)
+        .replace("__SURFACE__", surface)
+        .replace("__SURFACE_ALT__", surface_alt)
+        .replace("__ACCENT__", accent)
+        .replace("__ACCENT_TEXT__", accent_text)
     )
+    st.markdown(css, unsafe_allow_html=True)
 
 def format_company_insights(insights_text):
     """
