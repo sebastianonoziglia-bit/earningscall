@@ -622,8 +622,8 @@ section[data-testid="stSidebar"],
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    min-height: 52px;
+    gap: 8px;
+    height: 60px;
     text-align: center;
     padding: 12px 16px;
     background: #1d4ed8;
@@ -632,34 +632,40 @@ section[data-testid="stSidebar"],
     text-decoration: none;
     font-weight: 600;
     border: 1px solid #1d4ed8;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 .welcome-nav .nav-btn:hover {
     background: #2563eb;
     border-color: #2563eb;
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.35);
 }
 .welcome-nav .nav-icon {
-    width: 18px;
-    height: 18px;
+    width: 28px;
+    height: 28px;
     background-repeat: no-repeat;
     background-position: center;
     background-size: contain;
-    flex: 0 0 18px;
+    flex: 0 0 28px;
+}
+.welcome-nav .nav-label {
+    line-height: 1.1;
 }
 .nav-icon-search { background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2211%22%20cy%3D%2211%22%20r%3D%227%22/%3E%3Cline%20x1%3D%2216.5%22%20y1%3D%2216.5%22%20x2%3D%2222%22%20y2%3D%2222%22/%3E%3C/svg%3E'); }
 .nav-icon-bar { background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cline%20x1%3D%224%22%20y1%3D%2220%22%20x2%3D%2220%22%20y2%3D%2220%22/%3E%3Crect%20x%3D%226%22%20y%3D%2211%22%20width%3D%223%22%20height%3D%229%22/%3E%3Crect%20x%3D%2211%22%20y%3D%227%22%20width%3D%223%22%20height%3D%2213%22/%3E%3Crect%20x%3D%2216%22%20y%3D%223%22%20width%3D%223%22%20height%3D%2217%22/%3E%3C/svg%3E'); }
 .nav-icon-line { background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%223%2017%209%2011%2013%2015%2021%207%22/%3E%3Cpolyline%20points%3D%223%2021%203%2017%2021%2017%22/%3E%3C/svg%3E'); }
 .nav-icon-coin { background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cellipse%20cx%3D%2212%22%20cy%3D%226%22%20rx%3D%227%22%20ry%3D%223%22/%3E%3Cpath%20d%3D%22M5%206v6c0%201.7%203.1%203%207%203s7-1.3%207-3V6%22/%3E%3Cpath%20d%3D%22M5%2012v6c0%201.7%203.1%203%207%203s7-1.3%207-3v-6%22/%3E%3C/svg%3E'); }
-.nav-icon-book { background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%204h7a3%203%200%200%201%203%203v13a3%203%200%200%200-3-3H3z%22/%3E%3Cpath%20d%3D%22M21%204h-7a3%203%200%200%200-3%203%22/%3E%3Cpath%20d%3D%22M21%2020h-7a3%203%200%200%201-3-3%22/%3E%3C/svg%3E'); }
+.nav-icon-book { background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M2%203h7a4%204%200%200%201%204%204v14a3%203%200%200%200-3-3H2z%22/%3E%3Cpath%20d%3D%22M22%203h-7a4%204%200%200%200-4%204%22/%3E%3Cpath%20d%3D%22M22%2020h-7a3%203%200%200%201-3-3%22/%3E%3Cline%20x1%3D%2212%22%20y1%3D%227%22%20x2%3D%2212%22%20y2%3D%2221%22/%3E%3C/svg%3E'); }
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown("""
 <div class="welcome-nav">
-  <a class="nav-btn" href="?nav=overview"><span class="nav-icon nav-icon-search"></span>Overview</a>
-  <a class="nav-btn" href="?nav=earnings"><span class="nav-icon nav-icon-coin"></span>Earnings</a>
-  <a class="nav-btn" href="?nav=stocks"><span class="nav-icon nav-icon-line"></span>Stocks</a>
-  <a class="nav-btn" href="?nav=editorial"><span class="nav-icon nav-icon-book"></span>Editorial</a>
-  <a class="nav-btn" href="?nav=genie"><span class="nav-icon nav-icon-bar"></span>Financial Genie (SPECIAL)</a>
+  <a class="nav-btn" href="?nav=overview"><span class="nav-icon nav-icon-search"></span><span class="nav-label">Overview</span></a>
+  <a class="nav-btn" href="?nav=earnings"><span class="nav-icon nav-icon-coin"></span><span class="nav-label">Earnings</span></a>
+  <a class="nav-btn" href="?nav=stocks"><span class="nav-icon nav-icon-line"></span><span class="nav-label">Stocks</span></a>
+  <a class="nav-btn" href="?nav=editorial"><span class="nav-icon nav-icon-book"></span><span class="nav-label">Editorial</span></a>
+  <a class="nav-btn" href="?nav=genie"><span class="nav-icon nav-icon-bar"></span><span class="nav-label">Financial Genie (SPECIAL)</span></a>
 </div>
 """, unsafe_allow_html=True)
 
