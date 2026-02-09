@@ -224,9 +224,7 @@ def render_hero(logos_html="", show_spinner=False):
 	        border-radius: 22px;
 	        background: rgba(255, 255, 255, 0.22);
 	        border: 1px solid rgba(255, 255, 255, 0.35);
-	        backdrop-filter: blur(14px);
-	        -webkit-backdrop-filter: blur(14px);
-	        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+			        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
 	        display: flex;
 	        align-items: center;
 	        justify-content: center;
@@ -621,12 +619,16 @@ section[data-testid="stSidebar"],
     margin: 12px 0 24px;
 }
 .welcome-nav .nav-btn {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 52px;
     text-align: center;
     padding: 12px 16px;
     background: #1d4ed8;
     color: #ffffff !important;
-    border-radius: 10px;
+    border-radius: 12px;
     text-decoration: none;
     font-weight: 600;
     border: 1px solid #1d4ed8;
@@ -635,24 +637,33 @@ section[data-testid="stSidebar"],
     background: #2563eb;
     border-color: #2563eb;
 }
+.welcome-nav .nav-icon {
+    width: 18px;
+    height: 18px;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    flex: 0 0 18px;
+}
+.nav-icon-search { background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2211%22%20cy%3D%2211%22%20r%3D%227%22/%3E%3Cline%20x1%3D%2216.5%22%20y1%3D%2216.5%22%20x2%3D%2222%22%20y2%3D%2222%22/%3E%3C/svg%3E'); }
+.nav-icon-bar { background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cline%20x1%3D%224%22%20y1%3D%2220%22%20x2%3D%2220%22%20y2%3D%2220%22/%3E%3Crect%20x%3D%226%22%20y%3D%2211%22%20width%3D%223%22%20height%3D%229%22/%3E%3Crect%20x%3D%2211%22%20y%3D%227%22%20width%3D%223%22%20height%3D%2213%22/%3E%3Crect%20x%3D%2216%22%20y%3D%223%22%20width%3D%223%22%20height%3D%2217%22/%3E%3C/svg%3E'); }
+.nav-icon-line { background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%223%2017%209%2011%2013%2015%2021%207%22/%3E%3Cpolyline%20points%3D%223%2021%203%2017%2021%2017%22/%3E%3C/svg%3E'); }
+.nav-icon-coin { background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cellipse%20cx%3D%2212%22%20cy%3D%226%22%20rx%3D%227%22%20ry%3D%223%22/%3E%3Cpath%20d%3D%22M5%206v6c0%201.7%203.1%203%207%203s7-1.3%207-3V6%22/%3E%3Cpath%20d%3D%22M5%2012v6c0%201.7%203.1%203%207%203s7-1.3%207-3v-6%22/%3E%3C/svg%3E'); }
+.nav-icon-book { background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%204h7a3%203%200%200%201%203%203v13a3%203%200%200%200-3-3H3z%22/%3E%3Cpath%20d%3D%22M21%204h-7a3%203%200%200%200-3%203%22/%3E%3Cpath%20d%3D%22M21%2020h-7a3%203%200%200%201-3-3%22/%3E%3C/svg%3E'); }
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown("""
 <div class="welcome-nav">
-  <a class="nav-btn" href="?nav=overview">Overview</a>
-  <a class="nav-btn" href="?nav=earnings">Earnings</a>
-  <a class="nav-btn" href="?nav=stocks">Stocks</a>
-  <a class="nav-btn" href="?nav=editorial">Editorial</a>
-  <a class="nav-btn" href="?nav=genie">Financial Genie (SPECIAL)</a>
-  <a class="nav-btn" href="#glossary-section">Glossary</a>
-  <a class="nav-btn" href="#sources-section">Sources</a>
-  <a class="nav-btn" href="#sql-section">SQL Assistant</a>
+  <a class="nav-btn" href="?nav=overview"><span class="nav-icon nav-icon-search"></span>Overview</a>
+  <a class="nav-btn" href="?nav=earnings"><span class="nav-icon nav-icon-coin"></span>Earnings</a>
+  <a class="nav-btn" href="?nav=stocks"><span class="nav-icon nav-icon-line"></span>Stocks</a>
+  <a class="nav-btn" href="?nav=editorial"><span class="nav-icon nav-icon-book"></span>Editorial</a>
+  <a class="nav-btn" href="?nav=genie"><span class="nav-icon nav-icon-bar"></span>Financial Genie (SPECIAL)</a>
 </div>
 """, unsafe_allow_html=True)
 
 # Add Glossary section
-st.markdown('<div id="glossary-section"></div>', unsafe_allow_html=True)
 with st.expander("Glossary"):
     st.markdown("""
     - **Adjust by USD Purchasing Power**: Modifies values based on the U.S. dollar's purchasing power to account for inflation effects over time (Bureau of Labor Statistics data).
@@ -679,7 +690,6 @@ with st.expander("Glossary"):
     """)
 
 # Add Sources section
-st.markdown('<div id="sources-section"></div>', unsafe_allow_html=True)
 with st.expander("Sources"):
     st.markdown("""
     Our financial data is sourced from:
@@ -687,16 +697,6 @@ with st.expander("Sources"):
     - SEC 10-K Filings
     - S&P 500 Index Data
     """)
-
-# Add SQL Assistant description
-st.markdown('<div id="sql-section"></div>', unsafe_allow_html=True)
-with st.expander("SQL Assistant"):
-    st.markdown("""
-    <div style="padding: 10px 0;">
-        <p>Access our database using natural language through the SQL Assistant in the side menu.</p>
-        <p>Simply ask questions in English, Italian, or Spanish to get insights about companies, markets, and financial metrics.</p>
-    </div>
-    """, unsafe_allow_html=True)
 
 # Add JavaScript for scrolling to login section when clicking protected links
 # Removed scrollToLogin script to avoid client-side DOM manipulation.
