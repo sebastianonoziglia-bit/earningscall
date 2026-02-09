@@ -168,6 +168,10 @@ def apply_theme():
             color: var(--app-text) !important;
             border-right: 1px solid var(--app-border);
         }
+        section[data-testid="stSidebar"] *,
+        [data-testid="stSidebarNav"] * {
+            color: var(--app-text) !important;
+        }
 
         /* Inputs / selects */
         div[data-baseweb="select"] > div,
@@ -179,6 +183,9 @@ def apply_theme():
             color: var(--app-text) !important;
             border-color: var(--app-border) !important;
         }
+        div[data-baseweb="select"] * {
+            color: var(--app-text) !important;
+        }
 
         .stMultiSelect [data-baseweb="tag"] {
             background: var(--app-surface-alt) !important;
@@ -189,7 +196,12 @@ def apply_theme():
         .stRadio label, .stCheckbox label {
             color: var(--app-text) !important;
         }
-        .stRadio [data-baseweb="radio"] {
+        .stRadio [data-baseweb="radio"],
+        .stCheckbox [data-baseweb="checkbox"] {
+            background: transparent !important;
+        }
+        .stRadio [data-baseweb="radio"] label,
+        .stCheckbox [data-baseweb="checkbox"] label {
             background: transparent !important;
         }
         .stRadio [data-baseweb="radio"] div[role="radio"] {
