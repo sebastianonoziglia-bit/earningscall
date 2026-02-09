@@ -1,3 +1,3 @@
 #!/bin/bash
 source app/.venv/bin/activate
-streamlit run Welcome.py --server.address localhost
+streamlit run app/Welcome.py --server.address localhost --server.runOnSave=false --server.fileWatcherType=none

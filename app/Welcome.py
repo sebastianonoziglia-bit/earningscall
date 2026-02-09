@@ -686,7 +686,12 @@ with st.expander(get_text('overview'), expanded=False):
     - Key market trends
     """)
     if st.session_state.get('logged_in', False):
-        st.page_link("pages/00_Overview.py", label=f"{get_text('go_to')} {get_text('overview').replace('📊 ', '')} →")
+        if st.button(
+            f"{get_text('go_to')} {get_text('overview').replace('📊 ', '')} →",
+            key="go_overview",
+            use_container_width=False,
+        ):
+            st.switch_page("pages/00_Overview.py")
     else:
         st.markdown('<a href="#" onclick="scrollToLogin(); return false;">Go to Overview →</a>', unsafe_allow_html=True)
 
@@ -699,7 +704,12 @@ with st.expander(get_text('earnings'), expanded=False):
     - Interactive pie charts and trend analysis
     """)
     if st.session_state.get('logged_in', False):
-        st.page_link("pages/01_Earnings.py", label=f"{get_text('go_to')} {get_text('earnings').replace('💰 ', '')} →")
+        if st.button(
+            f"{get_text('go_to')} {get_text('earnings').replace('💰 ', '')} →",
+            key="go_earnings",
+            use_container_width=False,
+        ):
+            st.switch_page("pages/01_Earnings.py")
     else:
         st.markdown('<a href="#" onclick="scrollToLogin(); return false;">Go to Earnings →</a>', unsafe_allow_html=True)
 
@@ -712,7 +722,12 @@ with st.expander(get_text('stocks'), expanded=False):
     - Volume analysis
     """)
     if st.session_state.get('logged_in', False):
-        st.page_link("pages/02_Stocks.py", label=f"{get_text('go_to')} {get_text('stocks').replace('📈 ', '')} →")
+        if st.button(
+            f"{get_text('go_to')} {get_text('stocks').replace('📈 ', '')} →",
+            key="go_stocks",
+            use_container_width=False,
+        ):
+            st.switch_page("pages/02_Stocks.py")
     else:
         st.markdown('<a href="#" onclick="scrollToLogin(); return false;">Go to Stocks →</a>', unsafe_allow_html=True)
 
@@ -726,7 +741,12 @@ with st.expander(get_text('editorial'), expanded=False):
     - Performance analysis
     """)
     if st.session_state.get('logged_in', False):
-        st.page_link("pages/03_Editorial.py", label=f"{get_text('go_to')} {get_text('editorial').replace('📝 ', '')} →")
+        if st.button(
+            f"{get_text('go_to')} {get_text('editorial').replace('📝 ', '')} →",
+            key="go_editorial",
+            use_container_width=False,
+        ):
+            st.switch_page("pages/03_Editorial.py")
     else:
         st.markdown('<a href="#" onclick="scrollToLogin(); return false;">Go to Editorial →</a>', unsafe_allow_html=True)
 
@@ -761,7 +781,12 @@ with st.expander("🧞 Financial Genie", expanded=False):
     - Interactive visualization tools
     """)
     if st.session_state.get('logged_in', False):
-        st.page_link("pages/04_Genie.py", label=f"{get_text('go_to')} {get_text('genie').replace('🧞 ', '')} →")
+        if st.button(
+            f"{get_text('go_to')} {get_text('genie').replace('🧞 ', '')} →",
+            key="go_genie",
+            use_container_width=False,
+        ):
+            st.switch_page("pages/04_Genie.py")
     else:
         st.markdown('<a href="#" onclick="scrollToLogin(); return false;">Go to Financial Genie →</a>', unsafe_allow_html=True)
 
