@@ -6,6 +6,10 @@ st.set_page_config(page_title="Global Overview",
                    layout="wide",
                    initial_sidebar_state="expanded")
 
+from utils.global_fonts import apply_global_fonts
+apply_global_fonts()
+
+
 from utils.page_transition import apply_page_transition_fix
 
 # Apply fix for page transitions to prevent background bleed-through

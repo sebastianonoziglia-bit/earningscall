@@ -3,6 +3,10 @@ import streamlit as st
 # Page config must be the first Streamlit command
 st.set_page_config(page_title="Financial Genie (SPECIAL)", page_icon="🧞", layout="wide")
 
+from utils.global_fonts import apply_global_fonts
+apply_global_fonts()
+
+
 from utils.page_transition import apply_page_transition_fix
 
 # Apply fix for page transitions to prevent background bleed-through

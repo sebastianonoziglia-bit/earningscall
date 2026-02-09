@@ -13,6 +13,10 @@ from io import StringIO
 # Page config must be the first Streamlit command
 st.set_page_config(page_title="SQL Manager", page_icon="🔧", layout="wide")
 
+from utils.global_fonts import apply_global_fonts
+apply_global_fonts()
+
+
 # Apply shared page styles
 from utils.styles import get_page_style
 from utils.header import display_header

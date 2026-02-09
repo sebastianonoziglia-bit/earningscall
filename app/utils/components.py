@@ -8,8 +8,6 @@ import logging
 import os
 import subprocess
 import time
-from utils.ai_chat import DashboardAIChat
-from utils.enhanced_ai_chat import EnhancedAIChat
 from utils.state_management import get_data_processor
 from PIL import Image
 import base64

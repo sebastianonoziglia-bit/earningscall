@@ -3,6 +3,10 @@ import streamlit as st
 # Page config must be the first Streamlit command
 st.set_page_config(page_title="Coming Soon", page_icon="🔮", layout="wide")
 
+from utils.global_fonts import apply_global_fonts
+apply_global_fonts()
+
+
 from utils.auth import check_password
 from utils.styles import get_page_style
 from utils.header import display_header

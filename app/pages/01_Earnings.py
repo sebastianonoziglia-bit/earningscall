@@ -26,6 +26,10 @@ from utils.theme import get_theme_mode
 # Page config must be the first Streamlit command
 st.set_page_config(page_title="Earnings", page_icon="E", layout="wide")
 
+from utils.global_fonts import apply_global_fonts
+apply_global_fonts()
+
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

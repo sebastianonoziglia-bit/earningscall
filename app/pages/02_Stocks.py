@@ -3,6 +3,10 @@ import streamlit as st
 # Page config must be the first Streamlit command
 st.set_page_config(page_title="Stocks", page_icon="📈", layout="wide")
 
+from utils.global_fonts import apply_global_fonts
+apply_global_fonts()
+
+
 from utils.page_transition import apply_page_transition_fix
 
 # Apply fix for page transitions to prevent background bleed-through
@@ -14,7 +18,6 @@ import pandas as pd
 from stock_processor_fix import StockDataProcessor  # Use the fixed version
 from data_processor import FinancialDataProcessor
 from utils.helpers import format_number
-from utils.ai_chat import render_chat_interface, initialize_chat
 from datetime import datetime, timedelta
 from PIL import Image
 import base64
@@ -271,9 +274,6 @@ def _get_last_nonzero(series):
 #############################
 # Start of Stocks Page Content
 #############################
-
-# Chat initialization for AI support
-initialize_chat()
 
 # Page title
 st.title("📈 Stock Performance")

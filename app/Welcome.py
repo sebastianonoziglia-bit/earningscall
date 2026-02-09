@@ -2,6 +2,9 @@
 import streamlit as st
 st.set_page_config(page_title="Welcome", page_icon="📊", layout="wide")
 
+from utils.global_fonts import apply_global_fonts
+apply_global_fonts()
+
 # Handle logo navigation via query params
 query_params = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
 
@@ -31,77 +34,6 @@ if target_param and str(target_param).lower() in {"earnings", "01_earnings"}:
 # Custom CSS for sidebar navigation items - particularly Financial Genie
 st.markdown('''
 <style>
-
-/* Apply Montserrat font globally to all elements */
-html, body, [class*="css"] {
-    font-family: 'Montserrat', sans-serif !important;
-    font-weight: 400;
-}
-
-/* Main content area */
-.main .block-container {
-    font-family: 'Montserrat', sans-serif !important;
-}
-
-/* Headers and titles - Montserrat Medium */
-h1, h2, h3, h4, h5, h6 {
-    font-family: 'Montserrat', sans-serif !important;
-    font-weight: 500 !important;
-}
-
-/* Streamlit specific elements */
-.stMarkdown, .stText {
-    font-family: 'Montserrat', sans-serif !important;
-}
-
-/* Sidebar */
-.css-1d391kg {
-    font-family: 'Montserrat', sans-serif !important;
-}
-
-/* Buttons */
-.stButton button {
-    font-family: 'Montserrat', sans-serif !important;
-    font-weight: 500 !important;
-}
-
-/* Selectbox and input elements */
-.stSelectbox label, .stTextInput label, .stNumberInput label {
-    font-family: 'Montserrat', sans-serif !important;
-    font-weight: 500 !important;
-}
-
-/* Tab labels */
-.stTabs [data-baseweb="tab-list"] button {
-    font-family: 'Montserrat', sans-serif !important;
-    font-weight: 500 !important;
-}
-
-/* Expander headers */
-.streamlit-expanderHeader {
-    font-family: 'Montserrat', sans-serif !important;
-    font-weight: 500 !important;
-}
-
-/* All paragraph text */
-p {
-    font-family: 'Montserrat', sans-serif !important;
-}
-
-/* List items */
-li {
-    font-family: 'Montserrat', sans-serif !important;
-}
-
-/* Ensure all divs inherit the font */
-div {
-    font-family: 'Montserrat', sans-serif !important;
-}
-
-/* Override any remaining default fonts */
-* {
-    font-family: 'Montserrat', sans-serif !important;
-}
 /* Custom styling for the Financial Genie in the sidebar */
 section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] div.element-container:has(a[href*="Genie"]) {
     background-color: #f3f4f6;

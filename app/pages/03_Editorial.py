@@ -3,8 +3,11 @@ import streamlit as st
 # Page config must be the first Streamlit command
 st.set_page_config(page_title="Editorial", page_icon="📝", layout="wide")
 
+from utils.global_fonts import apply_global_fonts
+apply_global_fonts()
+
+
 from utils.auth import check_password
-from utils.ai_chat import render_chat_interface, initialize_chat
 import plotly.graph_objects as go
 from subscriber_data_processor import SubscriberDataProcessor
 import pandas as pd
@@ -37,9 +40,6 @@ render_sql_assistant_sidebar()
 # Always authenticated - no password check needed
 from utils.time_utils import render_floating_clock
 render_floating_clock()
-
-# Initialize chat
-initialize_chat()
 
 st.title("Editorial Insights")
 st.write("Quarterly subscriber metrics analysis.")

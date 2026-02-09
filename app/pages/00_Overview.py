@@ -2,6 +2,10 @@ import streamlit as st
 # Set page config - Must be the first Streamlit command
 st.set_page_config(page_title="Overview", page_icon="📊", layout="wide")
 
+from utils.global_fonts import apply_global_fonts
+apply_global_fonts()
+
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
