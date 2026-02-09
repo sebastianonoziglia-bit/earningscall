@@ -38,16 +38,7 @@ def apply_page_transition_fix():
             padding: 0 !important;
         }
 
-        /* Specifically target transparent elements that may persist */
-        img[style*="opacity:0"], img[style*="opacity: 0"],
-        div[style*="opacity:0"], div[style*="opacity: 0"] {
-            display: none !important;
-            height: 0 !important;
-            width: 0 !important;
-            position: absolute !important;
-            top: -9999px !important;
-            left: -9999px !important;
-        }
+        /* Avoid blanket opacity selectors (they can hide Plotly/SVG layers). */
 
         /* Force images to be properly removed between Digital Transformation and Executive Summary */
         .main .block-container div[data-testid="stVerticalBlock"] > div:nth-child(n+10):nth-child(-n+20) img {
