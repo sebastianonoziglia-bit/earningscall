@@ -301,6 +301,14 @@ class FinancialDataProcessor:
                 self.df_segments['revenue'] = self._to_number(self.df_segments['revenue'])
             if 'company' in self.df_segments.columns:
                 self.df_segments = self.df_segments[self.df_segments['company'] != 'MFE']
+            if 'segment' in self.df_segments.columns:
+                self.df_segments['segment'] = (
+                    self.df_segments['segment']
+                    .astype(str)
+                    .str.replace("Sever products", "Server products", regex=False)
+                    .str.replace("Sever and products", "Server and products", regex=False)
+                    .str.replace("Sever", "Server", regex=False)
+                )
 
         if self.df_employees is not None and not self.df_employees.empty:
             self.df_employees.columns = [str(c).strip() for c in self.df_employees.columns]

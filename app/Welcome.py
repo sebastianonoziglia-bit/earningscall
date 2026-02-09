@@ -19,6 +19,10 @@ target_param = nav_param or go_param or page_param
 if target_param and str(target_param).lower() in {"earnings", "01_earnings"}:
     if company_param:
         st.session_state["prefill_company"] = company_param
+    try:
+        st.query_params.clear()
+    except Exception:
+        pass
     st.switch_page("pages/01_Earnings.py")
 
 # After page config, import and initialize session state

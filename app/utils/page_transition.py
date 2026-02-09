@@ -83,20 +83,12 @@ def apply_page_transition_fix():
     // This script runs in the Streamlit iframe to help clean up elements
     document.addEventListener('DOMContentLoaded', function() {
         // Function to clean up transparent elements
-        function cleanupTransparentElements() {
-            // Find all elements with opacity 0
-            const transparentElements = document.querySelectorAll('[style*="opacity: 0"], [style*="opacity:0"]');
-            transparentElements.forEach(el => {
-                // Remove them from the DOM
-                if (el.parentNode) {
-                    el.parentNode.removeChild(el);
-                }
-            });
-        }
-        
-        // Run cleanup on page load and periodically
-        cleanupTransparentElements();
-        setInterval(cleanupTransparentElements, 500);
+        const transparentElements = document.querySelectorAll('[style*="opacity: 0"], [style*="opacity:0"]');
+        transparentElements.forEach(el => {
+            if (el.parentNode) {
+                el.parentNode.removeChild(el);
+            }
+        });
     });
     </script>
     """, unsafe_allow_html=True)

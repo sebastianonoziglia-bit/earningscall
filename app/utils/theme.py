@@ -50,6 +50,9 @@ def apply_theme():
         surface_alt = "rgba(15, 23, 42, 0.65)"
         accent = "#3B82F6"
         accent_text = "#F8FAFC"
+        card_bg = "#FFFFFF"
+        card_text = "#0F172A"
+        card_muted = "#475569"
     else:
         bg = "#FFFFFF"
         text = "#0F172A"
@@ -59,6 +62,9 @@ def apply_theme():
         surface_alt = "#F1F5F9"
         accent = "#2563EB"
         accent_text = "#FFFFFF"
+        card_bg = "#FFFFFF"
+        card_text = "#0F172A"
+        card_muted = "#64748B"
 
     css = textwrap.dedent("""
     <style>
@@ -73,6 +79,9 @@ def apply_theme():
             --app-surface-alt: __SURFACE_ALT__;
             --app-accent: __ACCENT__;
             --app-accent-text: __ACCENT_TEXT__;
+            --card-bg: __CARD_BG__;
+            --card-text: __CARD_TEXT__;
+            --card-muted: __CARD_MUTED__;
         }
 
         /* Base styles - apply to everything */
@@ -210,6 +219,16 @@ def apply_theme():
         .stCheckbox label > div > div {
             background: transparent !important;
         }
+        .stRadio label * {
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+        .stRadio div[role="radiogroup"] label {
+            background: transparent !important;
+        }
+        .stRadio div[role="radiogroup"] > div {
+            background: transparent !important;
+        }
         .stRadio [data-baseweb="radio"],
         .stCheckbox [data-baseweb="checkbox"] {
             background: transparent !important;
@@ -228,6 +247,10 @@ def apply_theme():
         }
         .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"] {
             border-color: var(--app-accent) !important;
+        }
+        .stRadio [data-baseweb="radio"] div[role="radio"] {
+            background: transparent !important;
+            box-shadow: none !important;
         }
         .stCheckbox [data-baseweb="checkbox"] > div {
             border-color: var(--app-border) !important;
@@ -250,6 +273,27 @@ def apply_theme():
         .js-plotly-plot text {
             fill: var(--app-text) !important;
         }
+
+        /* Stock cards in dark mode: keep readable text on light cards */
+        .company-card,
+        .stock-metric-card {
+            background: var(--card-bg) !important;
+            color: var(--card-text) !important;
+            border-color: var(--app-border) !important;
+        }
+        .company-card-name,
+        .company-card-price,
+        .stock-metric-value {
+            color: var(--card-text) !important;
+        }
+        .stock-metric-label {
+            color: var(--card-muted) !important;
+        }
+
+        /* Remove heading anchor icons */
+        a.anchor-link {
+            display: none !important;
+        }
     </style>
     """)
     css = (
@@ -261,6 +305,9 @@ def apply_theme():
         .replace("__SURFACE_ALT__", surface_alt)
         .replace("__ACCENT__", accent)
         .replace("__ACCENT_TEXT__", accent_text)
+        .replace("__CARD_BG__", card_bg)
+        .replace("__CARD_TEXT__", card_text)
+        .replace("__CARD_MUTED__", card_muted)
     )
     st.markdown(css, unsafe_allow_html=True)
     st.markdown(
