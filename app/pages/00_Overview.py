@@ -128,6 +128,44 @@ st.markdown(
             padding-left: 10px;
         }
 
+        .ov-macro-label {
+            margin: 4px 0 8px;
+            font-size: 0.8rem;
+            color: #64748B;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .ov-macro-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0 14px 0;
+        }
+
+        .ov-macro-pill {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+            color: #0F172A;
+            font-weight: 600;
+        }
+
+        .ov-macro-pill.positive {
+            border-color: rgba(34, 197, 94, 0.4);
+            color: #166534;
+        }
+
+        .ov-macro-pill.negative {
+            border-color: rgba(248, 113, 113, 0.45);
+            color: #991B1B;
+        }
+
         body.theme-dark .ov-macro-label {
             margin: 4px 0 8px;
             font-size: 0.8rem;
@@ -1189,39 +1227,6 @@ if not country_ad_df.empty:
 
     macro_prev_years = [y for y in available_ad_years if y < year_for_map]
     macro_prev_year = max(macro_prev_years) if macro_prev_years else None
-    macro_rows = []
-    for macro, types in AD_MACRO_CATEGORIES.items():
-        current_sum = country_ad_df[
-            (country_ad_df["Year"] == int(year_for_map)) & (country_ad_df["Metric_type"].isin(types))
-        ]["Value"].sum()
-        prev_sum = 0.0
-        if macro_prev_year is not None:
-            prev_sum = country_ad_df[
-                (country_ad_df["Year"] == int(macro_prev_year))
-                & (country_ad_df["Metric_type"].isin(types))
-            ]["Value"].sum()
-        yoy = None
-        if prev_sum:
-            yoy = ((current_sum - prev_sum) / prev_sum) * 100.0
-        macro_rows.append((macro, yoy))
-
-    if macro_rows:
-        if macro_prev_year is not None:
-            macro_label = f"Macro YoY ({year_for_map} vs {macro_prev_year})"
-        else:
-            macro_label = f"Macro YoY ({year_for_map})"
-        st.markdown(f"<div class='ov-macro-label'>{macro_label}</div>", unsafe_allow_html=True)
-        macro_html = "<div class='ov-macro-row'>"
-        for macro, yoy in macro_rows:
-            if yoy is None:
-                cls = ""
-                value = "—"
-            else:
-                cls = "positive" if yoy >= 0 else "negative"
-                value = f"{yoy:+.1f}%"
-            macro_html += f"<div class='ov-macro-pill {cls}'><span>{macro}</span><span>{value}</span></div>"
-        macro_html += "</div>"
-        st.markdown(macro_html, unsafe_allow_html=True)
 
     df_year = country_ad_df[country_ad_df["Year"] == int(year_for_map)].copy()
     if metric_choice != "All channels":
@@ -1243,6 +1248,71 @@ if not country_ad_df.empty:
         )
         if picked_countries:
             df_year = df_year[df_year["Country"].isin(set(picked_countries))]
+    else:
+        picked_countries = []
+
+    macro_base_df = country_ad_df.copy()
+    macro_years = [int(year_for_map)]
+    if macro_prev_year is not None:
+        macro_years.append(int(macro_prev_year))
+    macro_base_df = macro_base_df[macro_base_df["Year"].isin(macro_years)]
+
+    if region_choice != "Global":
+        allowed = set(CONTINENT_MAPPINGS.get(region_choice, []))
+        if allowed:
+            macro_base_df = macro_base_df[macro_base_df["Country"].isin(allowed)]
+    if view_mode == "By country" and picked_countries:
+        macro_base_df = macro_base_df[macro_base_df["Country"].isin(set(picked_countries))]
+
+    macro_rows = []
+    if metric_choice == "All channels":
+        for macro, types in AD_MACRO_CATEGORIES.items():
+            current_sum = macro_base_df[
+                (macro_base_df["Year"] == int(year_for_map))
+                & (macro_base_df["Metric_type"].isin(types))
+            ]["Value"].sum()
+            prev_sum = 0.0
+            if macro_prev_year is not None:
+                prev_sum = macro_base_df[
+                    (macro_base_df["Year"] == int(macro_prev_year))
+                    & (macro_base_df["Metric_type"].isin(types))
+                ]["Value"].sum()
+            yoy = None
+            if prev_sum:
+                yoy = ((current_sum - prev_sum) / prev_sum) * 100.0
+            macro_rows.append((macro, yoy))
+    else:
+        macro_base_df = macro_base_df[macro_base_df["Metric_type"] == metric_choice]
+        current_sum = macro_base_df[macro_base_df["Year"] == int(year_for_map)]["Value"].sum()
+        prev_sum = 0.0
+        if macro_prev_year is not None:
+            prev_sum = macro_base_df[macro_base_df["Year"] == int(macro_prev_year)]["Value"].sum()
+        yoy = None
+        if prev_sum:
+            yoy = ((current_sum - prev_sum) / prev_sum) * 100.0
+        macro_rows.append((metric_choice, yoy))
+
+    if macro_rows:
+        if metric_choice == "All channels":
+            label_prefix = "Macro YoY"
+        else:
+            label_prefix = f"{metric_choice} YoY"
+        if macro_prev_year is not None:
+            macro_label = f"{label_prefix} ({year_for_map} vs {macro_prev_year})"
+        else:
+            macro_label = f"{label_prefix} ({year_for_map})"
+        st.markdown(f"<div class='ov-macro-label'>{macro_label}</div>", unsafe_allow_html=True)
+        macro_html = "<div class='ov-macro-row'>"
+        for macro, yoy in macro_rows:
+            if yoy is None:
+                cls = ""
+                value = "—"
+            else:
+                cls = "positive" if yoy >= 0 else "negative"
+                value = f"{yoy:+.1f}%"
+            macro_html += f"<div class='ov-macro-pill {cls}'><span>{macro}</span><span>{value}</span></div>"
+        macro_html += "</div>"
+        st.markdown(macro_html, unsafe_allow_html=True)
 
     df_map = (
         df_year.groupby("Country", as_index=False)["Value"].sum()

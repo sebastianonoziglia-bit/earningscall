@@ -21,6 +21,7 @@ from utils.auth import check_password
 from utils.state_management import get_data_processor
 from utils.styles import get_page_style
 from utils.header import display_header
+from utils.theme import get_theme_mode
 
 # Page config must be the first Streamlit command
 st.set_page_config(page_title="Earnings", page_icon="E", layout="wide")
@@ -1861,9 +1862,16 @@ def format_compact_value(value):
 def format_metric_value(value, scale="millions"):
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return "N/A"
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return "N/A"
     if scale == "raw":
-        return format_compact_value(value)
-    return format_number(value)
+        return format_compact_value(numeric_value)
+    # Guard against values already in raw dollars to avoid huge "B" outputs.
+    if abs(numeric_value) >= 1e9:
+        return format_compact_value(numeric_value)
+    return format_number(numeric_value)
 
 
 def infer_metric_scale(df):
@@ -3786,6 +3794,10 @@ def render_heatmap_figure(heatmap_df, heatmap_value_kind, heatmap_freq, y_title)
     if heatmap_df is None or heatmap_df.empty:
         st.info("Heatmap data is not available for the current selection.")
         return
+    theme_mode = get_theme_mode()
+    dark_mode = theme_mode == "dark"
+    heatmap_bg = "#0B1220" if dark_mode else "#FFFFFF"
+    heatmap_text = "#E2E8F0" if dark_mode else "#111827"
     heatmap_change_df = compute_heatmap_change(heatmap_df)
     if heatmap_basis == "Change (%)":
         heatmap_numeric = heatmap_change_df
@@ -3863,9 +3875,9 @@ def render_heatmap_figure(heatmap_df, heatmap_value_kind, heatmap_freq, y_title)
         margin=dict(l=20, r=20, t=20, b=20),
         xaxis_title=x_title,
         yaxis_title=y_title,
-        font=dict(family="Montserrat, sans-serif", size=12, color="#111827"),
-        plot_bgcolor="#FFFFFF",
-        paper_bgcolor="#FFFFFF",
+        font=dict(family="Montserrat, sans-serif", size=12, color=heatmap_text),
+        plot_bgcolor=heatmap_bg,
+        paper_bgcolor=heatmap_bg,
     )
     heatmap_fig.update_xaxes(showgrid=False, tickangle=0)
     heatmap_fig.update_yaxes(showgrid=False)

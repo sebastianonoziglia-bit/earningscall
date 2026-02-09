@@ -53,6 +53,7 @@ def apply_theme():
         card_bg = "#FFFFFF"
         card_text = "#0F172A"
         card_muted = "#475569"
+        plot_bg = bg
     else:
         bg = "#FFFFFF"
         text = "#0F172A"
@@ -65,6 +66,7 @@ def apply_theme():
         card_bg = "#FFFFFF"
         card_text = "#0F172A"
         card_muted = "#64748B"
+        plot_bg = bg
 
     css = textwrap.dedent("""
     <style>
@@ -82,6 +84,7 @@ def apply_theme():
             --card-bg: __CARD_BG__;
             --card-text: __CARD_TEXT__;
             --card-muted: __CARD_MUTED__;
+            --plot-bg: __PLOT_BG__;
         }
 
         /* Base styles - apply to everything */
@@ -110,6 +113,12 @@ def apply_theme():
             font-family: 'Montserrat', sans-serif !important;
             font-size: 1.05rem !important;
             line-height: 1.6 !important;
+        }
+
+        /* Ensure colored segment insight cards always use white text */
+        .segment-insight-card,
+        .segment-insight-card * {
+            color: #ffffff !important;
         }
         
         /* Bullet points in insights */
@@ -142,6 +151,21 @@ def apply_theme():
         /* Tooltips */
         .tooltip, [data-tooltip] {
             font-family: 'Montserrat', sans-serif !important;
+        }
+
+        /* Plotly background + text should follow theme */
+        .js-plotly-plot,
+        .js-plotly-plot .plotly,
+        .js-plotly-plot .plotly .main-svg {
+            background: var(--plot-bg) !important;
+        }
+        .js-plotly-plot .plotly .bg,
+        .js-plotly-plot .plotly .main-svg .bg,
+        .js-plotly-plot .plotly .cartesianlayer .plotbg {
+            fill: var(--plot-bg) !important;
+        }
+        .js-plotly-plot .plotly text {
+            fill: var(--app-text) !important;
         }
 
         /* Theme toggle styling */
@@ -319,6 +343,7 @@ def apply_theme():
         .replace("__CARD_BG__", card_bg)
         .replace("__CARD_TEXT__", card_text)
         .replace("__CARD_MUTED__", card_muted)
+        .replace("__PLOT_BG__", plot_bg)
     )
     st.markdown(css, unsafe_allow_html=True)
     st.markdown(

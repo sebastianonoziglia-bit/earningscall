@@ -3,3 +3,6 @@
 app/.streamlit.log
 app/.streamlit.pid
 app/.streamlit.port
+.streamlit/*.log
+.streamlit/*.pid
+.streamlit/*.port
