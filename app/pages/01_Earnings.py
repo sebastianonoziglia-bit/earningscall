@@ -2093,6 +2093,18 @@ def build_quarterly_metric_heatmap_data(quarterly_df, companies, metric_key, yea
     if df.empty:
         return pd.DataFrame()
     df = df.groupby(["company", "year", "quarter_num", "period_label"], as_index=False)["value"].sum()
+    # Guard against mixed scaling in the quarterly sheet (raw dollars vs millions).
+    values = pd.to_numeric(df["value"], errors="coerce")
+    if values.notna().any():
+        median_val = float(values.median())
+        max_val = float(values.max())
+        # If most values look like millions but some are huge (raw dollars), scale those down.
+        if median_val < 1e7 and max_val > 1e9:
+            values = values.where(values <= 1e9, values / 1e6)
+        # If the entire series is in raw dollars, scale to millions for consistency.
+        elif median_val > 1e8:
+            values = values / 1e6
+        df["value"] = values
     df = df.sort_values(["year", "quarter_num"])
     period_order = df["period_label"].drop_duplicates().tolist()
     pivot = df.pivot(index="company", columns="period_label", values="value")

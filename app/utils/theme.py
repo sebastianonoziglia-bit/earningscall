@@ -24,6 +24,7 @@ def render_theme_toggle():
     index = 0 if current == "light" else 1
     if "theme_mode" not in st.session_state:
         st.session_state["theme_mode"] = "Light"
+    st.markdown("<div class=\"theme-toggle\">", unsafe_allow_html=True)
     st.radio(
         "Theme",
         options,
@@ -32,6 +33,7 @@ def render_theme_toggle():
         label_visibility="collapsed",
         key="theme_mode",
     )
+    st.markdown("</div>", unsafe_allow_html=True)
 
 def apply_theme():
     """
@@ -269,10 +271,17 @@ def apply_theme():
             box-shadow: none !important;
             width: 16px !important;
             height: 16px !important;
-            border-radius: 999px !important;
+            border-radius: 4px !important;
         }
         .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"] {
             border-color: var(--app-accent) !important;
+            background: var(--app-accent) !important;
+        }
+        /* Keep the theme toggle as a round radio with a dot */
+        .theme-toggle .stRadio [data-baseweb="radio"] div[role="radio"] {
+            border-radius: 999px !important;
+        }
+        .theme-toggle .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"] {
             background: radial-gradient(circle, var(--app-accent) 0 45%, transparent 46%) !important;
         }
         .stCheckbox [data-baseweb="checkbox"] > div {
