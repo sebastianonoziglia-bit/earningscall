@@ -273,6 +273,14 @@ def apply_theme():
             background: transparent !important;
             box-shadow: none !important;
         }
+        .stRadio [data-baseweb="radio"] label[data-baseweb="radio"] * {
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+        .stRadio [data-baseweb="radio"] span,
+        .stRadio [data-baseweb="radio"] div:last-child {
+            background: transparent !important;
+        }
         .stRadio [data-baseweb="radio"] label > div:last-child,
         .stCheckbox [data-baseweb="checkbox"] label > div:last-child {
             background: transparent !important;
@@ -287,7 +295,7 @@ def apply_theme():
             box-shadow: none !important;
             margin-right: 8px !important;
         }
-        .stRadio label[data-baseweb="radio"] input:checked + div {
+        div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div {
             background: var(--app-accent) !important;
             border-color: var(--app-accent) !important;
             box-shadow: inset 0 0 0 3px var(--app-accent-text) !important;

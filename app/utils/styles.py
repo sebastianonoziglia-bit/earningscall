@@ -149,7 +149,6 @@ def load_common_styles():
 
     label[data-baseweb="radio"] input:checked + div {
         border-color: var(--app-accent, #0073ff) !important;
-        background-color: transparent !important;
     }
 
     /* Main layout styles */
@@ -899,7 +898,6 @@ def get_page_style():
 
     label[data-baseweb="radio"] input:checked + div {
         border-color: var(--app-accent, #0073ff) !important;
-        background-color: transparent !important;
     }
 
     .main-content {
