@@ -2094,15 +2094,22 @@ def build_quarterly_metric_heatmap_data(quarterly_df, companies, metric_key, yea
         return pd.DataFrame()
     df = df.groupby(["company", "year", "quarter_num", "period_label"], as_index=False)["value"].sum()
     # Guard against mixed scaling in the quarterly sheet (raw dollars vs millions).
-    values = pd.to_numeric(df["value"], errors="coerce")
+    cleaned = (
+        df["value"]
+        .astype(str)
+        .str.replace(",", "", regex=False)
+        .str.replace("$", "", regex=False)
+        .str.replace("%", "", regex=False)
+        .str.replace("(", "-", regex=False)
+        .str.replace(")", "", regex=False)
+    )
+    values = pd.to_numeric(cleaned, errors="coerce")
     if values.notna().any():
-        median_val = float(values.median())
-        max_val = float(values.max())
-        # If most values look like millions but some are huge (raw dollars), scale those down.
-        if median_val < 1e7 and max_val > 1e9:
-            values = values.where(values <= 1e9, values / 1e6)
-        # If the entire series is in raw dollars, scale to millions for consistency.
-        elif median_val > 1e8:
+        abs_vals = values.abs()
+        median_val = float(abs_vals.median())
+        max_val = float(abs_vals.max())
+        # If values look like raw dollars (hundreds of millions or more), scale to millions.
+        if max_val >= 1e8:
             values = values / 1e6
         df["value"] = values
     df = df.sort_values(["year", "quarter_num"])
@@ -3822,12 +3829,12 @@ def render_heatmap_figure(heatmap_df, heatmap_value_kind, heatmap_freq, y_title)
         if flat.size:
             max_abs = float(np.nanmax(np.abs(flat)))
             median_abs = float(np.nanmedian(np.abs(flat)))
-            # If any values look like raw dollars (trillions), scale to millions.
-            if max_abs >= 1e12:
+            # If values look like raw dollars, scale to millions.
+            if max_abs >= 1e9:
                 numeric_df = numeric_df / 1e6
             # Mixed scaling: mostly millions but some raw dollar rows.
-            elif median_abs < 1e7 and max_abs >= 1e9:
-                numeric_df = numeric_df.where(numeric_df <= 1e9, numeric_df / 1e6)
+            elif median_abs < 1e7 and max_abs >= 1e8:
+                numeric_df = numeric_df.where(np.abs(numeric_df) <= 1e8, numeric_df / 1e6)
     heatmap_df = numeric_df
     heatmap_change_df = compute_heatmap_change(heatmap_df)
     if heatmap_basis == "Change (%)":

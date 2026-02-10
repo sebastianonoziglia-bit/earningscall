@@ -236,6 +236,11 @@ def apply_theme():
             background: transparent !important;
             box-shadow: none !important;
         }
+        .stCheckbox label,
+        .stCheckbox label * {
+            background: transparent !important;
+            box-shadow: none !important;
+        }
         .stRadio div[role="radiogroup"] label {
             background: transparent !important;
         }
@@ -261,45 +266,41 @@ def apply_theme():
         .stCheckbox [data-baseweb="checkbox"] label {
             background: transparent !important;
         }
+        .stRadio [data-baseweb="radio"] label[data-baseweb="radio"],
+        .stRadio [data-baseweb="radio"] label[data-baseweb="radio"]:hover,
+        .stCheckbox [data-baseweb="checkbox"] label[data-baseweb="checkbox"],
+        .stCheckbox [data-baseweb="checkbox"] label[data-baseweb="checkbox"]:hover {
+            background: transparent !important;
+            box-shadow: none !important;
+        }
         .stRadio [data-baseweb="radio"] label > div:last-child,
         .stCheckbox [data-baseweb="checkbox"] label > div:last-child {
             background: transparent !important;
         }
+        /* Force visible checkbox-style indicators for radios */
         .stRadio [data-baseweb="radio"] div[role="radio"] {
-            border-color: var(--app-border) !important;
-            background: transparent !important;
-            box-shadow: none !important;
             width: 16px !important;
             height: 16px !important;
+            border: 1.5px solid var(--app-border) !important;
             border-radius: 4px !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
+            background: transparent !important;
+            box-shadow: none !important;
         }
-        .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"] {
+        .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"],
+        .stRadio [data-baseweb="radio"] label[data-baseweb="radio"] input:checked + div {
             border-color: var(--app-accent) !important;
             background: var(--app-accent) !important;
-        }
-        .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"]::after {
-            content: "";
-            width: 6px;
-            height: 6px;
-            border-radius: 2px;
-            background: var(--app-accent-text);
+            box-shadow: inset 0 0 0 3px var(--app-accent-text) !important;
         }
         /* Keep the theme toggle as a round radio with a dot */
         .theme-toggle .stRadio [data-baseweb="radio"] div[role="radio"] {
             border-radius: 999px !important;
         }
-        .theme-toggle .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"] {
+        .theme-toggle .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"],
+        .theme-toggle .stRadio [data-baseweb="radio"] label[data-baseweb="radio"] input:checked + div {
             background: transparent !important;
-        }
-        .theme-toggle .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"]::after {
-            content: "";
-            width: 6px;
-            height: 6px;
-            border-radius: 999px;
-            background: var(--app-accent);
+            box-shadow: inset 0 0 0 4px var(--app-accent) !important;
+            border-color: var(--app-accent) !important;
         }
         .stCheckbox [data-baseweb="checkbox"] > div {
             border-color: var(--app-border) !important;
