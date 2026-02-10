@@ -2081,7 +2081,7 @@ def build_quarterly_segment_heatmap_data(segments_df, company, year_start, year_
 
 
 @st.cache_data(show_spinner=False)
-def build_quarterly_metric_heatmap_data(quarterly_df, companies, metric_key, year_start, year_end):
+def build_quarterly_metric_heatmap_data(quarterly_df, companies, metric_key, year_start, year_end, annual_df=None):
     if quarterly_df is None or quarterly_df.empty or not companies:
         return pd.DataFrame()
     df = quarterly_df[
@@ -2105,13 +2105,34 @@ def build_quarterly_metric_heatmap_data(quarterly_df, companies, metric_key, yea
     )
     values = pd.to_numeric(cleaned, errors="coerce")
     if values.notna().any():
-        abs_vals = values.abs()
-        median_val = float(abs_vals.median())
-        max_val = float(abs_vals.max())
-        # If values look like raw dollars (hundreds of millions or more), scale to millions.
-        if max_val >= 1e8:
-            values = values / 1e6
         df["value"] = values
+        scale_factor = None
+        if annual_df is not None and not annual_df.empty and metric_key in annual_df.columns:
+            annual = annual_df[
+                (annual_df["company"].isin(companies))
+                & (annual_df["year"] >= year_start)
+                & (annual_df["year"] <= year_end)
+            ][["company", "year", metric_key]].copy()
+            if not annual.empty:
+                annual = annual.groupby(["company", "year"], as_index=False)[metric_key].sum()
+                annual_vals = pd.to_numeric(annual[metric_key], errors="coerce")
+                annual["annual_value"] = annual_vals
+                quarterly_sum = df.groupby(["company", "year"], as_index=False)["value"].sum()
+                merged = quarterly_sum.merge(annual[["company", "year", "annual_value"]], on=["company", "year"], how="inner")
+                merged = merged[merged["annual_value"].notna() & merged["value"].notna()]
+                if not merged.empty:
+                    ratios = merged["value"] / merged["annual_value"]
+                    ratios = ratios.replace([np.inf, -np.inf], np.nan).dropna()
+                    if not ratios.empty:
+                        median_ratio = float(ratios.median())
+                        if median_ratio >= 1000:
+                            scale_factor = 1e6
+        if scale_factor:
+            df["value"] = df["value"] / scale_factor
+        else:
+            max_abs = float(values.abs().max())
+            if max_abs >= 1e12:
+                df["value"] = df["value"] / 1e6
     df = df.sort_values(["year", "quarter_num"])
     period_order = df["period_label"].drop_duplicates().tolist()
     pivot = df.pivot(index="company", columns="period_label", values="value")
@@ -3821,20 +3842,8 @@ def render_heatmap_figure(heatmap_df, heatmap_value_kind, heatmap_freq, y_title)
     dark_mode = theme_mode == "dark"
     heatmap_bg = "#0B1220" if dark_mode else "#FFFFFF"
     heatmap_text = "#E2E8F0" if dark_mode else "#111827"
-    # Ensure numeric values and normalize quarterly metrics that appear in raw dollars.
+    # Ensure numeric values.
     numeric_df = heatmap_df.apply(pd.to_numeric, errors="coerce")
-    if heatmap_value_kind == "metric" and heatmap_freq == "Quarterly":
-        flat = numeric_df.to_numpy().ravel()
-        flat = flat[~np.isnan(flat)]
-        if flat.size:
-            max_abs = float(np.nanmax(np.abs(flat)))
-            median_abs = float(np.nanmedian(np.abs(flat)))
-            # If values look like raw dollars, scale to millions.
-            if max_abs >= 1e9:
-                numeric_df = numeric_df / 1e6
-            # Mixed scaling: mostly millions but some raw dollar rows.
-            elif median_abs < 1e7 and max_abs >= 1e8:
-                numeric_df = numeric_df.where(np.abs(numeric_df) <= 1e8, numeric_df / 1e6)
     heatmap_df = numeric_df
     heatmap_change_df = compute_heatmap_change(heatmap_df)
     if heatmap_basis == "Change (%)":
@@ -3935,6 +3944,7 @@ if heatmap_mode == "Company Metrics":
                     metric_key,
                     year_range[0],
                     year_range[1],
+                    annual_df=data_processor.df_metrics,
                 )
                 if metric_df is None or metric_df.empty:
                     st.info(f"Quarterly {metric_label} metrics are not available in the Excel yet.")
