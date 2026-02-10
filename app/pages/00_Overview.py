@@ -2637,6 +2637,10 @@ if ad_stack_rows:
         ]
     )
     ad_pct_labels = [f"{r['AdPct']:.1f}%" for r in ad_stack_rows]
+    mode = get_theme_mode()
+    label_color = "#F8FAFC" if mode == "dark" else "#0F172A"
+    legend_color = "#E2E8F0" if mode == "dark" else "#1F2937"
+
     ad_bar_fig.add_trace(
         go.Scatter(
             x=x_companies,
@@ -2646,7 +2650,7 @@ if ad_stack_rows:
             textposition="top center",
             textfont=dict(
                 size=12,
-                color="#E2E8F0",
+                color=label_color,
                 family="Poppins, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
             ),
             hoverinfo="skip",
@@ -2667,7 +2671,7 @@ if ad_stack_rows:
             y=-0.14,
             x=0,
             xanchor="left",
-            font=dict(size=12, color="#E2E8F0"),
+            font=dict(size=12, color=legend_color),
         ),
         bargap=0.35,
         hoverlabel=dict(
@@ -2681,8 +2685,22 @@ if ad_stack_rows:
             align="left",
         ),
     )
-    ad_bar_fig.update_xaxes(showgrid=False, zeroline=False, showline=False, tickangle=-15)
-    ad_bar_fig.update_yaxes(showgrid=False, zeroline=False, showline=False, ticksuffix="B")
+    ad_bar_fig.update_xaxes(
+        showgrid=False,
+        zeroline=False,
+        showline=False,
+        tickangle=-15,
+        tickfont=dict(color=label_color),
+        title_font=dict(color=label_color),
+    )
+    ad_bar_fig.update_yaxes(
+        showgrid=False,
+        zeroline=False,
+        showline=False,
+        ticksuffix="B",
+        tickfont=dict(color=label_color),
+        title_font=dict(color=label_color),
+    )
     st.plotly_chart(ad_bar_fig, use_container_width=True, config=plotly_config)
 else:
     st.info("Advertising revenue data is not available for the selected year.")
@@ -3338,7 +3356,8 @@ if employee_data:
             orientation='h',
             name="Employees",
             textposition='outside',
-            texttemplate='%{x:,.0f}',  # Format as integer with commas
+            texttemplate='%{text}',  # Keep consistent with animation helper
+            text=[f"{int(d['Employees']):,}" for d in employee_data],
             hovertemplate="<b>%{y}</b><br>Employees: %{x:,.0f}<extra></extra>",
             marker=dict(
                 color=[COMPANY_COLORS.get(company, ['#808080'])[0] for company in [d['Company'] for d in employee_data]],

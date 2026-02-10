@@ -63,7 +63,7 @@ def create_animation_buttons(x_position=0.5, y_position=1.18):
                 'label': '▶',
                 'method': 'animate',
                 'args': [None, {
-                    'frame': {'duration': 500, 'redraw': True},  # keep scaling consistent across frames
+                    'frame': {'duration': 500, 'redraw': False},  # avoid layout reflow/jitter
                     'fromcurrent': True,
                     'transition': {'duration': 300, 'easing': 'cubic-in-out'}
                 }]
@@ -183,6 +183,7 @@ def update_chart_layout(
             tickmode='array',
             tickvals=tick_vals,
             ticktext=tick_text,
+            automargin=False,
             # Set fixed range for consistent scaling during animation (+ padding for outside labels)
             range=[0, padded_max_value],
             fixedrange=True,
@@ -193,7 +194,8 @@ def update_chart_layout(
             zeroline=False,
             autorange="reversed",  # Shows highest values at top
             fixedrange=True,      # Fix y-axis range to prevent stretching
-            showgrid=False
+            showgrid=False,
+            automargin=False,
         ),
         # Keep the plot wide; leave just enough room for outside labels.
         'margin': dict(l=60, r=120, t=110, b=90),
@@ -266,12 +268,14 @@ def fix_frame_animations(fig, max_value, tick_vals, tick_text):
                 frame.layout.xaxis.tickvals = tick_vals
                 frame.layout.xaxis.ticktext = tick_text
                 frame.layout.xaxis.fixedrange = True
+                frame.layout.xaxis.automargin = False
                 # Let Plotly use the full available width.
             
             # Update y-axis settings to prevent stretching
             if hasattr(frame.layout, "yaxis"):
                 frame.layout.yaxis.autorange = "reversed"
                 frame.layout.yaxis.fixedrange = True
+                frame.layout.yaxis.automargin = False
 
 def create_consistent_frame(companies, values, year, max_overall_value, 
                        title, tick_vals, tick_text, format_func, 
@@ -332,10 +336,12 @@ def create_consistent_frame(companies, values, year, max_overall_value,
                 tickvals=tick_vals,
                 ticktext=tick_text,
                 fixedrange=True,
+                automargin=False,
             ),
             yaxis=dict(
                 autorange="reversed",
-                fixedrange=True
+                fixedrange=True,
+                automargin=False,
             ),
             dragmode=False,
             transition={'duration': 300, 'easing': 'cubic-in-out'}
