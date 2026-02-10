@@ -272,17 +272,34 @@ def apply_theme():
             width: 16px !important;
             height: 16px !important;
             border-radius: 4px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
         .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"] {
             border-color: var(--app-accent) !important;
             background: var(--app-accent) !important;
+        }
+        .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"]::after {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 2px;
+            background: var(--app-accent-text);
         }
         /* Keep the theme toggle as a round radio with a dot */
         .theme-toggle .stRadio [data-baseweb="radio"] div[role="radio"] {
             border-radius: 999px !important;
         }
         .theme-toggle .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"] {
-            background: radial-gradient(circle, var(--app-accent) 0 45%, transparent 46%) !important;
+            background: transparent !important;
+        }
+        .theme-toggle .stRadio [data-baseweb="radio"] div[role="radio"][aria-checked="true"]::after {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: var(--app-accent);
         }
         .stCheckbox [data-baseweb="checkbox"] > div {
             border-color: var(--app-border) !important;

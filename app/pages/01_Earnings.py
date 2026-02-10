@@ -3814,6 +3814,21 @@ def render_heatmap_figure(heatmap_df, heatmap_value_kind, heatmap_freq, y_title)
     dark_mode = theme_mode == "dark"
     heatmap_bg = "#0B1220" if dark_mode else "#FFFFFF"
     heatmap_text = "#E2E8F0" if dark_mode else "#111827"
+    # Ensure numeric values and normalize quarterly metrics that appear in raw dollars.
+    numeric_df = heatmap_df.apply(pd.to_numeric, errors="coerce")
+    if heatmap_value_kind == "metric" and heatmap_freq == "Quarterly":
+        flat = numeric_df.to_numpy().ravel()
+        flat = flat[~np.isnan(flat)]
+        if flat.size:
+            max_abs = float(np.nanmax(np.abs(flat)))
+            median_abs = float(np.nanmedian(np.abs(flat)))
+            # If any values look like raw dollars (trillions), scale to millions.
+            if max_abs >= 1e12:
+                numeric_df = numeric_df / 1e6
+            # Mixed scaling: mostly millions but some raw dollar rows.
+            elif median_abs < 1e7 and max_abs >= 1e9:
+                numeric_df = numeric_df.where(numeric_df <= 1e9, numeric_df / 1e6)
+    heatmap_df = numeric_df
     heatmap_change_df = compute_heatmap_change(heatmap_df)
     if heatmap_basis == "Change (%)":
         heatmap_numeric = heatmap_change_df
