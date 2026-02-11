@@ -150,6 +150,16 @@ def load_common_styles():
     label[data-baseweb="radio"] input:checked + div {
         border-color: var(--app-accent, #0073ff) !important;
     }
+    label[data-baseweb="radio"],
+    label[data-baseweb="radio"]:hover,
+    label[data-baseweb="radio"][aria-checked="true"] {
+        background: transparent !important;
+        box-shadow: none !important;
+        outline: none !important;
+    }
+    label[data-baseweb="radio"] span {
+        background: transparent !important;
+    }
 
     /* Main layout styles */
     .main-container {
@@ -898,6 +908,16 @@ def get_page_style():
 
     label[data-baseweb="radio"] input:checked + div {
         border-color: var(--app-accent, #0073ff) !important;
+    }
+    label[data-baseweb="radio"],
+    label[data-baseweb="radio"]:hover,
+    label[data-baseweb="radio"][aria-checked="true"] {
+        background: transparent !important;
+        box-shadow: none !important;
+        outline: none !important;
+    }
+    label[data-baseweb="radio"] span {
+        background: transparent !important;
     }
 
     .main-content {

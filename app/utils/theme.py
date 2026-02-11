@@ -268,10 +268,12 @@ def apply_theme():
         }
         .stRadio [data-baseweb="radio"] label[data-baseweb="radio"],
         .stRadio [data-baseweb="radio"] label[data-baseweb="radio"]:hover,
+        .stRadio [data-baseweb="radio"] label[data-baseweb="radio"][aria-checked="true"],
         .stCheckbox [data-baseweb="checkbox"] label[data-baseweb="checkbox"],
         .stCheckbox [data-baseweb="checkbox"] label[data-baseweb="checkbox"]:hover {
             background: transparent !important;
             box-shadow: none !important;
+            outline: none !important;
         }
         .stRadio [data-baseweb="radio"] label[data-baseweb="radio"] * {
             background: transparent !important;
