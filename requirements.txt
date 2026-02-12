@@ -1,4 +1,8 @@
 altair
+numpy
+openpyxl
 pandas
+Pillow
+plotly
 streamlit
 psycopg[binary]

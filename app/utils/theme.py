@@ -297,10 +297,28 @@ def apply_theme():
             box-shadow: none !important;
             margin-right: 8px !important;
         }
+        .stCheckbox label[data-baseweb="checkbox"] > div:first-of-type {
+            width: 18px !important;
+            height: 18px !important;
+            border: 1.5px solid var(--app-accent) !important;
+            border-radius: 4px !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            margin-right: 8px !important;
+        }
         div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div {
             background: var(--app-accent) !important;
             border-color: var(--app-accent) !important;
             box-shadow: inset 0 0 0 3px var(--app-accent-text) !important;
+        }
+        div[data-testid="stCheckbox"] label[data-baseweb="checkbox"] input:checked + div {
+            background: var(--app-accent) !important;
+            border-color: var(--app-accent) !important;
+            box-shadow: inset 0 0 0 3px var(--app-accent-text) !important;
+        }
+        div[data-testid="stCheckbox"] label[data-baseweb="checkbox"] input:checked + div svg {
+            fill: var(--app-accent-text) !important;
+            stroke: var(--app-accent-text) !important;
         }
         /* Keep the theme toggle as a round radio with a dot */
         .theme-toggle .stRadio label[data-baseweb="radio"] > div:first-of-type {
@@ -311,6 +329,25 @@ def apply_theme():
             box-shadow: inset 0 0 0 4px var(--app-accent) !important;
             border-color: var(--app-accent) !important;
         }
+        /* Theme toggle: remove label highlight, keep only control fill */
+        .theme-toggle div[data-testid="stRadio"] [data-baseweb="button-group"] button,
+        .theme-toggle div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-pressed="true"],
+        .theme-toggle div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-checked="true"],
+        .theme-toggle div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-selected="true"],
+        .theme-toggle div[data-testid="stRadio"] [role="radiogroup"] [role="radio"],
+        .theme-toggle div[data-testid="stRadio"] [role="radiogroup"] [role="button"] {
+            background: transparent !important;
+            color: var(--app-text) !important;
+            box-shadow: none !important;
+            border: none !important;
+        }
+        .theme-toggle div[data-testid="stRadio"] [data-baseweb="button-group"] button *,
+        .theme-toggle div[data-testid="stRadio"] [role="radiogroup"] [role="radio"] *,
+        .theme-toggle div[data-testid="stRadio"] [role="radiogroup"] [role="button"] * {
+            background: transparent !important;
+            box-shadow: none !important;
+            color: var(--app-text) !important;
+        }
         .stCheckbox [data-baseweb="checkbox"] > div {
             border-color: var(--app-border) !important;
             background: var(--app-surface) !important;
@@ -318,6 +355,116 @@ def apply_theme():
         .stRadio [data-baseweb="radio"] div[role="radio"] + div,
         .stCheckbox [data-baseweb="checkbox"] div[role="checkbox"] + div {
             color: var(--app-text) !important;
+        }
+
+        /* Horizontal radios rendered as button-groups in newer Streamlit */
+        div[data-testid="stRadio"] [data-baseweb="button-group"],
+        div[data-testid="stRadio"] [data-baseweb="button-group"] > div {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button,
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-pressed="true"],
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-checked="true"],
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-selected="true"] {
+            background: transparent !important;
+            color: var(--app-text) !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 0 0 26px !important;
+            position: relative !important;
+        }
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button *,
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-pressed="true"] *,
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-checked="true"] *,
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-selected="true"] * {
+            color: var(--app-text) !important;
+            background: transparent !important;
+        }
+        div[data-testid="stRadio"] [role="radiogroup"] [aria-checked="true"],
+        div[data-testid="stRadio"] [role="radiogroup"] [aria-selected="true"],
+        div[data-testid="stRadio"] [role="radiogroup"] [aria-pressed="true"] {
+            background: transparent !important;
+            color: var(--app-text) !important;
+        }
+        .stRadio [data-baseweb="radio"] label[data-baseweb="radio"][aria-checked="true"] span {
+            color: var(--app-text) !important;
+        }
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button::before {
+            content: "";
+            position: absolute;
+            left: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            border: 1.5px solid var(--app-accent) !important;
+            border-radius: 4px;
+            background: transparent;
+            box-shadow: none;
+        }
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-pressed="true"]::before,
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-checked="true"]::before,
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-selected="true"]::before {
+            background: var(--app-accent) !important;
+            box-shadow: inset 0 0 0 3px var(--app-accent-text) !important;
+        }
+        /* Keep the theme toggle as a round radio with a dot */
+        .theme-toggle div[data-testid="stRadio"] [data-baseweb="button-group"] button::before {
+            border-radius: 999px;
+        }
+        .theme-toggle div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-pressed="true"]::before,
+        .theme-toggle div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-checked="true"]::before,
+        .theme-toggle div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-selected="true"]::before {
+            background: transparent !important;
+            box-shadow: inset 0 0 0 4px var(--app-accent) !important;
+        }
+
+        /* Catch-all for Streamlit radio button variants (avoid text highlight, force checkbox fill) */
+        div[data-testid="stRadio"] [role="radiogroup"] [role="radio"],
+        div[data-testid="stRadio"] [role="radiogroup"] [role="button"] {
+            background: transparent !important;
+            color: var(--app-text) !important;
+            box-shadow: none !important;
+            border: none !important;
+            position: relative !important;
+            padding-left: 26px !important;
+        }
+        div[data-testid="stRadio"] [role="radiogroup"] [role="radio"]::before,
+        div[data-testid="stRadio"] [role="radiogroup"] [role="button"]::before {
+            content: "";
+            position: absolute;
+            left: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            border: 1.5px solid var(--app-accent) !important;
+            border-radius: 4px;
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stRadio"] [role="radiogroup"] [role="radio"][aria-checked="true"]::before,
+        div[data-testid="stRadio"] [role="radiogroup"] [role="button"][aria-pressed="true"]::before,
+        div[data-testid="stRadio"] [role="radiogroup"] [role="button"][aria-selected="true"]::before {
+            background: var(--app-accent) !important;
+            box-shadow: inset 0 0 0 3px var(--app-accent-text) !important;
+        }
+        div[data-testid="stRadio"] [role="radiogroup"] [role="radio"] *,
+        div[data-testid="stRadio"] [role="radiogroup"] [role="button"] * {
+            color: var(--app-text) !important;
+            background: transparent !important;
+        }
+        .theme-toggle div[data-testid="stRadio"] [role="radiogroup"] [role="radio"]::before,
+        .theme-toggle div[data-testid="stRadio"] [role="radiogroup"] [role="button"]::before {
+            border-radius: 999px !important;
+        }
+        .theme-toggle div[data-testid="stRadio"] [role="radiogroup"] [role="radio"][aria-checked="true"]::before,
+        .theme-toggle div[data-testid="stRadio"] [role="radiogroup"] [role="button"][aria-pressed="true"]::before,
+        .theme-toggle div[data-testid="stRadio"] [role="radiogroup"] [role="button"][aria-selected="true"]::before {
+            background: transparent !important;
+            box-shadow: inset 0 0 0 4px var(--app-accent) !important;
         }
 
         /* Buttons */
