@@ -481,6 +481,21 @@ def apply_theme():
             -ms-user-select: none !important;
             cursor: pointer !important;
         }
+        div[data-testid="stRadio"] * {
+            background-color: transparent !important;
+            background-image: none !important;
+            box-shadow: none !important;
+            -webkit-tap-highlight-color: transparent !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -ms-user-select: none !important;
+        }
+        div[data-testid="stRadio"] button::after,
+        div[data-testid="stRadio"] [role="radio"]::after,
+        div[data-testid="stRadio"] [role="button"]::after {
+            background-color: transparent !important;
+            box-shadow: none !important;
+        }
         div[data-testid="stRadio"] button:focus,
         div[data-testid="stRadio"] button:focus-visible,
         div[data-testid="stRadio"] button:active,
