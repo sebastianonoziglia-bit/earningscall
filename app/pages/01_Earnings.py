@@ -1437,6 +1437,19 @@ def load_quarterly_segments(excel_path, file_mtime=0):
         df["segment"] = df["segment"].apply(
             lambda value: normalize_segment_label(company_name, value)
         )
+        df = df[df["segment"].notna() & (df["segment"].astype(str).str.strip() != "")]
+        # Some quarterly sheets contain duplicate segment labels for the same quarter.
+        # Collapse duplicates to avoid double-counting in hover/tooltips.
+        df = (
+            df.groupby(["company", "segment", "year", "quarter_num"], as_index=False)
+            .agg(
+                revenue=("revenue", "max"),
+                quarter=("quarter", "first"),
+            )
+        )
+        df["quarter"] = df["quarter"].fillna(
+            df["year"].astype(int).astype(str) + " Q" + df["quarter_num"].astype(int).astype(str)
+        )
         frames.append(df[["company", "quarter", "year", "quarter_num", "segment", "revenue"]])
     if not frames:
         return pd.DataFrame()

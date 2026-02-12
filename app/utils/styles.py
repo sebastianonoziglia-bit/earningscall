@@ -178,6 +178,11 @@ def load_common_styles():
         box-shadow: none !important;
         padding: 0 0 0 26px !important;
         position: relative !important;
+        -webkit-tap-highlight-color: transparent !important;
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        -ms-user-select: none !important;
+        cursor: pointer !important;
     }
     div[data-testid="stRadio"] [data-baseweb="button-group"] button *,
     div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-pressed="true"] *,
@@ -233,6 +238,11 @@ def load_common_styles():
         border: none !important;
         position: relative !important;
         padding-left: 26px !important;
+        -webkit-tap-highlight-color: transparent !important;
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        -ms-user-select: none !important;
+        cursor: pointer !important;
     }
     div[data-testid="stRadio"] [role="radiogroup"] [role="radio"]::before,
     div[data-testid="stRadio"] [role="radiogroup"] [role="button"]::before {
@@ -258,6 +268,9 @@ def load_common_styles():
     div[data-testid="stRadio"] [role="radiogroup"] [role="button"] * {
         color: var(--app-text, #111827) !important;
         background: transparent !important;
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        -ms-user-select: none !important;
     }
     .theme-toggle div[data-testid="stRadio"] [role="radiogroup"] [role="radio"]::before,
     .theme-toggle div[data-testid="stRadio"] [role="radiogroup"] [role="button"]::before {

@@ -467,6 +467,73 @@ def apply_theme():
             box-shadow: inset 0 0 0 4px var(--app-accent) !important;
         }
 
+        /* Hard override: remove selected label highlight, keep only checkbox/radio fill */
+        div[data-testid="stRadio"] button,
+        div[data-testid="stRadio"] [role="radio"],
+        div[data-testid="stRadio"] [role="button"],
+        div[data-testid="stRadio"] label {
+            background-color: transparent !important;
+            background-image: none !important;
+            box-shadow: none !important;
+            -webkit-tap-highlight-color: transparent !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+            -ms-user-select: none !important;
+            cursor: pointer !important;
+        }
+        div[data-testid="stRadio"] button:focus,
+        div[data-testid="stRadio"] button:focus-visible,
+        div[data-testid="stRadio"] button:active,
+        div[data-testid="stRadio"] [role="radio"]:focus,
+        div[data-testid="stRadio"] [role="radio"]:focus-visible,
+        div[data-testid="stRadio"] [role="radio"]:active,
+        div[data-testid="stRadio"] [role="button"]:focus,
+        div[data-testid="stRadio"] [role="button"]:focus-visible,
+        div[data-testid="stRadio"] [role="button"]:active {
+            background-color: transparent !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        div[data-testid="stRadio"] button[aria-pressed="true"],
+        div[data-testid="stRadio"] button[aria-selected="true"],
+        div[data-testid="stRadio"] button[aria-checked="true"],
+        div[data-testid="stRadio"] [role="radio"][aria-checked="true"],
+        div[data-testid="stRadio"] [role="button"][aria-pressed="true"],
+        div[data-testid="stRadio"] [role="button"][aria-selected="true"],
+        div[data-testid="stRadio"] [aria-checked="true"] {
+            background-color: transparent !important;
+            background-image: none !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stRadio"] button * ,
+        div[data-testid="stRadio"] [role="radio"] *,
+        div[data-testid="stRadio"] [role="button"] * {
+            background-color: transparent !important;
+            background-image: none !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-pressed="true"]::before,
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-checked="true"]::before,
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-selected="true"]::before,
+        div[data-testid="stRadio"] [role="radiogroup"] [aria-checked="true"]::before,
+        div[data-testid="stRadio"] [role="radiogroup"] [aria-pressed="true"]::before,
+        div[data-testid="stRadio"] [role="radiogroup"] [aria-selected="true"]::before {
+            background: var(--app-accent) !important;
+            box-shadow: inset 0 0 0 3px var(--app-accent-text) !important;
+        }
+
+        div[data-testid="stCheckbox"] label,
+        div[data-testid="stCheckbox"] [role="checkbox"],
+        div[data-testid="stCheckbox"] [role="checkbox"] * {
+            background-color: transparent !important;
+            background-image: none !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stCheckbox"] [role="checkbox"][aria-checked="true"] {
+            background-color: transparent !important;
+            box-shadow: none !important;
+        }
+
         /* Buttons */
         .stButton button,
         .stDownloadButton button {
