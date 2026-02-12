@@ -496,6 +496,37 @@ def apply_theme():
             background-color: transparent !important;
             box-shadow: none !important;
         }
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button > div,
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button > div > span,
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button span,
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button p {
+            background-color: transparent !important;
+            background-image: none !important;
+            box-shadow: none !important;
+            color: var(--app-text) !important;
+        }
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-pressed="true"],
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-selected="true"],
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button[aria-checked="true"] {
+            background-color: transparent !important;
+            background-image: none !important;
+            box-shadow: none !important;
+            color: var(--app-text) !important;
+        }
+        div[data-testid="stRadio"] ::selection,
+        div[data-testid="stRadio"] *::selection,
+        div[data-testid="stCheckbox"] ::selection,
+        div[data-testid="stCheckbox"] *::selection {
+            background: transparent !important;
+            color: inherit !important;
+        }
+        div[data-testid="stRadio"] ::-moz-selection,
+        div[data-testid="stRadio"] *::-moz-selection,
+        div[data-testid="stCheckbox"] ::-moz-selection,
+        div[data-testid="stCheckbox"] *::-moz-selection {
+            background: transparent !important;
+            color: inherit !important;
+        }
         div[data-testid="stRadio"] button:focus,
         div[data-testid="stRadio"] button:focus-visible,
         div[data-testid="stRadio"] button:active,
