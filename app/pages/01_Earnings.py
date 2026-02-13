@@ -121,8 +121,8 @@ st.markdown(
 	    }
 
 	    .earnings-hero.has-stock {
-	        --stock-safe-right: 280px;
-	        --stock-safe-bottom: 150px;
+	        --stock-safe-right: clamp(180px, 20vw, 280px);
+	        --stock-safe-bottom: clamp(128px, 14vw, 150px);
 	    }
 
 	    .earnings-hero.has-stock .earnings-hero-overlay {
@@ -856,7 +856,7 @@ st.markdown(
         }
 
         .kpi-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
         .company-logo {
@@ -874,7 +874,10 @@ st.markdown(
 
         .earnings-hero-stock {
             bottom: 0.8rem;
+            left: 0.9rem;
             right: 0.9rem;
+            min-width: 0;
+            text-align: left;
         }
 
         .earnings-hero-stock .hero-stock-ticker {
@@ -887,6 +890,30 @@ st.markdown(
 
         .earnings-hero-stock .hero-stock-change {
             font-size: 0.85rem;
+        }
+
+        .earnings-hero-stock .hero-stock-sparkline {
+            width: min(100%, 260px);
+        }
+
+        .earnings-hero.has-stock {
+            --stock-safe-right: 0px;
+            --stock-safe-bottom: 190px;
+        }
+
+        .earnings-hero.has-stock .earnings-hero-overlay {
+            padding-right: 1rem;
+            padding-bottom: calc(1rem + var(--stock-safe-bottom));
+        }
+    }
+
+    @media (max-width: 430px) {
+        .kpi-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .earnings-hero.has-stock {
+            --stock-safe-bottom: 230px;
         }
     }
     </style>
@@ -2656,18 +2683,44 @@ components.html(
         const img = hero.querySelector("img");
 	        const delayMs = {int(kpi_anim_start_delay * 1000)};
 	        const stepMs = {int(kpi_anim_step * 1000)};
-	        const minH = 460;
-	        const maxH = 760;
+	        const minH = 420;
 	        const ratio = 0.45;
+	        const toPx = (value) => {{
+	            const parsed = parseFloat(value || "0");
+	            return Number.isFinite(parsed) ? parsed : 0;
+	        }};
 
         if (window.parent.__kpiAnimTimers) {{
             window.parent.__kpiAnimTimers.forEach((t) => window.parent.clearTimeout(t));
         }}
         window.parent.__kpiAnimTimers = [];
 
+	        const getRequiredFinalHeight = function() {{
+	            const overlay = hero.querySelector(".earnings-hero-overlay");
+	            const stock = hero.querySelector(".earnings-hero-stock");
+	            const panelHeight = panel.scrollHeight || panel.getBoundingClientRect().height || 0;
+	            let overlayPadding = 0;
+	            let extraStock = 0;
+
+	            if (overlay) {{
+	                const overlayStyle = window.getComputedStyle(overlay);
+	                overlayPadding = toPx(overlayStyle.paddingTop) + toPx(overlayStyle.paddingBottom);
+	                if (stock && hero.classList.contains("has-stock")) {{
+	                    const stockHeight = stock.getBoundingClientRect().height || stock.scrollHeight || 0;
+	                    const safeBottom = toPx(overlayStyle.paddingBottom);
+	                    extraStock = Math.max(0, stockHeight + 18 - safeBottom);
+	                }}
+	            }}
+
+	            return Math.ceil(panelHeight + overlayPadding + extraStock + 12);
+	        }};
+
 	        const computeHeights = function() {{
 	            const width = hero.getBoundingClientRect().width || hero.clientWidth || 1;
-	            const finalHeight = Math.min(maxH, Math.max(minH, width * ratio));
+	            const viewportFinalCap = Math.min(1400, Math.max(760, window.innerHeight * 1.4));
+	            const baseFinalHeight = Math.max(minH, width * ratio);
+	            const contentFinalHeight = getRequiredFinalHeight();
+	            const finalHeight = Math.min(viewportFinalCap, Math.max(baseFinalHeight, contentFinalHeight));
 	            let introHeight = finalHeight;
 
 	            const imgHeight =
@@ -2681,10 +2734,9 @@ components.html(
 	                introHeight = Math.max(finalHeight, hero.scrollHeight || hero.clientHeight || finalHeight);
 	            }}
 
-	            // Prevent runaway heights on smaller/zoomed viewports (e.g. laptop screens),
-	            // but keep the large-display behavior by capping to a % of viewport height.
-	            const vhCap = Math.min(window.innerHeight * 0.92, 980);
-	            introHeight = Math.max(finalHeight, Math.min(introHeight, vhCap));
+	            // Let intro be larger than collapsed height, but keep it bounded.
+	            const introCap = Math.min(1550, Math.max(finalHeight, window.innerHeight * 1.55));
+	            introHeight = Math.max(finalHeight, Math.min(introHeight, introCap));
 	            return {{ finalHeight, introHeight }};
 	        }};
 
