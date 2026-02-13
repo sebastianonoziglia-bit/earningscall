@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 from subscriber_data_processor import SubscriberDataProcessor
 import pandas as pd
 from datetime import datetime, timedelta
+import re
 from utils.styles import get_page_style, get_animation_style
 import base64
 from PIL import Image
@@ -58,6 +59,16 @@ def _metric_label_for_service(service: str) -> str:
 # Initialize subscriber data processor
 if 'subscriber_processor' not in st.session_state:
     st.session_state['subscriber_processor'] = SubscriberDataProcessor()
+else:
+    existing_processor = st.session_state.get('subscriber_processor')
+    if existing_processor is None or not hasattr(existing_processor, "is_source_updated"):
+        st.session_state['subscriber_processor'] = SubscriberDataProcessor()
+    else:
+        try:
+            if existing_processor.is_source_updated():
+                st.session_state['subscriber_processor'] = SubscriberDataProcessor()
+        except Exception:
+            st.session_state['subscriber_processor'] = SubscriberDataProcessor()
 
 # Get available streaming services and sort them alphabetically
 services = sorted(st.session_state['subscriber_processor'].get_service_names())
@@ -182,118 +193,153 @@ if not hasattr(st.session_state, 'editorial_chart_css_added'):
 tab1, tab2 = st.tabs(["Individual Service Analysis", "Service Comparison"])
 
 with tab1:
-    filter_cols = st.columns(3)
-
-    with filter_cols[0]:
-        individual_company_filter = st.selectbox(
-            "Company filter",
-            ["All"] + companies,
-            key="editorial_individual_company_filter",
-        )
-
-    individual_service_options = (
-        processor.get_service_names(None if individual_company_filter == "All" else individual_company_filter)
+    raw_service_list = (
+        processor.get_service_names()
         if hasattr(processor, "get_service_names")
         else services
     )
+    service_list = sorted(raw_service_list, key=lambda s: str(s).lower())
 
-    with filter_cols[1]:
-        selected_service = st.selectbox(
-            "Service",
-            individual_service_options,
-            key="editorial_individual_service_filter",
-        ) if individual_service_options else None
-
-    service_series_keys = (
-        processor.get_series_columns([selected_service]) if selected_service and hasattr(processor, "get_series_columns") else ["subscribers"]
+    st.markdown(
+        """
+        <style>
+        .editorial-mini-filter-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: #6b7280;
+            margin-bottom: 0.12rem;
+            line-height: 1.1;
+            letter-spacing: 0.02em;
+        }
+        [class*="st-key-editorial_"][class*="_series"] [data-baseweb="select"] > div,
+        [class*="st-key-editorial_"][class*="_chart"] [data-baseweb="select"] > div,
+        [class*="st-key-editorial_"][class*="_range"] [data-baseweb="select"] > div {
+            min-height: 34px !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+        }
+        [class*="st-key-editorial_"][class*="_series"] [data-baseweb="select"] span,
+        [class*="st-key-editorial_"][class*="_chart"] [data-baseweb="select"] span,
+        [class*="st-key-editorial_"][class*="_range"] [data-baseweb="select"] span {
+            font-size: 0.84rem !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
-    default_series_key = "subscribers" if "subscribers" in service_series_keys else (service_series_keys[0] if service_series_keys else None)
-    default_series_index = service_series_keys.index(default_series_key) if default_series_key in service_series_keys else 0
 
-    with filter_cols[2]:
-        selected_series_key = st.selectbox(
-            "Series / Split",
-            service_series_keys,
-            index=default_series_index,
-            format_func=lambda key: processor.get_series_label(key) if hasattr(processor, "get_series_label") else str(key),
-            key="editorial_individual_series_filter",
-        ) if service_series_keys else None
+    if not service_list:
+        st.info("No services available.")
+    else:
+        for idx, service in enumerate(service_list):
+            service_key_stub = re.sub(r"[^a-z0-9_]+", "_", str(service).lower()).strip("_") or f"service_{idx}"
+            service_key_base = f"editorial_{service_key_stub}_{idx}"
 
-    control_cols = st.columns(2)
-    with control_cols[0]:
-        individual_chart_type = st.radio(
-            "Chart Type",
-            options=["Line Chart", "Bar Chart"],
-            horizontal=True,
-            key="editorial_individual_chart_type",
-        )
-
-    service_data = (
-        processor.get_service_data(selected_service, series_key=selected_series_key)
-        if selected_service else {"data": pd.DataFrame(), "column_name": "Subscribers", "unit": "millions"}
-    )
-    df_individual = service_data.get("data", pd.DataFrame()).copy()
-    if not df_individual.empty:
-        df_individual["date"] = df_individual["Quarter"].apply(parse_quarter_to_date)
-        df_individual = df_individual.dropna(subset=["date"])
-        df_individual = df_individual.sort_values("date")
-
-    with control_cols[1]:
-        if not df_individual.empty:
-            years = sorted(df_individual["date"].dt.year.unique().tolist())
-            min_year = int(min(years))
-            max_year = int(max(years))
-            default_start = max(min_year, max_year - 4)
-            individual_year_range = st.slider(
-                "Select Year Range",
-                min_value=min_year,
-                max_value=max_year,
-                value=(default_start, max_year),
-                step=1,
-                key="editorial_individual_year_range",
+            series_keys = (
+                processor.get_series_columns([service])
+                if hasattr(processor, "get_series_columns")
+                else ["subscribers"]
             )
-            df_individual = df_individual[
-                df_individual["date"].dt.year.between(individual_year_range[0], individual_year_range[1])
-            ]
-        else:
-            individual_year_range = None
+            default_series = (
+                "subscribers"
+                if "subscribers" in series_keys
+                else (series_keys[0] if series_keys else None)
+            )
+            default_series_idx = (
+                series_keys.index(default_series)
+                if default_series in series_keys
+                else 0
+            )
 
-    if selected_service and not df_individual.empty:
-        logo_col, title_col = st.columns([0.08, 0.92])
-        with logo_col:
-            logo_key_candidates = [
-                selected_service,
-                processor.df_subscribers[processor.df_subscribers["service"] == selected_service]["company"].iloc[0]
-                if "company" in processor.df_subscribers.columns and (processor.df_subscribers["service"] == selected_service).any()
-                else "",
-            ]
-            logo_b64 = None
-            for candidate in logo_key_candidates:
-                if candidate in service_logos:
-                    logo_b64 = service_logos[candidate]
-                    break
-            if logo_b64:
-                st.markdown(
-                    f"<img src='data:image/png;base64,{logo_b64}' class='company-logo'>",
-                    unsafe_allow_html=True,
+            header_cols = st.columns([0.07, 0.24, 0.37, 0.14, 0.18])
+            with header_cols[0]:
+                logo_key_candidates = [
+                    service,
+                    processor.df_subscribers[processor.df_subscribers["service"] == service]["company"].iloc[0]
+                    if "company" in processor.df_subscribers.columns and (processor.df_subscribers["service"] == service).any()
+                    else "",
+                ]
+                logo_b64 = None
+                for candidate in logo_key_candidates:
+                    if candidate in service_logos:
+                        logo_b64 = service_logos[candidate]
+                        break
+                if logo_b64:
+                    st.markdown(
+                        f"<img src='data:image/png;base64,{logo_b64}' class='company-logo'>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.write(str(service)[0] if str(service) else "?")
+
+            with header_cols[1]:
+                st.subheader(service)
+
+            with header_cols[2]:
+                st.markdown("<div class='editorial-mini-filter-label'>Split</div>", unsafe_allow_html=True)
+                selected_series_key = st.selectbox(
+                    "Series",
+                    series_keys,
+                    index=default_series_idx,
+                    format_func=lambda key: processor.get_series_label(key)
+                    if hasattr(processor, "get_series_label")
+                    else str(key),
+                    key=f"{service_key_base}_series",
+                    label_visibility="collapsed",
+                ) if series_keys else None
+
+            with header_cols[3]:
+                st.markdown("<div class='editorial-mini-filter-label'>Chart</div>", unsafe_allow_html=True)
+                service_chart_type = st.selectbox(
+                    "Chart",
+                    options=["Line", "Bar"],
+                    index=0,
+                    key=f"{service_key_base}_chart",
+                    label_visibility="collapsed",
                 )
-            else:
-                st.write(selected_service[0])
-        with title_col:
-            series_label = (
-                processor.get_series_label(selected_series_key)
-                if hasattr(processor, "get_series_label") and selected_series_key
-                else "Subscribers"
-            )
-            st.subheader(f"{selected_service} — {series_label}")
 
-        column_name = service_data.get("column_name", "Subscribers")
-        if column_name in df_individual.columns:
-            latest_value = df_individual.iloc[-1][column_name]
-            latest_quarter = df_individual.iloc[-1]["Quarter"]
+            with header_cols[4]:
+                st.markdown("<div class='editorial-mini-filter-label'>Range</div>", unsafe_allow_html=True)
+                service_range = st.selectbox(
+                    "Range",
+                    options=["5Y", "10Y", "All"],
+                    index=0,
+                    key=f"{service_key_base}_range",
+                    label_visibility="collapsed",
+                )
+
+            service_data = processor.get_service_data(service, series_key=selected_series_key)
+            df_service = service_data.get("data", pd.DataFrame()).copy()
+            if df_service.empty:
+                st.warning(f"No data available for {service}")
+                st.markdown("---")
+                continue
+
+            column_name = service_data.get("column_name", "Subscribers")
+            if column_name not in df_service.columns:
+                st.warning(f"No {column_name} column found for {service}")
+                st.markdown("---")
+                continue
+
+            df_service["date"] = df_service["Quarter"].apply(parse_quarter_to_date)
+            df_service = df_service.dropna(subset=["date"])
+            df_service = df_service.sort_values("date")
+
+            if service_range != "All":
+                years_back = int(service_range.replace("Y", ""))
+                cutoff_date = current_date - timedelta(days=years_back * 365)
+                df_service = df_service[df_service["date"] >= cutoff_date]
+
+            if df_service.empty:
+                st.info(f"No data for {service} in selected range.")
+                st.markdown("---")
+                continue
+
+            latest_value = df_service.iloc[-1][column_name]
+            latest_quarter = df_service.iloc[-1]["Quarter"]
             yoy_growth = None
-            if len(df_individual) >= 5:
-                previous_value = df_individual.iloc[-5][column_name]
+            if len(df_service) >= 5:
+                previous_value = df_service.iloc[-5][column_name]
                 if previous_value not in (None, 0):
                     yoy_growth = ((latest_value - previous_value) / previous_value) * 100
 
@@ -301,7 +347,7 @@ with tab1:
             with metric_col:
                 label_key = selected_series_key or "subscribers"
                 if label_key == "subscribers":
-                    metric_label = _metric_label_for_service(selected_service)
+                    metric_label = _metric_label_for_service(service)
                 else:
                     metric_label = processor.get_series_label(label_key)
                 st.metric(
@@ -314,33 +360,29 @@ with tab1:
 
             with chart_col:
                 fig = go.Figure()
-                if individual_chart_type == "Line Chart":
+                hovertemplate = (
+                    f"<b>{service}</b><br>"
+                    "Quarter: %{x}<br>"
+                    f"Value: %{{y:.1f}} {service_data.get('unit', 'millions')}<br>"
+                    "<extra></extra>"
+                )
+                if service_chart_type == "Line":
                     fig.add_trace(
                         go.Scatter(
-                            x=df_individual["Quarter"],
-                            y=df_individual[column_name],
+                            x=df_service["Quarter"],
+                            y=df_service[column_name],
                             mode="lines+markers",
-                            name=selected_service,
-                            hovertemplate=(
-                                f"<b>{selected_service}</b><br>"
-                                "Quarter: %{x}<br>"
-                                f"Value: %{{y:.1f}} {service_data.get('unit', 'millions')}<br>"
-                                "<extra></extra>"
-                            ),
+                            name=service,
+                            hovertemplate=hovertemplate,
                         )
                     )
                 else:
                     fig.add_trace(
                         go.Bar(
-                            x=df_individual["Quarter"],
-                            y=df_individual[column_name],
-                            name=selected_service,
-                            hovertemplate=(
-                                f"<b>{selected_service}</b><br>"
-                                "Quarter: %{x}<br>"
-                                f"Value: %{{y:.1f}} {service_data.get('unit', 'millions')}<br>"
-                                "<extra></extra>"
-                            ),
+                            x=df_service["Quarter"],
+                            y=df_service[column_name],
+                            name=service,
+                            hovertemplate=hovertemplate,
                         )
                     )
 
@@ -356,7 +398,7 @@ with tab1:
                     xaxis=dict(
                         type='category',
                         categoryorder='array',
-                        categoryarray=df_individual["Quarter"].tolist(),
+                        categoryarray=df_service["Quarter"].tolist(),
                         tickangle=45,
                         showgrid=False,
                     ),
@@ -366,8 +408,8 @@ with tab1:
                 st.markdown('<div class="chart-container">', unsafe_allow_html=True)
                 st.plotly_chart(fig, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
-    else:
-        st.info("No data available for the selected filters.")
+
+            st.markdown("---")
 
 with tab2:
     comparison_filter_cols = st.columns(3)

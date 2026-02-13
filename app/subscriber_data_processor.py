@@ -6,8 +6,8 @@ import pandas as pd
 
 
 @lru_cache(maxsize=4)
-def _read_subscriber_sheet(path, mtime):
-    # mtime is part of the cache key so Excel updates are picked up automatically.
+def _read_subscriber_sheet(path, source_stamp):
+    # source_stamp is part of the cache key so Excel updates are picked up automatically.
     return pd.read_excel(path, sheet_name="Company_subscribers_values")
 
 
@@ -115,6 +115,7 @@ def _build_quarter_label(quarter, year) -> str:
 class SubscriberDataProcessor:
     def __init__(self):
         self.data_path = self._resolve_excel_path()
+        self.source_stamp = self._get_source_stamp(self.data_path)
         self.df_subscribers = self._load_subscribers()
         self.series_columns = self._discover_series_columns(self.df_subscribers)
         self.series_labels = {
@@ -137,6 +138,18 @@ class SubscriberDataProcessor:
                 return os.path.abspath(path)
         return None
 
+    def _get_source_stamp(self, path):
+        if not path:
+            return None
+        try:
+            # ns precision avoids stale cache when edits happen in the same second.
+            return os.stat(path).st_mtime_ns
+        except OSError:
+            return None
+
+    def is_source_updated(self):
+        return self._get_source_stamp(self.data_path) != self.source_stamp
+
     def _empty_df(self):
         return pd.DataFrame(
             columns=["service", "company", "quarter", "year", "subscribers", "unit"]
@@ -145,13 +158,8 @@ class SubscriberDataProcessor:
     def _load_subscribers(self):
         if not self.data_path:
             return self._empty_df()
-
-        try:
-            mtime = int(os.path.getmtime(self.data_path))
-        except OSError:
-            mtime = 0
-
-        df = _read_subscriber_sheet(self.data_path, mtime).copy()
+        source_stamp = self.source_stamp if self.source_stamp is not None else 0
+        df = _read_subscriber_sheet(self.data_path, source_stamp).copy()
         raw_cols = [str(col).strip() for col in df.columns]
         norm_cols = [_normalize_column_name(col) for col in raw_cols]
         df.columns = norm_cols
@@ -191,7 +199,15 @@ class SubscriberDataProcessor:
         for col in df.columns:
             if col in base_cols:
                 continue
-            numeric = pd.to_numeric(df[col], errors="coerce")
+            cleaned = df[col]
+            if cleaned.dtype == object:
+                cleaned = (
+                    cleaned.astype(str)
+                    .str.replace(",", "", regex=False)
+                    .str.strip()
+                    .replace({"": pd.NA, "nan": pd.NA, "None": pd.NA})
+                )
+            numeric = pd.to_numeric(cleaned, errors="coerce")
             if numeric.notna().any():
                 df[col] = numeric
                 series_cols.append(col)

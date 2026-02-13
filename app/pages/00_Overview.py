@@ -2015,6 +2015,16 @@ company_logos = load_company_logos()
 # Subscribers data (from Company_subscribers_values)
 if "subscriber_processor" not in st.session_state:
     st.session_state["subscriber_processor"] = SubscriberDataProcessor()
+else:
+    existing_processor = st.session_state.get("subscriber_processor")
+    if existing_processor is None or not hasattr(existing_processor, "is_source_updated"):
+        st.session_state["subscriber_processor"] = SubscriberDataProcessor()
+    else:
+        try:
+            if existing_processor.is_source_updated():
+                st.session_state["subscriber_processor"] = SubscriberDataProcessor()
+        except Exception:
+            st.session_state["subscriber_processor"] = SubscriberDataProcessor()
 
 subscribers_data = []
 subscriber_df = getattr(st.session_state["subscriber_processor"], "df_subscribers", None)
