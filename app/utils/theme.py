@@ -580,6 +580,61 @@ def apply_theme():
             box-shadow: none !important;
         }
 
+        /* Final deterministic filter styling: no text highlight, only indicator fill */
+        div[data-testid="stRadio"] [data-baseweb="button-group"] button.mfe-filter-radio,
+        div[data-testid="stRadio"] [role="radiogroup"] [role="radio"].mfe-filter-radio,
+        div[data-testid="stRadio"] [role="radiogroup"] [role="button"].mfe-filter-radio {
+            background: transparent !important;
+            background-color: transparent !important;
+            background-image: none !important;
+            box-shadow: none !important;
+            border: none !important;
+            color: var(--app-text) !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 0.5rem !important;
+            min-height: 28px !important;
+            padding: 0 !important;
+            margin: 0 0.8rem 0 0 !important;
+            position: relative !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+        div[data-testid="stRadio"] .mfe-filter-radio * {
+            background: transparent !important;
+            background-color: transparent !important;
+            background-image: none !important;
+            box-shadow: none !important;
+            color: var(--app-text) !important;
+            text-shadow: none !important;
+        }
+        div[data-testid="stRadio"] .mfe-filter-radio-indicator {
+            width: 16px !important;
+            height: 16px !important;
+            flex: 0 0 16px !important;
+            border: 1.5px solid var(--app-accent) !important;
+            border-radius: 4px !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            display: inline-block !important;
+        }
+        div[data-testid="stRadio"] .mfe-filter-radio.mfe-filter-radio-selected > .mfe-filter-radio-indicator {
+            background: var(--app-accent) !important;
+            box-shadow: inset 0 0 0 3px var(--app-accent-text) !important;
+        }
+        .theme-toggle div[data-testid="stRadio"] .mfe-filter-radio-indicator {
+            border-radius: 999px !important;
+        }
+        .theme-toggle div[data-testid="stRadio"] .mfe-filter-radio.mfe-filter-radio-selected > .mfe-filter-radio-indicator {
+            background: transparent !important;
+            box-shadow: inset 0 0 0 4px var(--app-accent) !important;
+        }
+        div[data-testid="stRadio"] .mfe-filter-radio::selection,
+        div[data-testid="stRadio"] .mfe-filter-radio *::selection {
+            background: transparent !important;
+            color: inherit !important;
+        }
+
         /* Buttons */
         .stButton button,
         .stDownloadButton button {
@@ -636,6 +691,88 @@ def apply_theme():
           if (mode === "dark") {{
             document.body.classList.add("theme-dark");
           }}
+
+          const isSelected = (el) => {{
+            const attrs = ["aria-checked", "aria-pressed", "aria-selected", "data-selected", "data-active"];
+            return attrs.some((attr) => (el.getAttribute(attr) || "").toLowerCase() === "true");
+          }};
+
+          const clearHighlight = (el) => {{
+            el.style.setProperty("background", "transparent", "important");
+            el.style.setProperty("background-color", "transparent", "important");
+            el.style.setProperty("background-image", "none", "important");
+            el.style.setProperty("box-shadow", "none", "important");
+            el.style.setProperty("color", "var(--app-text)", "important");
+          }};
+
+          const ensureIndicator = (el) => {{
+            let indicator = null;
+            const first = el.firstElementChild;
+            if (first && first.classList && first.classList.contains("mfe-filter-radio-indicator")) {{
+              indicator = first;
+            }} else {{
+              indicator = document.createElement("span");
+              indicator.className = "mfe-filter-radio-indicator";
+              el.insertBefore(indicator, el.firstChild);
+            }}
+            return indicator;
+          }};
+
+          const patchRadio = (el) => {{
+            if (!(el instanceof HTMLElement)) return;
+            el.classList.add("mfe-filter-radio");
+            clearHighlight(el);
+            el.querySelectorAll("*").forEach((child) => {{
+              if (child.classList && child.classList.contains("mfe-filter-radio-indicator")) return;
+              clearHighlight(child);
+            }});
+            ensureIndicator(el);
+            el.classList.toggle("mfe-filter-radio-selected", isSelected(el));
+          }};
+
+          const applyRadioFixes = () => {{
+            document.querySelectorAll('div[data-testid="stRadio"] [data-baseweb="button-group"] button').forEach(patchRadio);
+            document.querySelectorAll('div[data-testid="stRadio"] [role="radiogroup"] [role="radio"], div[data-testid="stRadio"] [role="radiogroup"] [role="button"]').forEach(patchRadio);
+          }};
+
+          if (window.__mfeRadioFixObserver) {{
+            window.__mfeRadioFixObserver.disconnect();
+            window.__mfeRadioFixObserver = null;
+          }}
+
+          let queued = false;
+          const scheduleFix = () => {{
+            if (queued) return;
+            queued = true;
+            requestAnimationFrame(() => {{
+              queued = false;
+              applyRadioFixes();
+            }});
+          }};
+
+          scheduleFix();
+          const observer = new MutationObserver((mutations) => {{
+            for (const mutation of mutations) {{
+              if (mutation.type === "childList") {{
+                scheduleFix();
+                return;
+              }}
+              if (
+                mutation.type === "attributes" &&
+                ["aria-checked", "aria-pressed", "aria-selected"].includes(mutation.attributeName || "")
+              ) {{
+                scheduleFix();
+                return;
+              }}
+            }}
+          }});
+          observer.observe(document.body, {{
+            subtree: true,
+            childList: true,
+            attributes: true,
+            attributeFilter: ["aria-checked", "aria-pressed", "aria-selected"],
+          }});
+          window.__mfeRadioFixObserver = observer;
         }})();
         </script>
         """,
