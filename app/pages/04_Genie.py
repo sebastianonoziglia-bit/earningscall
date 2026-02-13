@@ -544,23 +544,48 @@ with col2:
         placeholder="Type to search countries...",
         key="country_search"
     )
+    country_query = (country_search or "").strip().lower()
     st.session_state.search_country = country_search
 
-    # Filter countries based on search (excluding Global)
-    available_countries = [c for c in filter_options.get('countries', []) if c != 'Global']
-    filtered_countries = [
-        country for country in available_countries
-        if country_search.lower() in country.lower()
-    ] if country_search else available_countries
+    # Filter countries based on search (excluding Global) with normalized values.
+    available_countries = sorted(
+        {
+            str(c).strip()
+            for c in filter_options.get("countries", [])
+            if str(c).strip() and str(c).strip().lower() != "global"
+        }
+    )
+    filtered_countries = (
+        [country for country in available_countries if country_query in country.lower()]
+        if country_query
+        else available_countries
+    )
 
-    # Country selection with Italy as default
+    if "country_selector" not in st.session_state:
+        default_country = "Italy" if "Italy" in available_countries else (available_countries[0] if available_countries else None)
+        st.session_state["country_selector"] = [default_country] if default_country else []
+    else:
+        # Keep only still-valid countries in the current workbook.
+        st.session_state["country_selector"] = [
+            c for c in st.session_state.get("country_selector", []) if c in available_countries
+        ]
+
+    # Keep selected countries visible even when search query narrows options.
+    options_for_multiselect = list(filtered_countries)
+    for c in st.session_state.get("country_selector", []):
+        if c not in options_for_multiselect:
+            options_for_multiselect.insert(0, c)
+
     selected_countries = st.multiselect(
         "Select Countries",
-        options=filtered_countries,
-        default=['Italy'] if 'Italy' in filtered_countries else [filtered_countries[0]] if filtered_countries else None,
+        options=options_for_multiselect,
         help="Select one or more countries to analyze",
         key="country_selector"
     )
+    selected_countries = [c for c in selected_countries if c in available_countries]
+
+    if country_query and not filtered_countries:
+        st.caption("No countries match that search.")
 
     # Ad spend metric selection
     metric_selection_mode = st.radio(
@@ -670,6 +695,46 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Keep macro expander controls readable even when global theme CSS is aggressive.
+st.markdown(
+    """
+    <style>
+    div[data-testid="stExpander"] div[data-testid="stCheckbox"] label {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.45rem !important;
+        width: auto !important;
+    }
+    div[data-testid="stExpander"] div[data-testid="stCheckbox"] label > div:first-child {
+        flex: 0 0 18px !important;
+    }
+    div[data-testid="stExpander"] div[data-testid="stCheckbox"] label > div:last-child,
+    div[data-testid="stExpander"] div[data-testid="stCheckbox"] label > div:last-child * {
+        writing-mode: horizontal-tb !important;
+        text-orientation: mixed !important;
+        white-space: normal !important;
+        width: auto !important;
+        max-width: 100% !important;
+        display: inline !important;
+        line-height: 1.25 !important;
+        letter-spacing: normal !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+    }
+    div[data-testid="stExpander"] div[data-testid="stRadio"] [data-baseweb="button-group"] {
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+    }
+    div[data-testid="stExpander"] div[data-testid="stRadio"] [data-baseweb="button-group"] button {
+        white-space: nowrap !important;
+        min-width: 120px !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Organize options into expanders to reduce clutter
 show_fed_funds = False
 fed_funds_aggregation = "Annual Average"
@@ -735,10 +800,9 @@ with st.expander("Activate Macro Economics Indicators", expanded=False):
         )
         
         if show_inflation:
-            inflation_type = st.radio(
+            inflation_type = st.selectbox(
                 "Inflation Source",
                 ["Official", "Alternative"],
-                horizontal=True,
                 key="inflation_type"
             )
     
@@ -756,10 +820,9 @@ with st.expander("Activate Macro Economics Indicators", expanded=False):
             key="fed_funds_checkbox",
         )
         if show_fed_funds:
-            fed_funds_aggregation = st.radio(
+            fed_funds_aggregation = st.selectbox(
                 "Fed Funds Aggregation",
                 ["Annual Average", "Year-End"],
-                horizontal=True,
                 key="fed_funds_aggregation",
             )
         if adjust_purchasing_power:
