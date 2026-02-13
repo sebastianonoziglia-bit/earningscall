@@ -147,8 +147,21 @@ def load_common_styles():
         accent-color: var(--app-accent, #0073ff) !important;
     }
 
+    /* Streamlit radio: input:checked + div is the text block, not the marker. */
     label[data-baseweb="radio"] input:checked + div {
+        border-color: transparent !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+    label[data-baseweb="radio"]:has(input:checked) > div:first-of-type {
+        background: var(--app-accent, #0073ff) !important;
         border-color: var(--app-accent, #0073ff) !important;
+        box-shadow: inset 0 0 0 3px var(--app-accent-text, #ffffff) !important;
+    }
+    label[data-baseweb="radio"] > div:last-of-type,
+    label[data-baseweb="radio"] > div:last-of-type * {
+        background: transparent !important;
+        box-shadow: none !important;
     }
     label[data-baseweb="radio"],
     label[data-baseweb="radio"]:hover,
@@ -1028,8 +1041,21 @@ def get_page_style():
         accent-color: var(--app-accent, #0073ff) !important;
     }
 
+    /* Streamlit radio: input:checked + div is the text block, not the marker. */
     label[data-baseweb="radio"] input:checked + div {
+        border-color: transparent !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+    label[data-baseweb="radio"]:has(input:checked) > div:first-of-type {
+        background: var(--app-accent, #0073ff) !important;
         border-color: var(--app-accent, #0073ff) !important;
+        box-shadow: inset 0 0 0 3px var(--app-accent-text, #ffffff) !important;
+    }
+    label[data-baseweb="radio"] > div:last-of-type,
+    label[data-baseweb="radio"] > div:last-of-type * {
+        background: transparent !important;
+        box-shadow: none !important;
     }
     label[data-baseweb="radio"],
     label[data-baseweb="radio"]:hover,

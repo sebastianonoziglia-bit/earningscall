@@ -306,10 +306,25 @@ def apply_theme():
             box-shadow: none !important;
             margin-right: 8px !important;
         }
+        /* Important: input:checked + div targets the label text block in Streamlit radios.
+           Keep that text block transparent and style only the first marker box. */
         div[data-testid="stRadio"] label[data-baseweb="radio"] input:checked + div {
+            background: transparent !important;
+            border-color: transparent !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) > div:first-of-type {
             background: var(--app-accent) !important;
             border-color: var(--app-accent) !important;
             box-shadow: inset 0 0 0 3px var(--app-accent-text) !important;
+        }
+        div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) > div:last-of-type,
+        div[data-testid="stRadio"] label[data-baseweb="radio"]:has(input:checked) > div:last-of-type *,
+        div[data-testid="stRadio"] label[data-baseweb="radio"] > div:last-of-type,
+        div[data-testid="stRadio"] label[data-baseweb="radio"] > div:last-of-type * {
+            background: transparent !important;
+            color: var(--app-text) !important;
+            box-shadow: none !important;
         }
         div[data-testid="stCheckbox"] label[data-baseweb="checkbox"] input:checked + div {
             background: var(--app-accent) !important;
@@ -325,6 +340,11 @@ def apply_theme():
             border-radius: 999px !important;
         }
         .theme-toggle .stRadio label[data-baseweb="radio"] input:checked + div {
+            background: transparent !important;
+            box-shadow: none !important;
+            border-color: transparent !important;
+        }
+        .theme-toggle .stRadio label[data-baseweb="radio"]:has(input:checked) > div:first-of-type {
             background: transparent !important;
             box-shadow: inset 0 0 0 4px var(--app-accent) !important;
             border-color: var(--app-accent) !important;
