@@ -3655,6 +3655,7 @@ if selected_metrics and has_metrics_source:
                 )
             fig.update_layout(
                 yaxis_title=f"{metric_label} (M)",
+                xaxis_title="Quarterly" if metrics_freq == "Quarterly" else "Year",
                 height=520,
                 margin=dict(t=60, r=30, l=20, b=40),
             )
@@ -3982,6 +3983,14 @@ def render_heatmap_figure(heatmap_df, heatmap_value_kind, heatmap_freq, y_title)
         hover_text.append(row)
     row_count = len(y_labels)
     heatmap_height = min(640, max(320, 36 * row_count + 120))
+    x_tick_angle = 0
+    bottom_margin = 20
+    if heatmap_freq in {"Quarterly", "Monthly", "Weekly", "Daily"}:
+        x_tick_angle = -90
+        bottom_margin = 110
+    elif len(x_labels) >= 14:
+        x_tick_angle = -45
+        bottom_margin = 70
 
     heatmap_fig = go.Figure(
         data=go.Heatmap(
@@ -4001,14 +4010,16 @@ def render_heatmap_figure(heatmap_df, heatmap_value_kind, heatmap_freq, y_title)
     )
     heatmap_fig.update_layout(
         height=heatmap_height,
-        margin=dict(l=20, r=20, t=20, b=20),
+        margin=dict(l=20, r=20, t=20, b=bottom_margin),
         xaxis_title=x_title,
         yaxis_title=y_title,
         font=dict(family="Montserrat, sans-serif", size=12, color=heatmap_text),
         plot_bgcolor=heatmap_bg,
         paper_bgcolor=heatmap_bg,
     )
-    heatmap_fig.update_xaxes(showgrid=False, tickangle=0)
+    heatmap_fig.update_xaxes(showgrid=False, tickangle=x_tick_angle, automargin=True)
+    if heatmap_freq in {"Quarterly", "Monthly"} and len(x_labels) >= 20:
+        heatmap_fig.update_xaxes(tickfont=dict(size=10))
     heatmap_fig.update_yaxes(showgrid=False)
     render_plotly(heatmap_fig)
 
