@@ -83,7 +83,7 @@ st.markdown(
 
         body.theme-dark .ov-map-summary {
             position: absolute;
-            top: clamp(10px, 35%, 258px);
+            top: clamp(90px, calc(35% + 90px), 380px);
             left: 18px;
             z-index: 6;
             max-width: min(340px, 40vw);
@@ -1785,7 +1785,7 @@ if not country_ad_df.empty:
                   }}
                   .ov-map-summary {{
                     position: absolute;
-                    top: clamp(30px, calc(35% + 20px), 278px);
+                    top: clamp(90px, calc(35% + 90px), 380px);
                     left: 18px;
                     z-index: 6;
                     max-width: min(340px, 40vw);
