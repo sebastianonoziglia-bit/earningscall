@@ -20,14 +20,15 @@ import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime
 from data_processor import FinancialDataProcessor
-from utils.data_loader import load_advertising_data, get_available_filters
+from utils.data_loader import load_advertising_data, get_available_filters, read_excel_data
 from utils.components import render_ai_assistant
 from utils.styles import load_common_styles, load_genie_specific_styles
 from utils.enhanced_chat_interface import render_enhanced_chat_interface
 from utils.m2_supply_data import get_m2_monthly_data, get_m2_annual_data, create_m2_visualization
+from utils.fed_funds_data import get_fed_funds_annual_data
 from utils.bitcoin_analysis import get_bitcoin_monthly_returns, create_bitcoin_monthly_returns_chart, render_bitcoin_analysis_section
 from utils.inflation_analysis import render_inflation_methodology_section
-from utils.inflation_calculator import create_inflation_analysis_box, add_inflation_selector
+from utils.inflation_calculator import create_inflation_analysis_box, add_inflation_selector, load_usd_inflation_table
 from subscriber_data_processor import SubscriberDataProcessor
 import logging
 from functools import lru_cache
@@ -140,6 +141,54 @@ def get_available_years(companies_tuple, data_processor_id):
         years = data_processor.get_available_years(company)
         all_years.extend(years)
     return sorted(list(set(all_years)))
+
+
+@st.cache_data(ttl=3600 * 24)
+def get_advertising_years():
+    try:
+        df = read_excel_data()
+        if df is None or df.empty or "year" not in df.columns:
+            return []
+        years = pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).tolist()
+        return sorted(set(years))
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=3600 * 24)
+def get_inflation_years():
+    try:
+        df = load_usd_inflation_table()
+        if df is None or df.empty or "Year" not in df.columns:
+            return []
+        years = pd.to_numeric(df["Year"], errors="coerce").dropna().astype(int).tolist()
+        return sorted(set(years))
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=3600 * 24)
+def get_m2_years():
+    try:
+        df = get_m2_annual_data(1900, datetime.now().year + 2)
+        if df is None or df.empty or "year" not in df.columns:
+            return []
+        years = pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).tolist()
+        return sorted(set(years))
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=3600 * 24)
+def get_fed_funds_years():
+    try:
+        df = get_fed_funds_annual_data(1900, datetime.now().year + 2, method="average")
+        if df is None or df.empty or "year" not in df.columns:
+            return []
+        years = pd.to_numeric(df["year"], errors="coerce").dropna().astype(int).tolist()
+        return sorted(set(years))
+    except Exception:
+        return []
 
 # Update the mapping of macro categories to their detailed metrics
 MACRO_CATEGORY_MAPPING = {
@@ -622,6 +671,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Organize options into expanders to reduce clutter
+show_fed_funds = False
+fed_funds_aggregation = "Annual Average"
 with st.expander("Activate Macro Economics Indicators", expanded=False):
     # Row 1 - Basic Options
     basic_cols = st.columns([1, 1])
@@ -698,6 +749,19 @@ with st.expander("Activate Macro Economics Indicators", expanded=False):
             help="Convert values to real terms using historical USD purchasing power",
             key="purchasing_power_checkbox"
         )
+        show_fed_funds = st.checkbox(
+            "Fed Funds Rate",
+            value=False,
+            help="Overlay Federal Funds Rate from the 'Fed Fund Rates' sheet.",
+            key="fed_funds_checkbox",
+        )
+        if show_fed_funds:
+            fed_funds_aggregation = st.radio(
+                "Fed Funds Aggregation",
+                ["Annual Average", "Year-End"],
+                horizontal=True,
+                key="fed_funds_aggregation",
+            )
         if adjust_purchasing_power:
             from utils.inflation_calculator import load_usd_inflation_table
 
@@ -715,11 +779,34 @@ with st.expander("Activate Macro Economics Indicators", expanded=False):
                 )
 
 # Year range selector positioned right below the options row
+year_candidates = set()
+
+# Company years
 if selected_companies:
-    all_years = get_available_years(tuple(selected_companies), id(data_processor))
-else:
-    # Default year range when no companies selected
-    all_years = list(range(2010, 2025))
+    year_candidates.update(get_available_years(tuple(selected_companies), id(data_processor)))
+
+# Country advertising years
+if selected_metrics or show_global:
+    year_candidates.update(get_advertising_years())
+
+# Inflation years (needed both for chart overlay and purchasing power adjustment)
+if show_inflation or adjust_purchasing_power:
+    year_candidates.update(get_inflation_years())
+
+# M2 years
+if show_m2_supply:
+    year_candidates.update(get_m2_years())
+
+# Fed funds years
+if show_fed_funds:
+    year_candidates.update(get_fed_funds_years())
+
+if not year_candidates:
+    year_candidates.update(range(2010, datetime.now().year + 1))
+
+all_years = sorted(int(y) for y in year_candidates if y is not None)
+if not all_years:
+    all_years = list(range(2010, datetime.now().year + 1))
 
 year_range = st.slider(
     "Select Year Range",
@@ -749,7 +836,15 @@ else:
     selected_segments = []
     
 # Create visualizations when any data selection is made 
-if selected_metrics or selected_company_metrics or selected_segment_options or show_global or show_m2_supply:
+if (
+    selected_metrics
+    or ("selected_company_metrics" in locals() and selected_company_metrics)
+    or ("selected_segment_options" in locals() and selected_segment_options)
+    or show_global
+    or show_m2_supply
+    or show_inflation
+    or show_fed_funds
+):
     # We can display both company metrics AND segments simultaneously on the same chart
     # Create visualization
     fig = go.Figure()
@@ -1125,6 +1220,9 @@ if selected_metrics or selected_company_metrics or selected_segment_options or s
                 )
             )
 
+    fed_rate_min_value = None
+    fed_rate_max_value = None
+
     # Add inflation rate if enabled
     if show_inflation:
         # Use the value from session state to ensure consistency
@@ -1149,6 +1247,40 @@ if selected_metrics or selected_company_metrics or selected_segment_options or s
                           "Rate: %{y:.1f}%<br>" +
                           "<extra></extra>"
         ))
+
+    # Add Fed Funds rate if enabled
+    if show_fed_funds:
+        fed_method = "average" if fed_funds_aggregation == "Annual Average" else "year_end"
+        fed_df = get_fed_funds_annual_data(
+            start_year=year_range[0],
+            end_year=year_range[1],
+            method=fed_method,
+        )
+        if fed_df is None or fed_df.empty:
+            st.info(
+                "Fed Funds Rate sheet not found or empty. "
+                "Expected sheet name like 'Fed Fund Rates' with date/year and rate columns."
+            )
+        else:
+            fed_values = pd.to_numeric(fed_df["value"], errors="coerce").dropna()
+            if not fed_values.empty:
+                fed_rate_min_value = float(fed_values.min())
+                fed_rate_max_value = float(fed_values.max())
+            fig.add_trace(
+                go.Scatter(
+                    x=fed_df["year"].astype(int),
+                    y=fed_df["value"].astype(float),
+                    name=f"Fed Funds Rate ({fed_funds_aggregation})",
+                    mode="lines+markers",
+                    line=dict(width=2, dash="solid", color="rgba(245, 158, 11, 0.9)"),
+                    marker=dict(size=6, color="rgba(245, 158, 11, 0.9)"),
+                    yaxis="y8",
+                    hovertemplate="<b>%{data.name}</b><br>"
+                    + "Year: %{x}<br>"
+                    + "Rate: %{y:.2f}%<br>"
+                    + "<extra></extra>",
+                )
+            )
 
     # Calculate axis ranges and steps
     country_max = max(country_max_values) if country_max_values else 0
@@ -1210,6 +1342,7 @@ if selected_metrics or selected_company_metrics or selected_segment_options or s
     right_axes_count = sum([
         show_global,
         show_inflation,
+        show_fed_funds,
         bool(selected_companies and selected_company_metrics),
         bool('selected_segments' in locals() and selected_segments),
         show_m2_supply and not show_m2_growth  # Only when showing absolute M2 values
@@ -1255,6 +1388,32 @@ if selected_metrics or selected_company_metrics or selected_segment_options or s
             titlefont=dict(size=11, color='rgba(255, 0, 0, 0.6)'),  # Red-themed for inflation
             tickfont=dict(size=10, color='rgba(255, 0, 0, 0.6)')   # Matching tick color
         )
+
+    # Add Fed Funds axis if needed
+    if show_fed_funds:
+        current_position -= right_side_spacing
+        fed_range = None
+        if fed_rate_min_value is not None and fed_rate_max_value is not None:
+            fed_pad = max(0.5, (fed_rate_max_value - fed_rate_min_value) * 0.2)
+            fed_low = min(0.0, fed_rate_min_value - fed_pad)
+            fed_high = fed_rate_max_value + fed_pad
+            if fed_high <= fed_low:
+                fed_high = fed_low + 1.0
+            fed_range = [fed_low, fed_high]
+        layout_dict['yaxis8'] = dict(
+            title=f"Fed Funds Rate (%) [{fed_funds_aggregation}]",
+            overlaying="y",
+            side="right",
+            anchor="free",
+            position=current_position,
+            showgrid=False,
+            range=fed_range,
+            tickformat='.2f',
+            titlefont=dict(size=11, color='rgba(245, 158, 11, 0.95)'),
+            tickfont=dict(size=10, color='rgba(245, 158, 11, 0.95)'),
+            tickmode='auto',
+            nticks=6
+        )
     
     # Add Company metrics axis if needed
     if selected_companies and selected_company_metrics:
@@ -1294,6 +1453,7 @@ if selected_metrics or selected_company_metrics or selected_segment_options or s
 
     # Add M2 money supply data if enabled
     if show_m2_supply:
+        m2_axis_title = "M2 Supply (Billions USD, Real)" if adjust_purchasing_power else "M2 Supply (Billions USD)"
         # Add additional UI controls for M2 supply visualization in a sidebar section
         with st.sidebar.expander("M2 Money Supply Options", expanded=True):
             # Use checkboxes to allow selecting both annual and monthly views simultaneously
@@ -1331,6 +1491,13 @@ if selected_metrics or selected_company_metrics or selected_segment_options or s
             # Get the annual M2 data and make sure it includes the current year (2025)
             annual_m2_df = get_m2_annual_data(year_range[0], year_range[1])
             if not annual_m2_df.empty:
+                annual_m2_df = annual_m2_df.sort_values("year").copy()
+                if adjust_purchasing_power:
+                    annual_m2_df["value"] = annual_m2_df.apply(
+                        lambda row: adjust_for_purchasing_power(row["value"], row["year"]),
+                        axis=1,
+                    )
+                    annual_m2_df["annual_growth"] = annual_m2_df["value"].pct_change() * 100.0
                 # Log the data we have for debugging
                 current_year = datetime.now().year
                 logging.info(f"M2 annual data years: {annual_m2_df['year'].unique()}")
@@ -1342,7 +1509,7 @@ if selected_metrics or selected_company_metrics or selected_segment_options or s
                     fig.add_trace(go.Scatter(
                         x=annual_m2_df['year'],
                         y=annual_m2_df['value'],
-                        name='M2 Supply Annual (Billions USD)',
+                        name=f"M2 Supply Annual ({'Real' if adjust_purchasing_power else 'Nominal'})",
                         line=dict(color='#1f77b4', width=3),
                         mode='lines',
                         yaxis='y6',  # Use yaxis6 to match the layout definition
@@ -1359,6 +1526,16 @@ if selected_metrics or selected_company_metrics or selected_segment_options or s
         if show_monthly_m2:
             monthly_m2_df = get_m2_monthly_data()
             if not monthly_m2_df.empty:
+                monthly_m2_df = monthly_m2_df.sort_values("date").copy()
+                if adjust_purchasing_power:
+                    monthly_m2_df["value"] = monthly_m2_df.apply(
+                        lambda row: adjust_for_purchasing_power(
+                            row["value"],
+                            row["date"].year if hasattr(row["date"], "year") else row["year"],
+                        ),
+                        axis=1,
+                    )
+                    monthly_m2_df["monthly_growth"] = monthly_m2_df["value"].pct_change() * 100.0
                 # For monthly data, we need to filter by year component
                 # Handle datetime.date objects which are the most common case
                 if hasattr(monthly_m2_df['date'].iloc[0], 'year'):
@@ -1431,7 +1608,7 @@ if selected_metrics or selected_company_metrics or selected_segment_options or s
             # Add a new y-axis for M2 Supply
             current_position -= right_side_spacing
             layout_dict['yaxis6'] = dict(
-                title="M2 Supply (Billions USD)",
+                title=m2_axis_title,
                 overlaying='y',
                 side='right',
                 anchor='free',
@@ -1980,6 +2157,31 @@ if 'show_m2_supply' in locals() and show_m2_supply:
     except Exception as e:
         logging.error(f"Error generating M2 Supply insights: {e}")
 
+# Generate Fed Funds macro insight
+if 'show_fed_funds' in locals() and show_fed_funds:
+    try:
+        fed_method = "average" if fed_funds_aggregation == "Annual Average" else "year_end"
+        fed_df = get_fed_funds_annual_data(earliest_year, latest_year, method=fed_method)
+        if fed_df is not None and not fed_df.empty:
+            fed_df = fed_df.sort_values("year")
+            start_row = fed_df.iloc[0]
+            end_row = fed_df.iloc[-1]
+            start_rate = float(start_row["value"])
+            end_rate = float(end_row["value"])
+            rate_delta = end_rate - start_rate
+            macro_insights.append(
+                f"""
+                <div class='macro-title'>Fed Funds Rate Analysis ({int(start_row['year'])}-{int(end_row['year'])})</div>
+                <p>Using <b>{fed_funds_aggregation}</b> values from the Fed Funds sheet, rates moved from
+                <span class='cagr-value'>{start_rate:.2f}%</span> to <span class='cagr-value'>{end_rate:.2f}%</span>
+                (<span class='cagr-value'>{rate_delta:+.2f} pp</span>).</p>
+                <p>This helps contextualize valuation pressure, debt servicing cost, and liquidity conditions
+                relative to ad spend, company fundamentals, inflation, and M2 trends.</p>
+                """
+            )
+    except Exception as e:
+        logging.error(f"Error generating Fed Funds insights: {e}")
+
 # We've removed the redundant purchasing power adjustment analysis box
 # as it's been replaced by the more comprehensive inflation analysis below
 
@@ -1997,7 +2199,7 @@ if 'adjust_purchasing_power' in locals() and adjust_purchasing_power and selecte
         for company in selected_companies:
             for metric_name in selected_company_metrics:
                 metric_key = available_metrics[metric_name]
-                for year in year_range:
+                for year in range(int(year_range[0]), int(year_range[1]) + 1):
                     metrics = get_cached_metrics(company, year)
                     if metrics and metric_key in metrics:
                         company_metrics_data.append({
@@ -2115,7 +2317,11 @@ try:
         'metric_selection_mode': metric_selection_mode,
         'selected_metrics': selected_detailed_metrics,
         'selected_company_metrics': selected_company_metrics if 'selected_company_metrics' in locals() else [],
-        'year_range': f"{year_range[0]}-{year_range[1]}" if 'year_range' in locals() else "unknown"
+        'year_range': f"{year_range[0]}-{year_range[1]}" if 'year_range' in locals() else "unknown",
+        'show_m2_supply': bool(show_m2_supply) if 'show_m2_supply' in locals() else False,
+        'show_inflation': bool(show_inflation) if 'show_inflation' in locals() else False,
+        'show_fed_funds': bool(show_fed_funds) if 'show_fed_funds' in locals() else False,
+        'adjust_purchasing_power': bool(adjust_purchasing_power) if 'adjust_purchasing_power' in locals() else False,
     }
 
     # AI Assistant disabled for now
