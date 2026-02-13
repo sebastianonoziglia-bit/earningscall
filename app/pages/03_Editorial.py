@@ -76,6 +76,8 @@ def load_company_logos():
         'Netflix': 'attached_assets/9.png',
         'Paramount+': 'attached_assets/Paramount.png',
         'Warner Bros Discovery': 'attached_assets/adadad.png',
+        'Warner Bros. Discovery': 'attached_assets/adadad.png',
+        'WBD': 'attached_assets/adadad.png',
         'Spotify': 'attached_assets/11.png',
         'Alphabet': 'attached_assets/8.png',  # Reverted to original working logo
         'Apple': 'attached_assets/10.png',
@@ -157,367 +159,395 @@ current_date = datetime.now()
 five_years_ago = current_date - timedelta(days=5*365)
 
 # Add tabs for single service view and comparison view
+processor = st.session_state['subscriber_processor']
+companies = processor.get_company_names() if hasattr(processor, "get_company_names") else []
+selected_services = []
+
+# Add chart zoom effect once
+if not hasattr(st.session_state, 'editorial_chart_css_added'):
+    st.markdown("""
+    <style>
+    .chart-container {
+        transition: transform 0.3s ease;
+        transform-origin: center center;
+    }
+    .chart-container:hover {
+        transform: scale(1.02);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    st.session_state.editorial_chart_css_added = True
+
+# Add tabs for single service view and comparison view
 tab1, tab2 = st.tabs(["Individual Service Analysis", "Service Comparison"])
 
 with tab1:
-    # Add selectors for subscriber type and chart type at the top
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        subscriber_type = st.radio(
-            "Select Metric",
-            options=["Subscribers"],
-            horizontal=True,
-            key="individual_subscriber_type"
+    filter_cols = st.columns(3)
+
+    with filter_cols[0]:
+        individual_company_filter = st.selectbox(
+            "Company filter",
+            ["All"] + companies,
+            key="editorial_individual_company_filter",
         )
-    
-    with col2:
-        chart_type = st.radio(
+
+    individual_service_options = (
+        processor.get_service_names(None if individual_company_filter == "All" else individual_company_filter)
+        if hasattr(processor, "get_service_names")
+        else services
+    )
+
+    with filter_cols[1]:
+        selected_service = st.selectbox(
+            "Service",
+            individual_service_options,
+            key="editorial_individual_service_filter",
+        ) if individual_service_options else None
+
+    service_series_keys = (
+        processor.get_series_columns([selected_service]) if selected_service and hasattr(processor, "get_series_columns") else ["subscribers"]
+    )
+    default_series_key = "subscribers" if "subscribers" in service_series_keys else (service_series_keys[0] if service_series_keys else None)
+    default_series_index = service_series_keys.index(default_series_key) if default_series_key in service_series_keys else 0
+
+    with filter_cols[2]:
+        selected_series_key = st.selectbox(
+            "Series / Split",
+            service_series_keys,
+            index=default_series_index,
+            format_func=lambda key: processor.get_series_label(key) if hasattr(processor, "get_series_label") else str(key),
+            key="editorial_individual_series_filter",
+        ) if service_series_keys else None
+
+    control_cols = st.columns(2)
+    with control_cols[0]:
+        individual_chart_type = st.radio(
             "Chart Type",
             options=["Line Chart", "Bar Chart"],
             horizontal=True,
-            key="individual_chart_type",
-            help="Select line chart to view trends over time or bar chart to compare values across quarters"
+            key="editorial_individual_chart_type",
         )
 
-    main_col1, main_col2 = st.columns([3, 1])
-
-    with main_col1:
-        # Display all services in alphabetical order
-        for service in services:
-            with st.container():
-                # Header row with logo and name
-                col1, col2 = st.columns([0.1, 0.9])
-
-                with col1:
-                    if service in service_logos:
-                        try:
-                            # Display logo with base64 encoding and hover effect
-                            st.markdown(f"""
-                                <img src='data:image/png;base64,{service_logos[service]}' class='company-logo'>
-                            """, unsafe_allow_html=True)
-                        except:
-                            st.write(service[0])  # Display first letter as fallback
-                    else:
-                        st.write(service[0])  # Display first letter as fallback
-
-                with col2:
-                    st.subheader(service)
-
-                # Get service data based on selected subscriber type
-                metric_type = "subscribers"
-                service_data = st.session_state['subscriber_processor'].get_service_data(service, metric_type=metric_type)
-
-                if service_data and not service_data['data'].empty:
-                    df = service_data['data'].copy()
-
-                    # Convert quarters to datetime for filtering
-                    df['date'] = df['Quarter'].apply(parse_quarter_to_date)
-                    df = df.dropna(subset=['date'])
-
-                    if not df.empty:
-                        # Filter to last 5 years
-                        df = df[df['date'] >= five_years_ago]
-                        # Sort chronologically (ascending)
-                        df = df.sort_values('date')
-
-                        if not df.empty:
-                            column_name = service_data['column_name']
-                            # Verify the column exists
-                            if column_name in df.columns:
-                                latest_data = {
-                                    'quarter': df.iloc[-1]['Quarter'],
-                                    'subscribers': df.iloc[-1][column_name],
-                                    'metric': column_name,
-                                    'unit': service_data['unit']
-                                }
-
-                                # Calculate YoY growth
-                                if len(df) >= 5:
-                                    yoy_growth = ((df.iloc[-1][service_data['column_name']] - 
-                                                df.iloc[-5][service_data['column_name']]) / 
-                                                df.iloc[-5][service_data['column_name']]) * 100
-                                else:
-                                    yoy_growth = None
-
-                                metric_col1, metric_col2 = st.columns([0.2, 0.8])
-
-                                with metric_col1:
-                                    metric_label = _metric_label_for_service(service)
-                                    st.metric(
-                                        label=f"{metric_label} ({latest_data['unit']})",
-                                        value=f"{latest_data['subscribers']:,.1f}",
-                                        delta=f"{yoy_growth:+.1f}%" if yoy_growth is not None else None,
-                                        delta_color="normal"
-                                    )
-                                    st.caption(f"Quarter: {latest_data['quarter']}")
-
-                                with metric_col2:
-                                    # Create either line chart or bar chart based on user selection
-                                    fig = go.Figure()
-                                    
-                                    if chart_type == "Line Chart":
-                                        # Create line chart
-                                        fig.add_trace(
-                                            go.Scatter(
-                                                x=df['Quarter'],
-                                                y=df[service_data['column_name']],
-                                                mode='lines+markers',
-                                                name=service,
-                                                hovertemplate=(
-                                                    "<b>" + service + "</b><br>" +
-                                                    "Quarter: %{x}<br>" +
-                                                    f"Value: %{{y:.1f}} {service_data['unit']}<br>" +
-                                                    "<extra></extra>"
-                                                )
-                                            )
-                                        )
-                                    else:  # Bar Chart
-                                        # Create bar chart
-                                        fig.add_trace(
-                                            go.Bar(
-                                                x=df['Quarter'],
-                                                y=df[service_data['column_name']],
-                                                name=service,
-                                                hovertemplate=(
-                                                    "<b>" + service + "</b><br>" +
-                                                    "Quarter: %{x}<br>" +
-                                                    f"Value: %{{y:.1f}} {service_data['unit']}<br>" +
-                                                    "<extra></extra>"
-                                                )
-                                            )
-                                        )
-
-                                    # Add specific layout options based on chart type
-                                    xaxis_config = dict(
-                                        showgrid=False,
-                                        tickangle=45  # Add 45-degree rotation for all chart types
-                                    )
-                                    
-                                    # For bar charts, adjust x-axis to ensure bars are displayed properly
-                                    if chart_type == "Bar Chart":
-                                        xaxis_config.update(
-                                            type='category',
-                                            categoryorder='array',
-                                            categoryarray=df['Quarter'].tolist()
-                                        )
-                                    
-                                    fig.update_layout(
-                                        margin=dict(l=20, r=20, t=30, b=40),  # Increased bottom margin for rotated labels
-                                        height=220,  # Slightly increased height to accommodate labels
-                                        showlegend=False,
-                                        template='mfe_blue',
-                                        xaxis_title=None,
-                                        yaxis_title=None,
-                                        plot_bgcolor='white',
-                                        paper_bgcolor='white',
-                                        xaxis=xaxis_config,
-                                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0')
-                                    )
-
-                                    # Add chart zoom effect if not already added
-                                    if not hasattr(st.session_state, 'editorial_chart_css_added'):
-                                        st.markdown("""
-                                        <style>
-                                        .chart-container {
-                                            transition: transform 0.3s ease;
-                                            transform-origin: center center;
-                                        }
-                                        .chart-container:hover {
-                                            transform: scale(1.02);
-                                        }
-                                        </style>
-                                        """, unsafe_allow_html=True)
-                                        st.session_state.editorial_chart_css_added = True
-                                    
-                                    # Display the plot with zoom effect
-                                    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-                                    st.plotly_chart(fig, use_container_width=True)
-                                    st.markdown('</div>', unsafe_allow_html=True)
-                            else:
-                                st.error(f"Column '{column_name}' not found for {service}. Available columns: {', '.join(df.columns)}")
-                                st.info(f"Check subscriber_data_processor.py for correct column mapping for {service}")
-                                continue
-                        else:
-                            st.warning(f"No data available in the last 5 years for {service}")
-                    else:
-                        st.warning(f"Invalid date format in data for {service}")
-                else:
-                    st.warning(f"No data available for {service}")
-
-                # Add a separator between services
-                st.markdown("---")
-
-with tab2:
-    # Add subscriber type selector for comparison view
-    comparison_subscriber_type = st.radio(
-        "Select View Type",
-        options=["Subscribers"],
-        horizontal=True,
-        key="comparison_subscriber_type"
+    service_data = (
+        processor.get_service_data(selected_service, series_key=selected_series_key)
+        if selected_service else {"data": pd.DataFrame(), "column_name": "Subscribers", "unit": "millions"}
     )
+    df_individual = service_data.get("data", pd.DataFrame()).copy()
+    if not df_individual.empty:
+        df_individual["date"] = df_individual["Quarter"].apply(parse_quarter_to_date)
+        df_individual = df_individual.dropna(subset=["date"])
+        df_individual = df_individual.sort_values("date")
 
-    # Multi-select for services to compare
-    selected_services = st.multiselect(
-        "Select Services to Compare",
-        options=services,
-        default=[services[0]] if services else None,
-        help="Select services to compare"
-    )
-
-    # Add controls in two columns
-    col1, col2 = st.columns(2)
-
-    with col1:
-        # Chart type selector
-        chart_type = st.radio(
-            "Select Chart Type",
-            options=["Line", "Bar"],
-            horizontal=True
-        )
-
-    with col2:
-        # Get all available years across all services
-        all_years = set()
-        metric_type = "subscribers"
-
-        for service in selected_services:
-            service_data = st.session_state['subscriber_processor'].get_service_data(
-                service, 
-                metric_type=metric_type
-            )
-            if service_data and not service_data['data'].empty:
-                df = service_data['data'].copy()
-                df['date'] = df['Quarter'].apply(parse_quarter_to_date)
-                df = df.dropna(subset=['date'])
-                if not df.empty:
-                    years = df['date'].dt.year.unique()
-                    all_years.update(years)
-
-        # Create year range selector if we have years
-        if all_years:
-            min_year, max_year = min(all_years), max(all_years)
-            year_range = st.slider(
+    with control_cols[1]:
+        if not df_individual.empty:
+            years = sorted(df_individual["date"].dt.year.unique().tolist())
+            min_year = int(min(years))
+            max_year = int(max(years))
+            default_start = max(min_year, max_year - 4)
+            individual_year_range = st.slider(
                 "Select Year Range",
                 min_value=min_year,
                 max_value=max_year,
-                value=(max_year-4, max_year),  # Default to last 5 years
-                step=1
+                value=(default_start, max_year),
+                step=1,
+                key="editorial_individual_year_range",
             )
+            df_individual = df_individual[
+                df_individual["date"].dt.year.between(individual_year_range[0], individual_year_range[1])
+            ]
         else:
-            year_range = None
+            individual_year_range = None
 
-    if selected_services:
-        # Dictionary to store all service data
-        all_data = {}
-        all_quarters_set = set()
-
-        # First pass: collect all data and standardize quarters
-        for service in selected_services:
-            service_data = st.session_state['subscriber_processor'].get_service_data(
-                service,
-                metric_type=metric_type
+    if selected_service and not df_individual.empty:
+        logo_col, title_col = st.columns([0.08, 0.92])
+        with logo_col:
+            logo_key_candidates = [
+                selected_service,
+                processor.df_subscribers[processor.df_subscribers["service"] == selected_service]["company"].iloc[0]
+                if "company" in processor.df_subscribers.columns and (processor.df_subscribers["service"] == selected_service).any()
+                else "",
+            ]
+            logo_b64 = None
+            for candidate in logo_key_candidates:
+                if candidate in service_logos:
+                    logo_b64 = service_logos[candidate]
+                    break
+            if logo_b64:
+                st.markdown(
+                    f"<img src='data:image/png;base64,{logo_b64}' class='company-logo'>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.write(selected_service[0])
+        with title_col:
+            series_label = (
+                processor.get_series_label(selected_series_key)
+                if hasattr(processor, "get_series_label") and selected_series_key
+                else "Subscribers"
             )
-            if service_data and not service_data['data'].empty:
-                df = service_data['data'].copy()
+            st.subheader(f"{selected_service} — {series_label}")
 
-                # Convert quarters to datetime
-                df['date'] = df['Quarter'].apply(parse_quarter_to_date)
-                df = df.dropna(subset=['date'])
+        column_name = service_data.get("column_name", "Subscribers")
+        if column_name in df_individual.columns:
+            latest_value = df_individual.iloc[-1][column_name]
+            latest_quarter = df_individual.iloc[-1]["Quarter"]
+            yoy_growth = None
+            if len(df_individual) >= 5:
+                previous_value = df_individual.iloc[-5][column_name]
+                if previous_value not in (None, 0):
+                    yoy_growth = ((latest_value - previous_value) / previous_value) * 100
 
-                # Filter by selected year range
-                if year_range and not df.empty:
-                    df = df[df['date'].dt.year.between(year_range[0], year_range[1])]
+            metric_col, chart_col = st.columns([0.22, 0.78])
+            with metric_col:
+                label_key = selected_series_key or "subscribers"
+                if label_key == "subscribers":
+                    metric_label = _metric_label_for_service(selected_service)
+                else:
+                    metric_label = processor.get_series_label(label_key)
+                st.metric(
+                    label=f"{metric_label} ({service_data.get('unit', 'millions')})",
+                    value=f"{latest_value:,.1f}",
+                    delta=f"{yoy_growth:+.1f}%" if yoy_growth is not None else None,
+                    delta_color="normal",
+                )
+                st.caption(f"Quarter: {latest_quarter}")
 
-                if not df.empty:
-                    # Sort chronologically
-                    df = df.sort_values('date')
-                    all_quarters_set.update(df['date'])
-                    all_data[service] = {
-                        'data': df,
-                        'metric_col': service_data['column_name'],
-                        'unit': service_data['unit']
-                    }
-
-        if all_data:
-            # Sort quarters chronologically
-            all_quarters = sorted(list(all_quarters_set))
-            quarter_labels = [f"Q{(d.month-1)//3 + 1} {d.year}" for d in all_quarters]
-
-            # Create figure
-            fig = go.Figure()
-
-            # Plot each service
-            for service in selected_services:
-                if service in all_data:
-                    service_info = all_data[service]
-                    df = service_info['data']
-
-                    # Create trace based on chart type
-                    if chart_type == "Line":
-                        fig.add_trace(
-                            go.Scatter(
-                                x=df['Quarter'],
-                                y=df[service_info['metric_col']],
-                                name=service,
-                                mode='lines+markers',
-                                connectgaps=False,
-                                hovertemplate=(
-                                    f"<b>{service}</b><br>" +
-                                    "Quarter: %{x}<br>" +
-                                    f"Value: %{{y:.1f}} {service_info['unit']}<br>" +
-                                    "<extra></extra>"
-                                )
-                            )
+            with chart_col:
+                fig = go.Figure()
+                if individual_chart_type == "Line Chart":
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df_individual["Quarter"],
+                            y=df_individual[column_name],
+                            mode="lines+markers",
+                            name=selected_service,
+                            hovertemplate=(
+                                f"<b>{selected_service}</b><br>"
+                                "Quarter: %{x}<br>"
+                                f"Value: %{{y:.1f}} {service_data.get('unit', 'millions')}<br>"
+                                "<extra></extra>"
+                            ),
                         )
-                    else:  # Bar chart
-                        fig.add_trace(
-                            go.Bar(
-                                x=df['Quarter'],
-                                y=df[service_info['metric_col']],
-                                name=service,
-                                hovertemplate=(
-                                    f"<b>{service}</b><br>" +
-                                    "Quarter: %{x}<br>" +
-                                    f"Value: %{{y:.1f}} {service_info['unit']}<br>" +
-                                    "<extra></extra>"
-                                )
-                            )
+                    )
+                else:
+                    fig.add_trace(
+                        go.Bar(
+                            x=df_individual["Quarter"],
+                            y=df_individual[column_name],
+                            name=selected_service,
+                            hovertemplate=(
+                                f"<b>{selected_service}</b><br>"
+                                "Quarter: %{x}<br>"
+                                f"Value: %{{y:.1f}} {service_data.get('unit', 'millions')}<br>"
+                                "<extra></extra>"
+                            ),
                         )
+                    )
 
-            # Update layout
-            fig.update_layout(
-                title=f"Streaming Services Comparison ({comparison_subscriber_type})",
-                xaxis_title="Quarter",
-                yaxis_title="Subscribers (millions)",
-                showlegend=True,
-                height=500,
-                template='mfe_blue',
-                xaxis=dict(
-                    type='category',
-                    categoryorder='array',
-                    categoryarray=quarter_labels,
-                    tickangle=45,
-                    showgrid=True
-                ),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1
-                ),
-                barmode='group' if chart_type == "Bar" else None
-            )
+                fig.update_layout(
+                    margin=dict(l=20, r=20, t=25, b=50),
+                    height=280,
+                    showlegend=False,
+                    template='mfe_blue',
+                    xaxis_title=None,
+                    yaxis_title=None,
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    xaxis=dict(
+                        type='category',
+                        categoryorder='array',
+                        categoryarray=df_individual["Quarter"].tolist(),
+                        tickangle=45,
+                        showgrid=False,
+                    ),
+                    yaxis=dict(showgrid=True, gridcolor='#f0f0f0'),
+                )
 
-            # Display the plot with zoom effect
-            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-            st.plotly_chart(fig, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            st.info("No data available for the selected services and time range")
+                st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+                st.plotly_chart(fig, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.info("Select multiple services to compare their performance")
+        st.info("No data available for the selected filters.")
+
+with tab2:
+    comparison_filter_cols = st.columns(3)
+
+    with comparison_filter_cols[0]:
+        comparison_company_filter = st.selectbox(
+            "Company filter",
+            ["All"] + companies,
+            key="editorial_comparison_company_filter",
+        )
+
+    comparison_service_pool = (
+        processor.get_service_names(None if comparison_company_filter == "All" else comparison_company_filter)
+        if hasattr(processor, "get_service_names")
+        else services
+    )
+    default_comparison_services = comparison_service_pool[:2] if len(comparison_service_pool) >= 2 else comparison_service_pool
+
+    with comparison_filter_cols[1]:
+        selected_services = st.multiselect(
+            "Services",
+            options=comparison_service_pool,
+            default=default_comparison_services,
+            key="editorial_comparison_services_filter",
+            help="Select services to compare.",
+        )
+
+    comparison_series_options = (
+        processor.get_series_columns(selected_services if selected_services else comparison_service_pool)
+        if hasattr(processor, "get_series_columns")
+        else ["subscribers"]
+    )
+    comparison_default_series = (
+        "subscribers"
+        if "subscribers" in comparison_series_options
+        else (comparison_series_options[0] if comparison_series_options else None)
+    )
+    comparison_default_series_idx = (
+        comparison_series_options.index(comparison_default_series)
+        if comparison_default_series in comparison_series_options
+        else 0
+    )
+
+    with comparison_filter_cols[2]:
+        comparison_series_key = st.selectbox(
+            "Series / Split",
+            comparison_series_options,
+            index=comparison_default_series_idx,
+            format_func=lambda key: processor.get_series_label(key) if hasattr(processor, "get_series_label") else str(key),
+            key="editorial_comparison_series_filter",
+        ) if comparison_series_options else None
+
+    comparison_control_cols = st.columns(2)
+    with comparison_control_cols[0]:
+        comparison_chart_type = st.radio(
+            "Chart Type",
+            options=["Line", "Bar"],
+            horizontal=True,
+            key="editorial_comparison_chart_type",
+        )
+
+    comparison_long = (
+        processor.get_long_series_data(services=selected_services, series_keys=[comparison_series_key])
+        if selected_services and comparison_series_key and hasattr(processor, "get_long_series_data")
+        else pd.DataFrame()
+    )
+    if not comparison_long.empty:
+        comparison_long["date"] = comparison_long["Quarter"].apply(parse_quarter_to_date)
+        comparison_long = comparison_long.dropna(subset=["date"])
+        comparison_long = comparison_long.sort_values(["service", "date"])
+
+    with comparison_control_cols[1]:
+        if not comparison_long.empty:
+            years = sorted(comparison_long["date"].dt.year.unique().tolist())
+            min_year = int(min(years))
+            max_year = int(max(years))
+            default_start = max(min_year, max_year - 4)
+            comparison_year_range = st.slider(
+                "Select Year Range",
+                min_value=min_year,
+                max_value=max_year,
+                value=(default_start, max_year),
+                step=1,
+                key="editorial_comparison_year_range",
+            )
+            comparison_long = comparison_long[
+                comparison_long["date"].dt.year.between(comparison_year_range[0], comparison_year_range[1])
+            ]
+        else:
+            comparison_year_range = None
+
+    if selected_services and not comparison_long.empty:
+        available_service_set = set(comparison_long["service"].unique().tolist())
+        missing_services = [s for s in selected_services if s not in available_service_set]
+        if missing_services:
+            st.warning(
+                "No data for selected split in: " + ", ".join(missing_services)
+            )
+
+        quarter_order = (
+            comparison_long[["Quarter", "date"]]
+            .drop_duplicates()
+            .sort_values("date")["Quarter"]
+            .tolist()
+        )
+
+        fig = go.Figure()
+        for service_name in selected_services:
+            df_service = comparison_long[comparison_long["service"] == service_name]
+            if df_service.empty:
+                continue
+            df_service = df_service.sort_values("date")
+            hover_template = (
+                f"<b>{service_name}</b><br>"
+                "Quarter: %{x}<br>"
+                "Value: %{y:.1f}<br>"
+                "<extra></extra>"
+            )
+            if comparison_chart_type == "Line":
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_service["Quarter"],
+                        y=df_service["value"],
+                        mode="lines+markers",
+                        connectgaps=False,
+                        name=service_name,
+                        hovertemplate=hover_template,
+                    )
+                )
+            else:
+                fig.add_trace(
+                    go.Bar(
+                        x=df_service["Quarter"],
+                        y=df_service["value"],
+                        name=service_name,
+                        hovertemplate=hover_template,
+                    )
+                )
+
+        series_title = (
+            processor.get_series_label(comparison_series_key)
+            if hasattr(processor, "get_series_label") and comparison_series_key
+            else "Subscribers"
+        )
+        units = sorted(
+            comparison_long["unit"].dropna().astype(str).str.strip().replace("", "millions").unique().tolist()
+        )
+        y_title = series_title if len(units) != 1 else f"{series_title} ({units[0]})"
+
+        fig.update_layout(
+            title=f"Service Comparison — {series_title}",
+            xaxis_title="Quarter",
+            yaxis_title=y_title,
+            showlegend=True,
+            height=500,
+            template='mfe_blue',
+            xaxis=dict(
+                type='category',
+                categoryorder='array',
+                categoryarray=quarter_order,
+                tickangle=45,
+                showgrid=True,
+            ),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+            ),
+            barmode='group' if comparison_chart_type == "Bar" else None,
+        )
+
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    elif selected_services:
+        st.info("No data available for the selected filters.")
+    else:
+        st.info("Select services to compare.")
 
 # Update AI context
 dashboard_state = {
