@@ -82,11 +82,11 @@ st.markdown(
 
         body.theme-dark .ov-map-summary {
             position: absolute;
-            top: 258px;
+            top: clamp(10px, 35%, 258px);
             left: 18px;
             z-index: 6;
             max-width: min(340px, 40vw);
-            height: clamp(300px, 48vh, 460px);
+            height: clamp(180px, 35vh, 420px);
             background: rgba(11, 18, 32, 0.6);
             border-radius: 12px;
             padding: 10px 12px;
@@ -180,7 +180,7 @@ st.markdown(
 
         body.theme-dark .ov-map-wrap {
             position: relative;
-            min-height: 700px;
+            min-height: clamp(420px, 58vh, 680px);
         }
 
         body.theme-dark .ov-macro-row {
@@ -1689,7 +1689,7 @@ if not country_ad_df.empty:
             include_plotlyjs="cdn",
             full_html=False,
             config=map_config,
-            default_height=680,
+            default_height="100%",
         )
         overlay_html = summary_html if summary_html else ""
         summary_bg = "rgba(11, 18, 32, 0.74)" if dark_mode else "rgba(255, 255, 255, 0.92)"
@@ -1713,20 +1713,27 @@ if not country_ad_df.empty:
                   .ov-map-wrap {{
                     position: relative;
                     width: 100%;
-                    height: 680px;
+                    height: clamp(420px, 58vh, 680px);
                     background: {map_bg};
                   }}
                   .ov-map-wrap .js-plotly-plot {{
                     width: 100%;
                     height: 100%;
                   }}
+                  .ov-map-wrap .js-plotly-plot > div,
+                  .ov-map-wrap .js-plotly-plot .plot-container,
+                  .ov-map-wrap .js-plotly-plot .svg-container,
+                  .ov-map-wrap .js-plotly-plot .main-svg {{
+                    width: 100% !important;
+                    height: 100% !important;
+                  }}
                   .ov-map-summary {{
                     position: absolute;
-                    top: 258px;
+                    top: clamp(10px, 35%, 258px);
                     left: 18px;
                     z-index: 6;
                     max-width: min(340px, 40vw);
-                    height: clamp(300px, 48vh, 460px);
+                    height: clamp(180px, 35vh, 420px);
                     background: {summary_bg};
                     border-radius: 12px;
                     padding: 10px 12px;
@@ -1788,6 +1795,36 @@ if not country_ad_df.empty:
                   {map_html}
                   {overlay_html}
                 </div>
+                <script>
+                  (function () {{
+                    const wrap = document.querySelector(".ov-map-wrap");
+                    if (!wrap) return;
+
+                    const relayout = () => {{
+                      const plot = wrap.querySelector(".js-plotly-plot");
+                      if (!plot || !window.Plotly) return;
+                      try {{
+                        window.Plotly.Plots.resize(plot);
+                        window.Plotly.relayout(plot, {{ autosize: true }});
+                      }} catch (e) {{}}
+                    }};
+
+                    let tries = 0;
+                    const settle = () => {{
+                      relayout();
+                      tries += 1;
+                      if (tries < 20) {{
+                        window.setTimeout(settle, 80);
+                      }}
+                    }};
+                    settle();
+                    window.addEventListener("resize", relayout);
+                    if (typeof ResizeObserver !== "undefined") {{
+                      const observer = new ResizeObserver(relayout);
+                      observer.observe(wrap);
+                    }}
+                  }})();
+                </script>
                 """
             ),
             height=700,
