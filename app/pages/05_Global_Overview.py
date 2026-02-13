@@ -60,10 +60,8 @@ def get_company_color(company_name):
 st.markdown(get_page_style(), unsafe_allow_html=True)
 display_header()
 
-# Add header with language selector
-from utils.header import render_header
+# Add localized text helpers
 from utils.language import get_text
-render_header()
 
 # Add SQL Assistant in the sidebar
 from utils.sql_assistant_sidebar import render_sql_assistant_sidebar

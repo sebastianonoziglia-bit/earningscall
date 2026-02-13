@@ -196,7 +196,7 @@ def render_hero(logos_html="", show_spinner=False):
     .hero-section {{
         position: relative;
         width: 100%;
-        height: clamp(320px, 60vh, 680px);
+        aspect-ratio: 16 / 9;
         min-height: 320px;
         border-radius: 18px;
         background-image: url("data:{background_mime};base64,{background_b64}");
@@ -296,10 +296,6 @@ def render_hero(logos_html="", show_spinner=False):
     }}
 
 	    @media (max-width: 1200px) {{
-        .hero-section {{
-            height: clamp(320px, 58vh, 620px);
-        }}
-
         .hero-overlay-wrap {{
             width: min(92vw, 1080px);
         }}
@@ -311,30 +307,14 @@ def render_hero(logos_html="", show_spinner=False):
 	    }}
 
 	    @media (max-width: 800px) {{
-        .hero-section {{
-            height: clamp(320px, 62vh, 560px);
-            background-position: center top;
-        }}
-
 	        .hero-overlay-wrap {{
 	            width: 92vw;
 	            top: 58%;
 	        }}
 
-        .hero-overlay {{
-            padding: 18px 16px;
-            border-radius: 18px;
-        }}
-
         .hero-logo-row {{
             gap: 14px;
-            justify-content: center;
-            flex-wrap: wrap;
-            overflow: visible;
-        }}
-
-        .hero-logo-link {{
-            flex: 0 1 118px;
+            overflow-x: auto;
         }}
 
 	        .hero-logo {{
@@ -342,36 +322,6 @@ def render_hero(logos_html="", show_spinner=False):
 	            max-width: 112px;
 	        }}
 	    }}
-
-    @media (max-width: 520px) {{
-        .hero-section {{
-            height: clamp(300px, 66vh, 480px);
-        }}
-
-        .hero-overlay-wrap {{
-            width: 94vw;
-            top: 60%;
-            gap: 8px;
-        }}
-
-        .hero-title {{
-            font-size: 0.8rem;
-            letter-spacing: 0.14em;
-        }}
-
-        .hero-logo-link {{
-            flex: 0 1 96px;
-        }}
-
-        .hero-logo {{
-            height: 44px;
-            max-width: 96px;
-        }}
-
-        .hero-logo-roku {{
-            height: 52px;
-        }}
-    }}
 	    </style>
 	    """).strip()
 

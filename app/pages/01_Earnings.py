@@ -1487,116 +1487,133 @@ def load_quarterly_segments(excel_path, file_mtime=0):
 def load_quarterly_company_metrics(excel_path, file_mtime=0):
     if not excel_path:
         return pd.DataFrame()
-    candidate_sheets = [
-        # Canonical sheet name (may be truncated by Excel's 31-char sheet limit).
-        "Company_Quarterly_segments_",
-        # Legacy name used in earlier versions (if present).
-        "Quarterly_Company_metrics_earnings_values",
-    ]
+    # Build quarterly metrics from the per-company quarterly segment sheets.
+    # This avoids the corrupted consolidated quarterly sheet where Q1 can contain annual totals.
+    segments_df = load_quarterly_segments(excel_path, file_mtime)
+    if segments_df is None or segments_df.empty:
+        return pd.DataFrame()
+
+    revenue_quarterly = (
+        segments_df.groupby(["company", "year", "quarter_num"], as_index=False)["revenue"]
+        .sum()
+        .rename(columns={"revenue": "value"})
+    )
+    revenue_quarterly["metric_key"] = "revenue"
+    records = [revenue_quarterly[["company", "year", "quarter_num", "metric_key", "value"]]]
+
+    # Use annual company metrics for non-revenue KPIs and allocate to quarters based on
+    # revenue seasonality shares (quarter revenue / annual revenue).
     try:
         xls = pd.ExcelFile(excel_path)
     except Exception as exc:
-        logger.warning("Quarterly company metrics load failed: %s", exc)
+        logger.warning("Quarterly company metrics annual cross-reference failed: %s", exc)
+        xls = None
+
+    if xls is not None:
+        annual_sheet = None
+        for s in xls.sheet_names:
+            if s == "Company_metrics_earnings_values":
+                annual_sheet = s
+                break
+            if s.startswith("Company_metrics_earnings"):
+                annual_sheet = s
+                break
+
+        if annual_sheet:
+            try:
+                annual_df = pd.read_excel(xls, sheet_name=annual_sheet)
+            except Exception as exc:
+                logger.warning("Annual metrics read failed for quarterly allocation: %s", exc)
+                annual_df = pd.DataFrame()
+
+            if annual_df is not None and not annual_df.empty:
+                annual_df.columns = [str(c).strip() for c in annual_df.columns]
+                lowered = {str(c).strip().lower(): c for c in annual_df.columns}
+
+                year_col = lowered.get("year")
+                company_col = lowered.get("company") or lowered.get("player")
+                ticker_col = lowered.get("ticker") or lowered.get("symbol")
+
+                if year_col and (company_col or ticker_col):
+                    annual_df = annual_df.rename(columns={year_col: "year"})
+                    annual_df["year"] = pd.to_numeric(annual_df["year"], errors="coerce")
+                    annual_df = annual_df.dropna(subset=["year"])
+                    annual_df["year"] = annual_df["year"].astype(int)
+
+                    if company_col:
+                        annual_df["company"] = annual_df[company_col].astype(str).str.strip().apply(normalize_company)
+                    else:
+                        ticker_to_company = {}
+                        for company_name, tickers in COMPANY_TICKERS.items():
+                            for t in tickers:
+                                ticker_to_company[str(t).upper()] = normalize_company(company_name)
+                        annual_df["ticker"] = annual_df[ticker_col].astype(str).str.strip().str.upper()
+                        annual_df["company"] = annual_df["ticker"].map(ticker_to_company).fillna(annual_df["ticker"])
+
+                    metric_cols = {}
+                    preferred = {
+                        "cost_of_revenue": lowered.get("cost of revenue") or lowered.get("cost_of_revenue"),
+                        "operating_income": lowered.get("operating income") or lowered.get("operating_income"),
+                        "net_income": lowered.get("net income") or lowered.get("net_income"),
+                        "capex": lowered.get("capex"),
+                        "rd": lowered.get("r&d") or lowered.get("rd") or lowered.get("r_d"),
+                        "total_assets": lowered.get("total assets") or lowered.get("total_assets"),
+                        "cash_balance": lowered.get("cash balance") or lowered.get("cash_balance"),
+                        "debt": lowered.get("debt"),
+                        "market_cap": lowered.get("market cap") or lowered.get("market_cap"),
+                    }
+                    for key, col in preferred.items():
+                        if col and col in annual_df.columns:
+                            metric_cols[key] = col
+
+                    if metric_cols:
+                        annual_keep = annual_df[["company", "year"] + list(metric_cols.values())].copy()
+                        for col in metric_cols.values():
+                            annual_keep[col] = pd.to_numeric(annual_keep[col], errors="coerce")
+                        annual_keep = annual_keep.groupby(["company", "year"], as_index=False).sum(min_count=1)
+
+                        shares = revenue_quarterly[["company", "year", "quarter_num", "value"]].copy()
+                        shares = shares.rename(columns={"value": "revenue_value"})
+                        annual_revenue = shares.groupby(["company", "year"], as_index=False)["revenue_value"].sum()
+                        annual_revenue = annual_revenue.rename(columns={"revenue_value": "annual_revenue"})
+                        shares = shares.merge(annual_revenue, on=["company", "year"], how="left")
+                        shares["quarter_count"] = shares.groupby(["company", "year"])["quarter_num"].transform("count")
+                        shares["share"] = np.where(
+                            shares["annual_revenue"].fillna(0) > 0,
+                            shares["revenue_value"] / shares["annual_revenue"],
+                            1.0 / shares["quarter_count"].clip(lower=1),
+                        )
+                        shares = shares.drop(columns=["quarter_count"])
+
+                        for metric_key, col in metric_cols.items():
+                            metric_base = annual_keep[["company", "year", col]].copy()
+                            metric_base = metric_base.rename(columns={col: "annual_value"})
+                            metric_base = metric_base[metric_base["annual_value"].notna()]
+                            if metric_base.empty:
+                                continue
+                            merged = shares.merge(metric_base, on=["company", "year"], how="inner")
+                            if merged.empty:
+                                continue
+                            if metric_key in {"total_assets", "cash_balance", "debt", "market_cap"}:
+                                # Stock-style metrics are point-in-time levels; keep the annual level per quarter.
+                                metric_values = merged["annual_value"]
+                            else:
+                                # Flow metrics are split by observed quarterly revenue seasonality.
+                                metric_values = merged["annual_value"] * merged["share"]
+                            temp = merged[["company", "year", "quarter_num"]].copy()
+                            temp["metric_key"] = metric_key
+                            temp["value"] = metric_values
+                            records.append(temp)
+
+    if not records:
         return pd.DataFrame()
-    sheet_name = None
-    for s in xls.sheet_names:
-        if s == "Quarterly_Company_metrics_earnings_values":
-            sheet_name = s
-            break
-        if s.startswith("Company_Quarterly_segments_"):
-            sheet_name = s
-            break
-    if not sheet_name:
-        return pd.DataFrame()
-    try:
-        df = pd.read_excel(xls, sheet_name=sheet_name)
-    except Exception as exc:
-        logger.warning("Quarterly company metrics read failed: %s", exc)
-        return pd.DataFrame()
-    if df is None or df.empty:
-        return pd.DataFrame()
-    df.columns = [str(c).strip() for c in df.columns]
-    lowered = {str(c).strip().lower(): c for c in df.columns}
-    # The quarterly KPI sheet is stored per ticker+year with repeated rows (Q1..Q4)
-    # but without an explicit quarter column. Infer quarters by row order within (ticker, year).
-    ticker_col = lowered.get("ticker") or lowered.get("symbol")
-    year_col = lowered.get("year")
-    if not ticker_col or not year_col:
-        return pd.DataFrame()
 
-    df = df.rename(columns={ticker_col: "ticker", year_col: "year"})
-    df["ticker"] = df["ticker"].astype(str).str.strip().str.upper()
-    df["year"] = pd.to_numeric(df["year"], errors="coerce")
-    df = df.dropna(subset=["ticker", "year"])
-    df["year"] = df["year"].astype(int)
-
-    # Map tickers to canonical company names used throughout the app.
-    ticker_to_company = {}
-    for company_name, tickers in COMPANY_TICKERS.items():
-        for t in tickers:
-            ticker_to_company[str(t).upper()] = normalize_company(company_name)
-    df["company"] = df["ticker"].map(ticker_to_company).fillna(df["ticker"])
-
-    # Preserve original order to infer quarters.
-    df["_row"] = np.arange(len(df))
-    df = df.sort_values(["ticker", "year", "_row"])
-
-    def _select_quarter_rows(group: pd.DataFrame) -> pd.DataFrame:
-        g = group.sort_values("_row").copy()
-        if len(g) <= 4:
-            return g
-        # Heuristic: if the sheet includes an annual total row, it typically has the max revenue
-        # and is much larger than the other rows. Drop that row before selecting quarters.
-        rev_col = next((c for c in g.columns if str(c).strip().lower() == "revenue"), None)
-        if rev_col:
-            rev = pd.to_numeric(g[rev_col], errors="coerce")
-            g["_rev_num"] = rev
-            if rev.notna().any():
-                max_rev = float(rev.max())
-                unique_vals = sorted(set(rev.dropna().astype(float).tolist()))
-                second_max = unique_vals[-2] if len(unique_vals) >= 2 else None
-                # Only drop max rows when they look like annual totals (significantly larger).
-                if second_max and second_max > 0 and max_rev >= 1.5 * second_max:
-                    cutoff = 1.5 * second_max
-                    g = g[g["_rev_num"] < cutoff].copy()
-        if len(g) > 4:
-            g = g.tail(4).copy()
-        return g.drop(columns=[c for c in ["_rev_num"] if c in g.columns], errors="ignore")
-
-    df = df.groupby(["ticker", "year"], group_keys=False).apply(_select_quarter_rows)
-    df = df.sort_values(["ticker", "year", "_row"])
-    df["quarter_num"] = df.groupby(["ticker", "year"]).cumcount() + 1
-
-    metric_cols = {}
-    # Explicit mapping for the quarterly sheet headers.
-    preferred = {
-        "revenue": lowered.get("revenue"),
-        "cost_of_revenue": lowered.get("cost of revenue") or lowered.get("cost_of_revenue"),
-        "operating_income": lowered.get("operating income") or lowered.get("operating_income"),
-        "net_income": lowered.get("net income") or lowered.get("net_income"),
-        "capex": lowered.get("capex"),
-        "rd": lowered.get("r&d") or lowered.get("rd") or lowered.get("r_d"),
-        "total_assets": lowered.get("total assets") or lowered.get("total_assets"),
-        "cash_balance": lowered.get("cash balance") or lowered.get("cash_balance"),
-        "debt": lowered.get("debt"),
-        # market_cap is not present in the quarterly KPI sheet.
-    }
-    for key, col in preferred.items():
-        if col and col in df.columns:
-            metric_cols[key] = col
-
-    if not metric_cols:
-        return pd.DataFrame()
-
-    records = []
-    for metric_key, col in metric_cols.items():
-        values = pd.to_numeric(df[col], errors="coerce")
-        temp = df[["company", "year", "quarter_num"]].copy()
-        temp["metric_key"] = metric_key
-        temp["value"] = values
-        records.append(temp)
     result = pd.concat(records, ignore_index=True)
+    result["value"] = pd.to_numeric(result["value"], errors="coerce")
     result = result.dropna(subset=["value"])
+    result["year"] = pd.to_numeric(result["year"], errors="coerce").astype(int)
+    result["quarter_num"] = pd.to_numeric(result["quarter_num"], errors="coerce").astype(int)
+    result = result.sort_values(["company", "year", "quarter_num", "metric_key"])
     result["period_label"] = (
         result["year"].astype(int).astype(str)
         + " Q"

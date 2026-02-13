@@ -1195,12 +1195,14 @@ colorbar_font = "rgba(226, 232, 240, 0.8)" if dark_mode else "rgba(15, 23, 42, 0
 
 country_ad_df = _load_country_advertising_df()
 if not country_ad_df.empty:
-    show_by_country = st.checkbox(
-        "By country",
-        value=False,
-        help="Toggle to show country-level detail; unchecked uses region view.",
+    view_mode = st.radio(
+        "Map view",
+        ["By region", "By country"],
+        index=0,
+        horizontal=True,
+        key="overview_map_view",
+        help="Choose region view or country-level detail.",
     )
-    view_mode = "By country" if show_by_country else "By region"
 
     region_options = ["Europe", "North America", "Asia Pacific", "South America", "Middle East & Africa"]
     region_col, _ = st.columns([0.22, 0.78])
