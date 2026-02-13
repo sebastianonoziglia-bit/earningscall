@@ -13,6 +13,7 @@ import plotly.io as pio
 from datetime import datetime
 import numpy as np
 import textwrap
+import html
 import json
 import requests
 import streamlit.components.v1 as components
@@ -1405,8 +1406,10 @@ if not country_ad_df.empty:
             )
             rows_html = ""
             for idx, row in enumerate(country_totals.itertuples(index=False), start=1):
+                country_text = html.escape(str(row.Country))
+                country_attr = html.escape(str(row.Country), quote=True)
                 rows_html += (
-                    f"<div class='ov-map-summary-row'><span>{idx}. {row.Country}</span>"
+                    f"<div class='ov-map-summary-row' data-country=\"{country_attr}\"><span>{idx}. {country_text}</span>"
                     f"<span>{_fmt_compact(row.Value)}</span></div>"
                 )
                 if metric_choice == "All channels":
@@ -1418,8 +1421,9 @@ if not country_ad_df.empty:
                         .head(3)
                     )
                     for channel in channel_df.itertuples(index=False):
+                        metric_text = html.escape(str(channel.Metric_type))
                         rows_html += (
-                            f"<div class='ov-map-summary-sub'><span>{channel.Metric_type}</span>"
+                            f"<div class='ov-map-summary-sub'><span>{metric_text}</span>"
                             f"<span>{_fmt_compact(channel.Value)}</span></div>"
                         )
         else:
@@ -1433,8 +1437,10 @@ if not country_ad_df.empty:
             country_totals = df_map.sort_values("Value", ascending=False).head(top_n)
             rows_html = ""
             for idx, row in enumerate(country_totals.itertuples(index=False), start=1):
+                country_text = html.escape(str(row.Country))
+                country_attr = html.escape(str(row.Country), quote=True)
                 rows_html += (
-                    f"<div class='ov-map-summary-row'><span>{idx}. {row.Country}</span>"
+                    f"<div class='ov-map-summary-row' data-country=\"{country_attr}\"><span>{idx}. {country_text}</span>"
                     f"<span>{_fmt_compact(row.Value)}</span></div>"
                 )
                 if metric_choice == "All channels":
@@ -1446,8 +1452,9 @@ if not country_ad_df.empty:
                         .head(3)
                     )
                     for channel in channel_df.itertuples(index=False):
+                        metric_text = html.escape(str(channel.Metric_type))
                         rows_html += (
-                            f"<div class='ov-map-summary-sub'><span>{channel.Metric_type}</span>"
+                            f"<div class='ov-map-summary-sub'><span>{metric_text}</span>"
                             f"<span>{_fmt_compact(channel.Value)}</span></div>"
                         )
 
@@ -1610,22 +1617,49 @@ if not country_ad_df.empty:
                 align="left",
             ),
         )
+        map_total_value = float(df_map["Value"].sum()) if not df_map.empty else 0.0
+        rank_df = (
+            df_map[["Country", "Value"]]
+            .sort_values("Value", ascending=False)
+            .reset_index(drop=True)
+        )
+        rank_lookup = {
+            str(row.Country): (idx + 1)
+            for idx, row in enumerate(rank_df.itertuples(index=False))
+        }
         hover_value = [f"{float(v):,.0f}" for v in df_map["Value"].tolist()]
         hover_region_total = [f"{float(v):,.0f}" for v in df_map["RegionTotal"].tolist()]
+        hover_share = [
+            f"{(float(v) / map_total_value) * 100:.1f}%"
+            if map_total_value > 0
+            else "—"
+            for v in df_map["Value"].tolist()
+        ]
+        hover_rank = [
+            f"#{rank_lookup[str(country)]}" if str(country) in rank_lookup else "—"
+            for country in df_map["Country"].tolist()
+        ]
+        hover_template = (
+            "<b>%{customdata[0]}</b>"
+            "<br>Year: %{customdata[2]}"
+            + ("<br>Region: %{customdata[1]}" if view_mode == "By region" else "")
+            + ("<br>Country value: %{customdata[3]}" if view_mode == "By region" else "<br>Advertising: %{customdata[3]}")
+            + ("<br>Region total: %{customdata[4]}" if view_mode == "By region" else "")
+            + "<br>Share of shown total: %{customdata[5]}"
+            + "<br>Rank: %{customdata[6]}"
+            + "<extra></extra>"
+        )
         map_fig.update_traces(
-            hovertemplate=(
-                "<b>%{customdata[0]}</b>"
-                "<br>Year: %{customdata[1]}"
-                "<br>Advertising: %{customdata[2]}"
-                + ("<br>Region total: %{customdata[3]}" if view_mode == "By region" else "")
-                + "<extra></extra>"
-            ),
+            hovertemplate=hover_template,
             customdata=np.stack(
                 [
-                    (df_map["Region"].astype(str) if view_mode == "By region" else df_map["Country"].astype(str)).to_numpy(),
+                    df_map["Country"].astype(str).to_numpy(),
+                    df_map["Region"].astype(str).to_numpy(),
                     np.full(len(df_map), int(year_for_map)),
                     np.array(hover_value, dtype=object),
                     np.array(hover_region_total, dtype=object),
+                    np.array(hover_share, dtype=object),
+                    np.array(hover_rank, dtype=object),
                 ],
                 axis=1,
             ),
@@ -1701,6 +1735,8 @@ if not country_ad_df.empty:
         summary_text_color = "#E2E8F0" if dark_mode else "#0F172A"
         summary_sub_color = "#94A3B8" if dark_mode else "#64748B"
         summary_sticky_bg = "rgba(11, 18, 32, 0.94)" if dark_mode else "rgba(255, 255, 255, 0.95)"
+        summary_row_hover_bg = "rgba(148, 163, 184, 0.20)" if dark_mode else "rgba(148, 163, 184, 0.18)"
+        summary_row_active_bg = "rgba(34, 211, 238, 0.24)" if dark_mode else "rgba(14, 116, 144, 0.14)"
         components.html(
             _html_block(
                 f"""
@@ -1729,13 +1765,31 @@ if not country_ad_df.empty:
                     width: 100% !important;
                     height: 100% !important;
                   }}
+                  .ov-map-wrap .choroplethlayer .trace path {{
+                    transition: transform 160ms ease, stroke-width 160ms ease, filter 180ms ease, opacity 140ms ease;
+                    transform-origin: center center;
+                    transform-box: fill-box;
+                    cursor: pointer;
+                  }}
+                  .ov-map-wrap .choroplethlayer .trace path.ov-map-country-pop {{
+                    transform: scale(1.045);
+                    stroke: rgba(255, 255, 255, 0.98) !important;
+                    stroke-width: 1.6px !important;
+                    filter: drop-shadow(0 2px 8px rgba(15, 23, 42, 0.45));
+                  }}
+                  .ov-map-wrap .choroplethlayer .trace path.ov-map-country-selected {{
+                    transform: scale(1.075);
+                    stroke: #22D3EE !important;
+                    stroke-width: 2.2px !important;
+                    filter: drop-shadow(0 3px 11px rgba(34, 211, 238, 0.55));
+                  }}
                   .ov-map-summary {{
                     position: absolute;
-                    top: clamp(10px, 35%, 258px);
+                    top: clamp(30px, calc(35% + 20px), 278px);
                     left: 18px;
                     z-index: 6;
                     max-width: min(340px, 40vw);
-                    height: clamp(180px, 35vh, 420px);
+                    height: clamp(260px, 45vh, 520px);
                     background: {summary_bg};
                     border-radius: 12px;
                     padding: 10px 12px;
@@ -1784,6 +1838,20 @@ if not country_ad_df.empty:
                     font-weight: 600;
                     color: {summary_text_color};
                   }}
+                  .ov-map-summary-row[data-country] {{
+                    margin: 0 -6px;
+                    padding: 4px 6px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    transition: background 120ms ease, transform 120ms ease;
+                  }}
+                  .ov-map-summary-row[data-country]:hover {{
+                    background: {summary_row_hover_bg};
+                    transform: translateX(1px);
+                  }}
+                  .ov-map-summary-row.ov-map-summary-row-active {{
+                    background: {summary_row_active_bg};
+                  }}
                   .ov-map-summary-sub {{
                     display: flex;
                     justify-content: space-between;
@@ -1802,8 +1870,13 @@ if not country_ad_df.empty:
                     const wrap = document.querySelector(".ov-map-wrap");
                     if (!wrap) return;
 
+                    const getPlot = () => wrap.querySelector(".js-plotly-plot");
+                    let hoveredPath = null;
+                    let selectedPath = null;
+                    let selectedCountry = "";
+
                     const relayout = () => {{
-                      const plot = wrap.querySelector(".js-plotly-plot");
+                      const plot = getPlot();
                       if (!plot || !window.Plotly) return;
                       try {{
                         window.Plotly.Plots.resize(plot);
@@ -1811,9 +1884,170 @@ if not country_ad_df.empty:
                       }} catch (e) {{}}
                     }};
 
+                    const getCountryPaths = () => {{
+                      const plot = getPlot();
+                      if (!plot) return [];
+                      const firstTrace = plot.querySelector(".choroplethlayer .trace");
+                      if (firstTrace) return Array.from(firstTrace.querySelectorAll("path"));
+                      return Array.from(plot.querySelectorAll(".choroplethlayer path"));
+                    }};
+
+                    const clearHover = () => {{
+                      if (hoveredPath && hoveredPath !== selectedPath) {{
+                        hoveredPath.classList.remove("ov-map-country-pop");
+                      }}
+                      hoveredPath = null;
+                    }};
+
+                    const setHover = (path) => {{
+                      if (!path || path === selectedPath) return;
+                      if (hoveredPath && hoveredPath !== selectedPath && hoveredPath !== path) {{
+                        hoveredPath.classList.remove("ov-map-country-pop");
+                      }}
+                      hoveredPath = path;
+                      hoveredPath.classList.add("ov-map-country-pop");
+                    }};
+
+                    const syncSummarySelection = () => {{
+                      wrap.querySelectorAll(".ov-map-summary-row[data-country]").forEach((row) => {{
+                        const isActive = !!selectedCountry && row.dataset.country === selectedCountry;
+                        row.classList.toggle("ov-map-summary-row-active", isActive);
+                      }});
+                    }};
+
+                    const clearSelected = () => {{
+                      if (selectedPath) {{
+                        selectedPath.classList.remove("ov-map-country-selected");
+                        selectedPath.classList.remove("ov-map-country-pop");
+                      }}
+                      if (hoveredPath && hoveredPath === selectedPath) {{
+                        hoveredPath = null;
+                      }}
+                      selectedPath = null;
+                      selectedCountry = "";
+                      syncSummarySelection();
+                    }};
+
+                    const getPointIndex = (pt) => {{
+                      if (!pt) return -1;
+                      if (Number.isInteger(pt.pointNumber)) return pt.pointNumber;
+                      if (Number.isInteger(pt.pointIndex)) return pt.pointIndex;
+                      return -1;
+                    }};
+
+                    const getCountryFromPoint = (pt) => {{
+                      if (!pt) return "";
+                      const cd = Array.isArray(pt.customdata) ? pt.customdata : null;
+                      if (cd && cd.length) return String(cd[0] || "").trim();
+                      if (pt.location) return String(pt.location).trim();
+                      return "";
+                    }};
+
+                    const getCountryToIndexMap = () => {{
+                      const plot = getPlot();
+                      const trace = plot && plot.data && plot.data[0] ? plot.data[0] : null;
+                      const cd = trace && Array.isArray(trace.customdata) ? trace.customdata : [];
+                      const map = new Map();
+                      cd.forEach((row, idx) => {{
+                        const country = Array.isArray(row) ? String(row[0] || "").trim() : "";
+                        if (country && !map.has(country)) {{
+                          map.set(country, idx);
+                        }}
+                      }});
+                      return map;
+                    }};
+
+                    const findPathForPoint = (data) => {{
+                      const evTarget = data && data.event && data.event.target && data.event.target.closest
+                        ? data.event.target.closest("path")
+                        : null;
+                      if (evTarget && evTarget.closest(".choroplethlayer")) {{
+                        return evTarget;
+                      }}
+                      const pt = data && data.points && data.points[0] ? data.points[0] : null;
+                      const idx = getPointIndex(pt);
+                      const paths = getCountryPaths();
+                      if (idx < 0 || idx >= paths.length) return null;
+                      return paths[idx];
+                    }};
+
+                    const setSelected = (path, country) => {{
+                      if (!path || !country) return;
+                      if (selectedPath && selectedPath !== path) {{
+                        selectedPath.classList.remove("ov-map-country-selected");
+                      }}
+                      selectedPath = path;
+                      selectedCountry = country;
+                      selectedPath.classList.add("ov-map-country-selected");
+                      syncSummarySelection();
+                    }};
+
+                    const bindSummaryRows = () => {{
+                      wrap.querySelectorAll(".ov-map-summary-row[data-country]").forEach((row) => {{
+                        if (row.dataset.ovBound === "1") return;
+                        row.dataset.ovBound = "1";
+
+                        row.addEventListener("mouseenter", () => {{
+                          const country = row.dataset.country || "";
+                          const indexMap = getCountryToIndexMap();
+                          const idx = indexMap.has(country) ? indexMap.get(country) : -1;
+                          const paths = getCountryPaths();
+                          if (idx >= 0 && idx < paths.length) {{
+                            setHover(paths[idx]);
+                          }}
+                        }});
+
+                        row.addEventListener("mouseleave", () => {{
+                          clearHover();
+                        }});
+
+                        row.addEventListener("click", () => {{
+                          const country = row.dataset.country || "";
+                          const indexMap = getCountryToIndexMap();
+                          const idx = indexMap.has(country) ? indexMap.get(country) : -1;
+                          const paths = getCountryPaths();
+                          if (idx < 0 || idx >= paths.length) return;
+                          if (selectedCountry && selectedCountry === country) {{
+                            clearSelected();
+                            return;
+                          }}
+                          setSelected(paths[idx], country);
+                        }});
+                      }});
+                    }};
+
+                    const bindMapEvents = () => {{
+                      const plot = getPlot();
+                      if (!plot || typeof plot.on !== "function" || plot.__ovMapBound) return;
+                      plot.__ovMapBound = true;
+
+                      plot.on("plotly_hover", (data) => {{
+                        const path = findPathForPoint(data);
+                        setHover(path);
+                      }});
+
+                      plot.on("plotly_unhover", () => {{
+                        clearHover();
+                      }});
+
+                      plot.on("plotly_click", (data) => {{
+                        const pt = data && data.points && data.points[0] ? data.points[0] : null;
+                        const path = findPathForPoint(data);
+                        const country = getCountryFromPoint(pt);
+                        if (!path || !country) return;
+                        if (selectedCountry && selectedCountry === country) {{
+                          clearSelected();
+                        }} else {{
+                          setSelected(path, country);
+                        }}
+                      }});
+                    }};
+
                     let tries = 0;
                     const settle = () => {{
                       relayout();
+                      bindMapEvents();
+                      bindSummaryRows();
                       tries += 1;
                       if (tries < 20) {{
                         window.setTimeout(settle, 80);
