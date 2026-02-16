@@ -88,6 +88,7 @@ import io
 import mimetypes
 from datetime import datetime
 from urllib.parse import quote
+from urllib import request as urllib_request
 from PIL import Image
 from utils.language import get_text, get_greeting_translated
 from utils.header import display_header
@@ -195,6 +196,25 @@ def get_hero_video_b64(path, cache_buster=0):
         return "", ""
 
 
+@st.cache_data(show_spinner=False, ttl=3600)
+def get_remote_hero_video_b64(url):
+    if not url:
+        return "", ""
+    try:
+        with urllib_request.urlopen(url, timeout=15) as response:
+            payload = response.read()
+            content_type = response.headers.get("Content-Type", "")
+        if not payload:
+            return "", ""
+        mime = content_type.split(";")[0].strip() if content_type else ""
+        if not mime or mime == "application/octet-stream":
+            mime = mimetypes.guess_type(url)[0] or "video/mp4"
+        return base64.b64encode(payload).decode(), mime
+    except Exception as e:
+        logger.warning(f"Remote hero video unavailable: {str(e)}")
+        return "", ""
+
+
 # Hero image with loading state
 background_path = os.path.join(ASSETS_DIR, "FAQ MFE.png")
 background_b64, background_mime = get_hero_background_b64(background_path)
@@ -203,21 +223,25 @@ hero_video_cache_buster = os.path.getmtime(hero_video_path) if hero_video_path e
 hero_video_b64, hero_video_mime = get_hero_video_b64(hero_video_path, hero_video_cache_buster)
 HERO_VIDEO_REMOTE_URL = (
     "https://raw.githubusercontent.com/sebastianonoziglia-bit/earningscall/"
-    "40b8b4c/app/attached_assets/HeroVideo.mp4"
+    "main/app/attached_assets/HeroVideo.mp4"
 )
+hero_video_remote_b64, hero_video_remote_mime = get_remote_hero_video_b64(HERO_VIDEO_REMOTE_URL)
 
 hero_placeholder = st.empty()
 
 
 def render_hero(logos_html="", show_spinner=False):
     hero_video_src = ""
-    video_source_mime = hero_video_mime or "video/mp4"
+    hero_video_type = "video/mp4"
     if hero_video_b64 and hero_video_mime:
         hero_video_src = f"data:{hero_video_mime};base64,{hero_video_b64}"
-        video_source_mime = hero_video_mime
+        hero_video_type = hero_video_mime
+    elif hero_video_remote_b64 and hero_video_remote_mime:
+        hero_video_src = f"data:{hero_video_remote_mime};base64,{hero_video_remote_b64}"
+        hero_video_type = hero_video_remote_mime
     elif HERO_VIDEO_REMOTE_URL:
         hero_video_src = HERO_VIDEO_REMOTE_URL
-        video_source_mime = "video/mp4"
+        hero_video_type = mimetypes.guess_type(HERO_VIDEO_REMOTE_URL)[0] or "video/mp4"
 
     has_video = bool(hero_video_src)
     if not background_b64 and not has_video:
@@ -254,7 +278,7 @@ def render_hero(logos_html="", show_spinner=False):
         )
         hero_video_html = textwrap.dedent(f"""
         <video class="hero-video" muted playsinline preload="metadata" {poster_attr}>
-            <source src="{hero_video_src}" type="{video_source_mime}">
+            <source src="{hero_video_src}" type="{hero_video_type}">
         </video>
         <div class="hero-video-mask"></div>
         <script>
@@ -538,7 +562,9 @@ section[data-testid="stSidebar"],
 }
 
 .welcome-nav-wrap {
-    margin-top: -12px;
+    margin-top: -74px;
+    position: relative;
+    z-index: 5;
 }
 .welcome-nav {
     display: grid;
@@ -613,7 +639,7 @@ section[data-testid="stSidebar"],
         font-size: 1.01rem;
     }
     .welcome-nav-wrap {
-        margin-top: -8px;
+        margin-top: -26px;
     }
 }
 
