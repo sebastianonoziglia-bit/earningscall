@@ -85,6 +85,7 @@ import os
 import base64
 import textwrap
 import io
+import mimetypes
 from datetime import datetime
 from urllib.parse import quote
 from PIL import Image
@@ -157,15 +158,69 @@ def get_hero_background_b64(path, max_width=2000, quality=85):
         except Exception:
             return "", "image/png"
 
+
+def find_hero_video_path(assets_dir):
+    if not assets_dir or not os.path.isdir(assets_dir):
+        return ""
+
+    preferred_names = [
+        "HeroVideo.mp4",
+        "HeroVideo.webm",
+        "HeroVideo.mov",
+        "HeroVideo.m4v",
+    ]
+    for filename in preferred_names:
+        candidate = os.path.join(assets_dir, filename)
+        if os.path.exists(candidate):
+            return candidate
+
+    for filename in os.listdir(assets_dir):
+        lower = filename.lower()
+        if lower.startswith("herovideo."):
+            return os.path.join(assets_dir, filename)
+
+    return ""
+
+
+@st.cache_data(show_spinner=False)
+def get_hero_video_b64(path, cache_buster=0):
+    if not path or not os.path.exists(path):
+        return "", ""
+    try:
+        mime = mimetypes.guess_type(path)[0] or "video/mp4"
+        with open(path, "rb") as video_file:
+            return base64.b64encode(video_file.read()).decode(), mime
+    except Exception as e:
+        logger.error(f"Error loading hero video: {str(e)}")
+        return "", ""
+
+
 # Hero image with loading state
 background_path = os.path.join(ASSETS_DIR, "FAQ MFE.png")
 background_b64, background_mime = get_hero_background_b64(background_path)
+hero_video_path = find_hero_video_path(ASSETS_DIR)
+hero_video_cache_buster = os.path.getmtime(hero_video_path) if hero_video_path else 0
+hero_video_b64, hero_video_mime = get_hero_video_b64(hero_video_path, hero_video_cache_buster)
+HERO_VIDEO_REMOTE_URL = (
+    "https://raw.githubusercontent.com/sebastianonoziglia-bit/earningscall/"
+    "40b8b4c/app/attached_assets/HeroVideo.mp4"
+)
 
 hero_placeholder = st.empty()
 
 
 def render_hero(logos_html="", show_spinner=False):
-    if not background_b64:
+    hero_video_src = ""
+    video_source_mime = hero_video_mime or "video/mp4"
+    if hero_video_b64 and hero_video_mime:
+        hero_video_src = f"data:{hero_video_mime};base64,{hero_video_b64}"
+        video_source_mime = hero_video_mime
+    elif HERO_VIDEO_REMOTE_URL:
+        hero_video_src = HERO_VIDEO_REMOTE_URL
+        video_source_mime = "video/mp4"
+
+    has_video = bool(hero_video_src)
+    if not background_b64 and not has_video:
         return
 
     spinner_html = "<div class='hero-spinner'></div>" if show_spinner else ""
@@ -184,6 +239,70 @@ def render_hero(logos_html="", show_spinner=False):
         {spinner_html}
         """).strip()
 
+    hero_background_css = (
+        f'background-image: url("data:{background_mime};base64,{background_b64}");'
+        if background_b64
+        else "background: #0f172a;"
+    )
+
+    hero_video_html = ""
+    if has_video:
+        poster_attr = (
+            f'poster="data:{background_mime};base64,{background_b64}"'
+            if background_b64
+            else ""
+        )
+        hero_video_html = textwrap.dedent(f"""
+        <video class="hero-video" muted playsinline preload="metadata" {poster_attr}>
+            <source src="{hero_video_src}" type="{video_source_mime}">
+        </video>
+        <div class="hero-video-mask"></div>
+        <script>
+        (function() {{
+            const section = document.querySelector(".hero-section");
+            if (!section || section.dataset.videoBound === "1") return;
+            const video = section.querySelector(".hero-video");
+            if (!video) return;
+            section.dataset.videoBound = "1";
+
+            const safePlay = () => {{
+                const p = video.play();
+                if (p && typeof p.catch === "function") p.catch(() => {{}});
+            }};
+
+            const playIntro = () => {{
+                video.loop = false;
+                video.currentTime = 0;
+                safePlay();
+            }};
+
+            if (video.readyState >= 2) {{
+                playIntro();
+            }} else {{
+                video.addEventListener("loadeddata", playIntro, {{ once: true }});
+            }}
+
+            section.addEventListener("mouseenter", () => {{
+                video.loop = true;
+                safePlay();
+            }});
+
+            section.addEventListener("mouseleave", () => {{
+                video.loop = false;
+                video.pause();
+                video.currentTime = 0;
+            }});
+
+            video.addEventListener("ended", () => {{
+                if (!section.matches(":hover")) {{
+                    video.pause();
+                    video.currentTime = 0;
+                }}
+            }});
+        }})();
+        </script>
+        """).strip()
+
     css = textwrap.dedent(f"""
     <style>
     .hero-shell {{
@@ -199,11 +318,29 @@ def render_hero(logos_html="", show_spinner=False):
         aspect-ratio: 16 / 9;
         min-height: 320px;
         border-radius: 18px;
-        background-image: url("data:{background_mime};base64,{background_b64}");
+        {hero_background_css}
         background-repeat: no-repeat;
         background-size: cover;
         background-position: center center;
         overflow: hidden;
+    }}
+
+    .hero-video {{
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        z-index: 0;
+        pointer-events: none;
+    }}
+
+    .hero-video-mask {{
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.12) 100%);
+        z-index: 1;
+        pointer-events: none;
     }}
 
 	    .hero-overlay-wrap {{
@@ -216,6 +353,7 @@ def render_hero(logos_html="", show_spinner=False):
 	        flex-direction: column;
 	        align-items: center;
 	        gap: 10px;
+            z-index: 2;
 	    }}
 
 	    .hero-overlay {{
@@ -330,6 +468,7 @@ def render_hero(logos_html="", show_spinner=False):
             css,
             '<div class="hero-shell">',
             '<div class="hero-section">',
+            hero_video_html,
             '<div class="hero-overlay-wrap">',
             overlay_html,
             "</div>",
