@@ -94,7 +94,7 @@ from utils.logos import load_company_logos
 # Note: avoid transition animation on Welcome to reduce visual flicker.
 
 # Global header (language + theme toggle)
-display_header()
+display_header(enable_dom_patch=False)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -189,7 +189,7 @@ def render_hero(logos_html="", show_spinner=False):
     .hero-shell {{
         border-radius: 18px;
         overflow: hidden;
-        margin-bottom: 0.6rem;
+        margin-bottom: 0.2rem;
         transform: translateZ(0);
     }}
 
@@ -399,34 +399,27 @@ section[data-testid="stSidebar"],
 }
 
 .welcome-nav-wrap {
-    margin-top: -2px;
-}
-.welcome-nav-head {
-    margin: 0 0 8px 0;
-    font-size: 1.5rem;
-    font-weight: 600;
-    line-height: 1.2;
-    color: #1f2937;
+    margin-top: -12px;
 }
 .welcome-nav {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
     gap: 14px;
-    margin: 0 0 24px;
+    margin: 0 0 18px;
 }
 .welcome-nav .nav-btn {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 10px;
-    height: 74px;
-    text-align: center;
-    padding: 14px 18px;
+    justify-content: flex-start;
+    gap: 12px;
+    height: 98px;
+    text-align: left;
+    padding: 14px 16px;
     color: #ffffff !important;
     border-radius: 14px;
     text-decoration: none !important;
     font-weight: 700;
-    font-size: 1.03rem;
+    font-size: 1.06rem;
     border: 1px solid transparent;
     transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
 }
@@ -450,7 +443,21 @@ section[data-testid="stSidebar"],
 }
 .welcome-nav .nav-label {
     color: #ffffff !important;
-    line-height: 1.15;
+    line-height: 1.2;
+    font-size: 1.08rem;
+    font-weight: 700;
+}
+.welcome-nav .nav-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+.welcome-nav .nav-desc {
+    color: rgba(255, 255, 255, 0.96) !important;
+    font-size: 0.78rem;
+    line-height: 1.28;
+    font-weight: 500;
 }
 .welcome-nav .nav-overview { background: #1d4ed8; border-color: #1e40af; box-shadow: 0 10px 18px rgba(30, 64, 175, 0.30); }
 .welcome-nav .nav-earnings { background: #0891b2; border-color: #0e7490; box-shadow: 0 10px 18px rgba(14, 116, 144, 0.30); }
@@ -463,8 +470,11 @@ section[data-testid="stSidebar"],
         grid-template-columns: 1fr;
     }
     .welcome-nav .nav-btn {
-        height: 68px;
-        font-size: 1rem;
+        height: 92px;
+        font-size: 1.01rem;
+    }
+    .welcome-nav-wrap {
+        margin-top: -8px;
     }
 }
 
@@ -478,13 +488,12 @@ section[data-testid="stSidebar"],
 
 st.markdown("""
 <div class="welcome-nav-wrap">
-  <div class="welcome-nav-head">Dashboard Pages</div>
   <div class="welcome-nav">
-    <a class="nav-btn nav-overview" href="?nav=overview"><span class="nav-icon nav-icon-search"></span><span class="nav-label">Overview</span></a>
-    <a class="nav-btn nav-earnings" href="?nav=earnings"><span class="nav-icon nav-icon-coin"></span><span class="nav-label">Earnings</span></a>
-    <a class="nav-btn nav-stocks" href="?nav=stocks"><span class="nav-icon nav-icon-line"></span><span class="nav-label">Stocks</span></a>
-    <a class="nav-btn nav-editorial" href="?nav=editorial"><span class="nav-icon nav-icon-book"></span><span class="nav-label">Editorial</span></a>
-    <a class="nav-btn nav-genie" href="?nav=genie"><span class="nav-icon nav-icon-bar"></span><span class="nav-label">Financial Genie (SPECIAL)</span></a>
+    <a class="nav-btn nav-overview" href="?nav=overview"><span class="nav-icon nav-icon-search"></span><span class="nav-copy"><span class="nav-label">Overview</span><span class="nav-desc">Global media map and KPI snapshot</span></span></a>
+    <a class="nav-btn nav-earnings" href="?nav=earnings"><span class="nav-icon nav-icon-coin"></span><span class="nav-copy"><span class="nav-label">Earnings</span><span class="nav-desc">Revenue segments and quarterly drilldowns</span></span></a>
+    <a class="nav-btn nav-stocks" href="?nav=stocks"><span class="nav-icon nav-icon-line"></span><span class="nav-copy"><span class="nav-label">Stocks</span><span class="nav-desc">Live performance and market trend tracking</span></span></a>
+    <a class="nav-btn nav-editorial" href="?nav=editorial"><span class="nav-icon nav-icon-book"></span><span class="nav-copy"><span class="nav-label">Editorial</span><span class="nav-desc">Service-level stories and subscriber context</span></span></a>
+    <a class="nav-btn nav-genie" href="?nav=genie"><span class="nav-icon nav-icon-bar"></span><span class="nav-copy"><span class="nav-label">Financial Genie (SPECIAL)</span><span class="nav-desc">Macro overlays with multi-metric comparisons</span></span></a>
   </div>
 </div>
 """, unsafe_allow_html=True)

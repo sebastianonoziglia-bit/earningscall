@@ -35,7 +35,7 @@ def render_theme_toggle():
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
-def apply_theme():
+def apply_theme(enable_dom_patch: bool = True):
     """
     Apply consistent styling across all pages
     - Sets Montserrat font throughout the application
@@ -702,6 +702,9 @@ def apply_theme():
         .replace("__PLOT_BG__", plot_bg)
     )
     st.markdown(css, unsafe_allow_html=True)
+    if not enable_dom_patch:
+        return
+
     st.markdown(
         f"""
         <script>

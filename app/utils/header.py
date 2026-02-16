@@ -2,7 +2,8 @@ import streamlit as st
 from utils.language import init_language, render_language_selector
 from utils.theme import apply_theme, render_theme_toggle
 
-def display_header():
+
+def display_header(enable_dom_patch: bool = True):
     """
     Display the common header across all app pages.
     This includes language selection buttons.
@@ -26,10 +27,11 @@ def display_header():
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Apply theme after toggles are rendered
-    apply_theme()
+    apply_theme(enable_dom_patch=enable_dom_patch)
     
-def render_header():
+
+def render_header(enable_dom_patch: bool = True):
     """
     Alias for display_header for backward compatibility
     """
-    return display_header()
+    return display_header(enable_dom_patch=enable_dom_patch)
