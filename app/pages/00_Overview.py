@@ -1141,6 +1141,442 @@ def _load_country_advertising_df() -> pd.DataFrame:
     df["Year"] = df["Year"].astype(int)
     return df
 
+
+def _coerce_numeric(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(
+        series.astype(str)
+        .str.replace(",", "", regex=False)
+        .str.replace("%", "", regex=False)
+        .str.replace("$", "", regex=False)
+        .str.strip(),
+        errors="coerce",
+    )
+
+
+@st.cache_data(ttl=3600)
+def _load_groupm_channels_df(excel_path: str) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name="Global Advertising (GroupM)")
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    df = df.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    if "year" in df.columns and "Year" not in df.columns:
+        df = df.rename(columns={"year": "Year"})
+    required = [
+        "Year",
+        "Traditional_TV",
+        "Connected_TV",
+        "Traditional_OOH",
+        "Digital_OOH",
+        "Search",
+        "NonSearch",
+        "Retail_Media",
+    ]
+    if not set(required).issubset(df.columns):
+        return pd.DataFrame()
+
+    out = df[required].copy()
+    out["Year"] = _coerce_numeric(out["Year"])
+    for col in required[1:]:
+        out[col] = _coerce_numeric(out[col])
+    out = out.dropna(subset=["Year"]).copy()
+    out["Year"] = out["Year"].astype(int)
+    out = out.sort_values("Year")
+    return out
+
+
+@st.cache_data(ttl=3600)
+def _load_groupm_total_ad_df(excel_path: str) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name=" (GroupM) Granular ")
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    df = df.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    if "year" in df.columns and "Year" not in df.columns:
+        df = df.rename(columns={"year": "Year"})
+    required = ["Year", "Total Advertising"]
+    if not set(required).issubset(df.columns):
+        return pd.DataFrame()
+
+    out = df[required].copy()
+    out["Year"] = _coerce_numeric(out["Year"])
+    out["Total Advertising"] = _coerce_numeric(out["Total Advertising"])
+    out = out.dropna(subset=["Year", "Total Advertising"]).copy()
+    out["Year"] = out["Year"].astype(int)
+    out = out.sort_values("Year")
+    return out
+
+
+def _latest_subscriber_history(subscriber_df: pd.DataFrame, services: list[str]) -> pd.DataFrame:
+    if subscriber_df is None or subscriber_df.empty:
+        return pd.DataFrame()
+    if not services:
+        return pd.DataFrame()
+
+    df = subscriber_df.copy()
+    if "year" not in df.columns or "quarter" not in df.columns or "subscribers" not in df.columns:
+        return pd.DataFrame()
+    df = df[df["service"].isin(services)].copy()
+    if df.empty:
+        return pd.DataFrame()
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    df["subscribers"] = pd.to_numeric(df["subscribers"], errors="coerce")
+    df["_q"] = df["quarter"].apply(_parse_quarter_number).fillna(0).astype(int)
+    df = df.dropna(subset=["year", "subscribers"])
+    if df.empty:
+        return pd.DataFrame()
+    df["year"] = df["year"].astype(int)
+    latest = (
+        df.sort_values(["service", "year", "_q", "subscribers"])
+        .groupby(["service", "year"], as_index=False)
+        .tail(1)
+        .copy()
+    )
+    latest = latest.sort_values(["year", "service"])
+    return latest
+
+
+def _render_quarterly_intelligence_briefing(
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    plotly_config: dict,
+) -> None:
+    st.markdown("---")
+    st.subheader("Quarterly Intelligence Briefing")
+    st.markdown(
+        "New topic block sourced from your two briefing docs and wired to Excel data updates. "
+        "This section is designed for quarterly refreshes."
+    )
+
+    st.markdown("#### Insight 19 — Apple Revenue Mix Shift")
+    st.caption(
+        "Track how Apple's Services share changes versus iPhone share. "
+        "This captures the margin-mix transition discussed in the addendum."
+    )
+    apple_segments = getattr(data_processor, "df_segments", None)
+    apple_metrics = getattr(data_processor, "df_metrics", None)
+    if apple_segments is not None and not apple_segments.empty and apple_metrics is not None and not apple_metrics.empty:
+        seg_df = apple_segments[apple_segments["company"] == "Apple"].copy()
+        seg_df["segment_norm"] = seg_df["segment"].astype(str).str.lower().str.strip()
+        services_df = seg_df[seg_df["segment_norm"].str.contains("services", na=False)].copy()
+        iphone_df = seg_df[seg_df["segment_norm"].str.contains("iphone", na=False)].copy()
+        services_year = (
+            services_df.groupby("year", as_index=False)["revenue"].sum().rename(columns={"revenue": "services_revenue"})
+            if not services_df.empty
+            else pd.DataFrame(columns=["year", "services_revenue"])
+        )
+        iphone_year = (
+            iphone_df.groupby("year", as_index=False)["revenue"].sum().rename(columns={"revenue": "iphone_revenue"})
+            if not iphone_df.empty
+            else pd.DataFrame(columns=["year", "iphone_revenue"])
+        )
+        rev_year = (
+            apple_metrics[apple_metrics["company"] == "Apple"][["year", "revenue"]]
+            .dropna()
+            .copy()
+            .rename(columns={"revenue": "total_revenue"})
+        )
+
+        mix_df = rev_year.merge(services_year, on="year", how="left").merge(iphone_year, on="year", how="left")
+        mix_df["services_revenue"] = mix_df["services_revenue"].fillna(0.0)
+        mix_df["iphone_revenue"] = mix_df["iphone_revenue"].fillna(0.0)
+        mix_df["services_share"] = np.where(
+            mix_df["total_revenue"] > 0,
+            (mix_df["services_revenue"] / mix_df["total_revenue"]) * 100.0,
+            np.nan,
+        )
+        mix_df["iphone_share"] = np.where(
+            mix_df["total_revenue"] > 0,
+            (mix_df["iphone_revenue"] / mix_df["total_revenue"]) * 100.0,
+            np.nan,
+        )
+        mix_df = mix_df.dropna(subset=["services_share", "iphone_share"]).sort_values("year")
+        if not mix_df.empty:
+            fig_mix = go.Figure()
+            fig_mix.add_trace(
+                go.Scatter(
+                    x=mix_df["year"],
+                    y=mix_df["services_share"],
+                    mode="lines+markers",
+                    name="Services share",
+                    line=dict(color="#2563EB", width=3),
+                )
+            )
+            fig_mix.add_trace(
+                go.Scatter(
+                    x=mix_df["year"],
+                    y=mix_df["iphone_share"],
+                    mode="lines+markers",
+                    name="iPhone share",
+                    line=dict(color="#111827", width=3),
+                )
+            )
+            fig_mix.update_layout(
+                height=360,
+                margin=dict(l=40, r=20, t=20, b=40),
+                yaxis_title="% of Apple total revenue",
+                xaxis_title="Year",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", y=1.12, x=0.0),
+            )
+            fig_mix.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
+            st.plotly_chart(fig_mix, use_container_width=True, config=plotly_config)
+        else:
+            st.info("Apple segment mix data not available for the current workbook.")
+    else:
+        st.info("Apple yearly segment data not available.")
+
+    st.markdown("#### Insight 20 — Streaming Subscriber Race")
+    st.caption(
+        "Annualized latest-quarter snapshots for key services. "
+        "This keeps quarterly updates while preserving readable yearly trend lines."
+    )
+    if "subscriber_processor" not in st.session_state:
+        st.session_state["subscriber_processor"] = SubscriberDataProcessor()
+    brief_subscriber_df = getattr(st.session_state["subscriber_processor"], "df_subscribers", None)
+    if brief_subscriber_df is not None and not brief_subscriber_df.empty:
+        service_candidates = ["Spotify", "Netflix", "Disney+", "WBD", "Paramount+"]
+        available_services = set(brief_subscriber_df["service"].dropna().astype(str).tolist())
+        picked_services = [s for s in service_candidates if s in available_services]
+        if not picked_services and "Spotify — Premium" in available_services:
+            picked_services = ["Spotify — Premium", "Netflix", "Disney+", "WBD", "Paramount+"]
+            picked_services = [s for s in picked_services if s in available_services]
+        sub_history = _latest_subscriber_history(brief_subscriber_df, picked_services)
+        if not sub_history.empty:
+            fig_sub = px.line(
+                sub_history,
+                x="year",
+                y="subscribers",
+                color="service",
+                markers=True,
+                labels={"year": "Year", "subscribers": "Subscribers (M)", "service": "Service"},
+            )
+            fig_sub.update_layout(
+                height=380,
+                margin=dict(l=40, r=20, t=20, b=40),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", y=1.12, x=0.0),
+            )
+            fig_sub.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
+            st.plotly_chart(fig_sub, use_container_width=True, config=plotly_config)
+        else:
+            st.info("Subscriber trend data is available but no valid service history was found.")
+    else:
+        st.info("Subscriber sheet not available in the workbook.")
+
+    st.markdown("#### Insight 21 — 2024 Ad Market Structure")
+    st.caption(
+        "Single-year ranking across the full advertising player list in `Company_advertising_revenue`."
+    )
+    try:
+        if getattr(data_processor, "df_ad_revenue", None) is None or data_processor.df_ad_revenue.empty:
+            data_processor._load_ad_revenue()
+    except Exception:
+        pass
+    ad_df = getattr(data_processor, "df_ad_revenue", None)
+    if ad_df is not None and not ad_df.empty:
+        ad_frame = ad_df.copy()
+        ad_frame.columns = [str(c).strip() for c in ad_frame.columns]
+        if "year" in ad_frame.columns and "Year" not in ad_frame.columns:
+            ad_frame = ad_frame.rename(columns={"year": "Year"})
+        if "Year" in ad_frame.columns:
+            ad_frame["Year"] = _coerce_numeric(ad_frame["Year"])
+            ad_frame = ad_frame.dropna(subset=["Year"]).copy()
+            ad_frame["Year"] = ad_frame["Year"].astype(int)
+            row = ad_frame[ad_frame["Year"] == int(selected_year)]
+            if row.empty:
+                eligible = ad_frame[ad_frame["Year"] <= int(selected_year)]
+                row = ad_frame[ad_frame["Year"] == int(eligible["Year"].max())] if not eligible.empty else ad_frame.tail(1)
+            ad_row = row.iloc[0]
+
+            ad_columns = {
+                "Google_Ads": "Alphabet",
+                "Meta_Ads": "Meta",
+                "Amazon_Ads": "Amazon",
+                "TikTok": "TikTok",
+                "*Microsoft_Ads": "Microsoft",
+                "Paramount": "Paramount",
+                "*WBD_Ads": "WBD",
+                "*Disney": "Disney",
+                "*Comcast": "Comcast",
+                "*Apple": "Apple",
+                "Snapchat": "Snapchat",
+                "Netflix*": "Netflix",
+                "Spotify_Ads": "Spotify",
+                "Twitter/X": "X (Twitter)",
+            }
+            ad_points = []
+            for col, label in ad_columns.items():
+                if col not in ad_row.index:
+                    continue
+                value = _coerce_numeric(pd.Series([ad_row[col]])).iloc[0]
+                if pd.notna(value) and float(value) > 0:
+                    ad_points.append({"Player": label, "Ad Revenue (USD B)": float(value)})
+            ad_rank = pd.DataFrame(ad_points).sort_values("Ad Revenue (USD B)", ascending=True) if ad_points else pd.DataFrame()
+            if not ad_rank.empty:
+                fig_ad = px.bar(
+                    ad_rank,
+                    x="Ad Revenue (USD B)",
+                    y="Player",
+                    orientation="h",
+                    text="Ad Revenue (USD B)",
+                    color="Ad Revenue (USD B)",
+                    color_continuous_scale="Blues",
+                )
+                fig_ad.update_traces(texttemplate="%{text:.1f}B", textposition="outside")
+                fig_ad.update_layout(
+                    height=470,
+                    margin=dict(l=40, r=20, t=20, b=40),
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    coloraxis_showscale=False,
+                    xaxis_title="Advertising revenue (USD billions)",
+                    yaxis_title="",
+                )
+                fig_ad.add_vline(x=100, line_dash="dot", line_color="rgba(59,130,246,0.55)")
+                fig_ad.add_vline(x=20, line_dash="dot", line_color="rgba(59,130,246,0.35)")
+                st.plotly_chart(fig_ad, use_container_width=True, config=plotly_config)
+            else:
+                st.info("Ad revenue ranking data is not available for this year.")
+        else:
+            st.info("Advertising revenue sheet is missing a Year column.")
+    else:
+        st.info("Company advertising revenue sheet not available.")
+
+    st.markdown("#### Insight 22 — Employee Count Divergence")
+    st.caption(
+        "Headcount trajectories show operating-model differences between logistics-heavy and software-heavy companies."
+    )
+    employee_df = getattr(data_processor, "df_employees", None)
+    if employee_df is not None and not employee_df.empty:
+        focus_companies = ["Amazon", "Microsoft", "Alphabet", "Apple", "Meta Platforms"]
+        emp = employee_df[employee_df["company"].isin(focus_companies)].copy()
+        emp["year"] = pd.to_numeric(emp["year"], errors="coerce")
+        emp["employees"] = pd.to_numeric(emp["employees"], errors="coerce")
+        emp = emp.dropna(subset=["year", "employees"])
+        emp["year"] = emp["year"].astype(int)
+        emp = emp.sort_values(["company", "year"])
+        if not emp.empty:
+            fig_emp = px.line(
+                emp,
+                x="year",
+                y="employees",
+                color="company",
+                markers=True,
+                labels={"year": "Year", "employees": "Employees", "company": "Company"},
+            )
+            fig_emp.update_layout(
+                height=380,
+                margin=dict(l=40, r=20, t=20, b=40),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", y=1.12, x=0.0),
+            )
+            fig_emp.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
+            st.plotly_chart(fig_emp, use_container_width=True, config=plotly_config)
+        else:
+            st.info("Employee count data is not available for the selected companies.")
+    else:
+        st.info("Employee data sheet not available.")
+
+    st.markdown("#### Insight 23 — Retail Media vs Traditional TV")
+    st.caption(
+        "Retail media is benchmarked against traditional TV using GroupM channel totals."
+    )
+    groupm_channels = _load_groupm_channels_df(getattr(data_processor, "data_path", ""))
+    if not groupm_channels.empty:
+        channels = groupm_channels[["Year", "Retail_Media", "Traditional_TV"]].copy()
+        channels = channels.sort_values("Year")
+        channels_long = channels.melt(
+            id_vars="Year",
+            value_vars=["Retail_Media", "Traditional_TV"],
+            var_name="Channel",
+            value_name="Value",
+        )
+        channel_names = {"Retail_Media": "Retail Media", "Traditional_TV": "Traditional TV"}
+        channels_long["Channel"] = channels_long["Channel"].map(channel_names).fillna(channels_long["Channel"])
+        fig_channels = px.line(
+            channels_long,
+            x="Year",
+            y="Value",
+            color="Channel",
+            markers=True,
+            labels={"Year": "Year", "Value": "Ad spend (USD millions)", "Channel": "Channel"},
+            color_discrete_map={"Retail Media": "#0EA5E9", "Traditional TV": "#F59E0B"},
+        )
+        fig_channels.update_layout(
+            height=380,
+            margin=dict(l=40, r=20, t=20, b=40),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            legend=dict(orientation="h", y=1.12, x=0.0),
+        )
+        fig_channels.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
+        st.plotly_chart(fig_channels, use_container_width=True, config=plotly_config)
+    else:
+        st.info("GroupM channel sheet (`Global Advertising (GroupM)`) not available.")
+
+    st.markdown("#### Insight 24 — Global Ad Spend YoY Shock Profile")
+    st.caption(
+        "Year-over-year growth from total global advertising spend. Useful for identifying regime breaks."
+    )
+    total_ad_df = _load_groupm_total_ad_df(getattr(data_processor, "data_path", ""))
+    if not total_ad_df.empty:
+        yoy_df = total_ad_df.copy().sort_values("Year")
+        yoy_df["YoY"] = yoy_df["Total Advertising"].pct_change() * 100.0
+        yoy_df = yoy_df.dropna(subset=["YoY"])
+        yoy_df["Direction"] = np.where(yoy_df["YoY"] >= 0, "Positive", "Negative")
+        fig_yoy = px.bar(
+            yoy_df,
+            x="Year",
+            y="YoY",
+            color="Direction",
+            color_discrete_map={"Positive": "#10B981", "Negative": "#EF4444"},
+            labels={"YoY": "YoY %", "Year": "Year"},
+        )
+        fig_yoy.update_layout(
+            height=340,
+            margin=dict(l=40, r=20, t=20, b=40),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            showlegend=False,
+        )
+        fig_yoy.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
+        fig_yoy.add_hline(y=0, line_dash="dot", line_color="rgba(148,163,184,0.6)")
+        st.plotly_chart(fig_yoy, use_container_width=True, config=plotly_config)
+    else:
+        st.info("GroupM granular totals sheet (` (GroupM) Granular `) not available.")
+
+    st.markdown("#### Next Layer — TV Cohort Transition (Spain, Italy, Germany)")
+    st.markdown(
+        "Add this as a quarterly demographics block: 55+ share of TV minutes, advertiser mix by age cohort, "
+        "and digital substitution pace by country. This will let you quantify how fast legacy-TV demand can reprice."
+    )
+    st.caption(
+        "Recommended source fields per country: `year`, `age_cohort`, `tv_minutes_per_day`, "
+        "`digital_minutes_per_day`, `ad_spend_tv`, `ad_spend_digital`."
+    )
+
 # Configure Plotly
 plotly_config = {
     'displayModeBar': True,
@@ -2075,6 +2511,7 @@ else:
 
 
 end_snap_section()
+_render_quarterly_intelligence_briefing(data_processor, selected_year, plotly_config)
 
 # Calculate summary metrics
 market_cap_data = []
