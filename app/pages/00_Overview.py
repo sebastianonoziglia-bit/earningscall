@@ -1195,6 +1195,37 @@ def _load_groupm_channels_df(excel_path: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
+def _load_groupm_granular_df(excel_path: str) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name=" (GroupM) Granular ")
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    df = df.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    if "year" in df.columns and "Year" not in df.columns:
+        df = df.rename(columns={"year": "Year"})
+    required = ["Year", "TV / Pro Video", "Internet", "Total Advertising"]
+    if not set(required).issubset(df.columns):
+        return pd.DataFrame()
+
+    out = df[required].copy()
+    for col in required:
+        out[col] = _coerce_numeric(out[col])
+    out = out.dropna(subset=["Year"]).copy()
+    out["Year"] = out["Year"].astype(int)
+    out = out.sort_values("Year")
+    return out
+
+
+@st.cache_data(ttl=3600)
 def _load_groupm_total_ad_df(excel_path: str) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -1260,12 +1291,423 @@ def _render_quarterly_intelligence_briefing(
     plotly_config: dict,
 ) -> None:
     st.markdown("---")
-    st.subheader("Quarterly Intelligence Briefing")
+    st.subheader("Global Media & Tech Intelligence Briefing")
+    st.caption("18 Key Correlations + Dashboard Architecture + Data Strategy")
+    st.caption("2010-2024 | 12 Companies | 33 Data Sheets")
     st.markdown(
-        "New topic block sourced from your two briefing docs and wired to Excel data updates. "
-        "This section is designed for quarterly refreshes."
+        "This section mirrors your briefing structure and is wired to Excel-backed updates. "
+        "It sits directly after the global map so users move from geography to narrative and then to validation charts."
     )
 
+    st.markdown("### Part 1 — Macro Correlations (Insights 01-10, 15-17)")
+    part1_sections = [
+        (
+            "1.1 — Advertising Market Insights",
+            [
+                (
+                    "01",
+                    "The Google + Meta Duopoly Now Controls ~44% of Global Ad Spend",
+                    "Google + Meta grew from ~8.8% of global advertising in 2010 to a COVID-era peak near 53.7%, then normalized around 44% in 2024.",
+                ),
+                (
+                    "05",
+                    "Lebanon Is More Ad-Saturated Than the USA (% of GDP)",
+                    "Ad spend intensity versus GDP can invert intuition: smaller economies can show higher ad-to-GDP ratios than the largest absolute markets.",
+                ),
+                (
+                    "07",
+                    "Traditional TV Advertising Flatlined — It Did Not Collapse Overnight",
+                    "Traditional TV declined over 2010-2024, but the bigger structural story is exponential growth of internet channels around it.",
+                ),
+                (
+                    "10",
+                    "Amazon Advertising Is the Quiet Third Pillar",
+                    "Amazon Ads scaled rapidly post-2020 and now behaves like a third structural force in digital advertising.",
+                ),
+            ],
+        ),
+        (
+            "1.2 — Company Efficiency & Capital Intelligence",
+            [
+                (
+                    "02",
+                    "Microsoft Is the Biggest Human Multiplier Story in Tech",
+                    "Market-cap-per-employee expansion materially outpaced peers after the cloud transition, indicating operating leverage at scale.",
+                ),
+                (
+                    "06",
+                    "Netflix: Small Team, High Revenue Per Employee",
+                    "Netflix sustains very high revenue-per-head relative to legacy media peers with larger operational footprints.",
+                ),
+                (
+                    "08",
+                    "Roku and Microsoft Hold High Cash Relative to Revenue",
+                    "Cash-to-revenue profiles differ by business model and optionality; platform transition and fortress balance sheets appear in the same metric.",
+                ),
+                (
+                    "09",
+                    "Comcast Is Most Leveraged Versus Its Market Cap",
+                    "Debt-to-market-cap divergence highlights rate sensitivity gaps between legacy media and platform-led tech balance sheets.",
+                ),
+            ],
+        ),
+        (
+            "1.3 — Macro & Monetary Context",
+            [
+                (
+                    "03",
+                    "Big Tech Market Cap Outran M2 Growth",
+                    "Aggregate tracked market cap expanded multiple times faster than M2 growth from 2010 to 2024.",
+                ),
+                (
+                    "17",
+                    "COVID Demand Shock Distorted Streaming Capital Allocation",
+                    "A temporary engagement spike drove durable cost commitments across the sector, then normalized faster than spend structures.",
+                ),
+            ],
+        ),
+        (
+            "1.4 — The Attention Economy",
+            [
+                (
+                    "04",
+                    "YouTube Monetizes Lowest per Minute but Wins on Scale",
+                    "Per-minute economics are lower, yet sheer watch-time volume dominates total monetization outcomes.",
+                ),
+                (
+                    "15",
+                    "Netflix Password Crackdown as a High-ROI Revenue Operation",
+                    "Subscriber conversion from existing usage produced high incremental revenue with limited proportional content cost expansion.",
+                ),
+                (
+                    "16",
+                    "Apple Services Is Larger Than Standalone Streaming Leaders",
+                    "Services scale and margins indicate Apple monetization behaves like a platform tax layer on installed base.",
+                ),
+            ],
+        ),
+    ]
+    for section_title, insights in part1_sections:
+        with st.expander(section_title, expanded=True):
+            for code, title, text in insights:
+                st.markdown(f"**{code} — {title}**")
+                st.markdown(text)
+
+    st.markdown("#### Correlation Validation Charts (Part 1)")
+    try:
+        if getattr(data_processor, "df_ad_revenue", None) is None or data_processor.df_ad_revenue.empty:
+            data_processor._load_ad_revenue()
+    except Exception:
+        pass
+    ad_df = getattr(data_processor, "df_ad_revenue", None)
+    groupm_granular = _load_groupm_granular_df(getattr(data_processor, "data_path", ""))
+
+    if ad_df is not None and not ad_df.empty and not groupm_granular.empty:
+        ad_frame = ad_df.copy()
+        ad_frame.columns = [str(c).strip() for c in ad_frame.columns]
+        if "year" in ad_frame.columns and "Year" not in ad_frame.columns:
+            ad_frame = ad_frame.rename(columns={"year": "Year"})
+        required_cols = {"Year", "Google_Ads", "Meta_Ads", "Amazon_Ads"}
+        if required_cols.issubset(ad_frame.columns):
+            share_df = ad_frame[["Year", "Google_Ads", "Meta_Ads", "Amazon_Ads"]].copy()
+            share_df["Year"] = _coerce_numeric(share_df["Year"])
+            share_df["Google_Ads"] = _coerce_numeric(share_df["Google_Ads"])
+            share_df["Meta_Ads"] = _coerce_numeric(share_df["Meta_Ads"])
+            share_df["Amazon_Ads"] = _coerce_numeric(share_df["Amazon_Ads"])
+            share_df = share_df.dropna(subset=["Year"]).copy()
+            share_df["Year"] = share_df["Year"].astype(int)
+            share_df = share_df[(share_df["Year"] >= 2010) & (share_df["Year"] <= 2024)]
+            global_totals = groupm_granular[["Year", "Total Advertising"]].copy()
+            global_totals["Global_Ad_B"] = global_totals["Total Advertising"] / 1000.0
+            duopoly_df = share_df.merge(global_totals[["Year", "Global_Ad_B"]], on="Year", how="inner")
+            duopoly_df = duopoly_df[duopoly_df["Global_Ad_B"] > 0]
+            duopoly_df["Duopoly_Share"] = (
+                (duopoly_df["Google_Ads"] + duopoly_df["Meta_Ads"]) / duopoly_df["Global_Ad_B"] * 100.0
+            )
+            duopoly_df["Amazon_Share"] = duopoly_df["Amazon_Ads"] / duopoly_df["Global_Ad_B"] * 100.0
+            if not duopoly_df.empty:
+                fig_duopoly = go.Figure()
+                fig_duopoly.add_trace(
+                    go.Scatter(
+                        x=duopoly_df["Year"],
+                        y=duopoly_df["Duopoly_Share"],
+                        mode="lines+markers",
+                        name="Google + Meta share",
+                        line=dict(color="#2563EB", width=3),
+                    )
+                )
+                fig_duopoly.add_trace(
+                    go.Scatter(
+                        x=duopoly_df["Year"],
+                        y=duopoly_df["Amazon_Share"],
+                        mode="lines+markers",
+                        name="Amazon share",
+                        line=dict(color="#F59E0B", width=2.5),
+                    )
+                )
+                fig_duopoly.update_layout(
+                    height=340,
+                    margin=dict(l=40, r=20, t=20, b=40),
+                    yaxis_title="% of global advertising spend",
+                    xaxis_title="Year",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    legend=dict(orientation="h", y=1.12, x=0.0),
+                )
+                fig_duopoly.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
+                st.plotly_chart(fig_duopoly, use_container_width=True, config=plotly_config)
+
+    if not groupm_granular.empty:
+        tv_net_df = groupm_granular.copy()
+        tv_net_df = tv_net_df[(tv_net_df["Year"] >= 2010) & (tv_net_df["Year"] <= 2024)].copy()
+        tv_net_df["TV_B"] = tv_net_df["TV / Pro Video"] / 1000.0
+        tv_net_df["Internet_B"] = tv_net_df["Internet"] / 1000.0
+        tv_net_long = tv_net_df.melt(
+            id_vars="Year",
+            value_vars=["TV_B", "Internet_B"],
+            var_name="Channel",
+            value_name="USD Billions",
+        )
+        tv_net_long["Channel"] = tv_net_long["Channel"].map(
+            {"TV_B": "TV / Pro Video", "Internet_B": "Internet"}
+        )
+        fig_tv = px.line(
+            tv_net_long,
+            x="Year",
+            y="USD Billions",
+            color="Channel",
+            markers=True,
+            color_discrete_map={"TV / Pro Video": "#F59E0B", "Internet": "#2563EB"},
+        )
+        fig_tv.update_layout(
+            height=360,
+            margin=dict(l=40, r=20, t=20, b=40),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            legend=dict(orientation="h", y=1.12, x=0.0),
+            yaxis_title="Ad spend (USD billions)",
+        )
+        fig_tv.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
+        st.plotly_chart(fig_tv, use_container_width=True, config=plotly_config)
+
+    metrics_df = getattr(data_processor, "df_metrics", None)
+    employees_df = getattr(data_processor, "df_employees", None)
+    if metrics_df is not None and not metrics_df.empty and employees_df is not None and not employees_df.empty:
+        ratio_df = metrics_df[["company", "year", "market_cap", "debt"]].merge(
+            employees_df[["company", "year", "employees"]],
+            on=["company", "year"],
+            how="inner",
+        )
+        ratio_df["market_cap"] = pd.to_numeric(ratio_df["market_cap"], errors="coerce")
+        ratio_df["employees"] = pd.to_numeric(ratio_df["employees"], errors="coerce")
+        ratio_df["debt"] = pd.to_numeric(ratio_df["debt"], errors="coerce")
+        ratio_df = ratio_df.dropna(subset=["year", "market_cap", "employees"])
+        ratio_df = ratio_df[ratio_df["employees"] > 0]
+        ratio_df["mcap_per_employee_m"] = ratio_df["market_cap"] / ratio_df["employees"]
+
+        focus_eff = ["Microsoft", "Netflix", "Apple", "Alphabet", "Meta Platforms"]
+        eff = ratio_df[ratio_df["company"].isin(focus_eff)].copy()
+        if not eff.empty:
+            pre = (
+                eff[(eff["year"] >= 2010) & (eff["year"] <= 2014)]
+                .groupby("company", as_index=False)["mcap_per_employee_m"]
+                .mean()
+                .rename(columns={"mcap_per_employee_m": "pre_period"})
+            )
+            post = (
+                eff[(eff["year"] >= 2020) & (eff["year"] <= 2024)]
+                .groupby("company", as_index=False)["mcap_per_employee_m"]
+                .mean()
+                .rename(columns={"mcap_per_employee_m": "post_period"})
+            )
+            mult = pre.merge(post, on="company", how="inner")
+            mult["Multiplier"] = np.where(mult["pre_period"] > 0, mult["post_period"] / mult["pre_period"], np.nan)
+            mult = mult.dropna(subset=["Multiplier"]).sort_values("Multiplier", ascending=True)
+            if not mult.empty:
+                fig_mult = px.bar(
+                    mult,
+                    x="Multiplier",
+                    y="company",
+                    orientation="h",
+                    text="Multiplier",
+                    color="Multiplier",
+                    color_continuous_scale="Blues",
+                )
+                fig_mult.update_traces(texttemplate="%{text:.2f}x", textposition="outside")
+                fig_mult.update_layout(
+                    height=330,
+                    margin=dict(l=40, r=20, t=20, b=40),
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    coloraxis_showscale=False,
+                    xaxis_title="Market-cap-per-employee multiplier (2020-2024 vs 2010-2014)",
+                    yaxis_title="",
+                )
+                st.plotly_chart(fig_mult, use_container_width=True, config=plotly_config)
+
+        focus_leverage = ["Comcast", "Disney", "Alphabet", "Meta Platforms"]
+        lev_rows = []
+        for comp in focus_leverage:
+            comp_df = ratio_df[(ratio_df["company"] == comp) & (ratio_df["year"] <= int(selected_year))].copy()
+            if comp_df.empty:
+                continue
+            latest = comp_df.sort_values("year").iloc[-1]
+            if pd.notna(latest["market_cap"]) and latest["market_cap"] and pd.notna(latest["debt"]):
+                lev_rows.append(
+                    {
+                        "Company": comp,
+                        "Debt / Market Cap": float(latest["debt"]) / float(latest["market_cap"]),
+                    }
+                )
+        lev_df = pd.DataFrame(lev_rows).sort_values("Debt / Market Cap", ascending=True) if lev_rows else pd.DataFrame()
+        if not lev_df.empty:
+            fig_lev = px.bar(
+                lev_df,
+                x="Debt / Market Cap",
+                y="Company",
+                orientation="h",
+                text="Debt / Market Cap",
+                color="Debt / Market Cap",
+                color_continuous_scale="Oranges",
+            )
+            fig_lev.update_traces(texttemplate="%{text:.3f}", textposition="outside")
+            fig_lev.update_layout(
+                height=300,
+                margin=dict(l=40, r=20, t=20, b=40),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                coloraxis_showscale=False,
+                xaxis_title=f"Debt-to-market-cap ratio (latest <= {selected_year})",
+                yaxis_title="",
+            )
+            st.plotly_chart(fig_lev, use_container_width=True, config=plotly_config)
+
+    st.markdown("### Part 2 — Company & Segment Deep Dives (Insights 11-14, 18, 13)")
+    part2_sections = [
+        (
+            "2.1 — Streaming Wars: Survivors, Wounded & Wildcards",
+            [
+                (
+                    "11",
+                    "Disney 2024: Three Companies in One Balance Sheet",
+                    "Linear TV decline, improving streaming profitability, and resilient parks now coexist in one valuation story.",
+                ),
+                (
+                    "12",
+                    "Warner Bros. Discovery: High Leverage, DTC Buildout, Legacy Cash Engine",
+                    "Debt service still leans on declining networks while DTC scales toward strategic relevance.",
+                ),
+                (
+                    "14",
+                    "Roku: Platform Scale First, Monetization Catch-Up Second",
+                    "Hardware subsidy strategy built reach; ad monetization depth is the unresolved variable.",
+                ),
+                (
+                    "18",
+                    "Spotify Profitability Followed Business-Model Expansion",
+                    "Margin expansion arrived with adjacent formats and tooling, not just core music renegotiation.",
+                ),
+            ],
+        ),
+        (
+            "2.2 — Tech Giants: The Real Media Companies",
+            [
+                (
+                    "13",
+                    "Microsoft Security: Large Vertical Built Inside Platform Distribution",
+                    "Security revenue scaled rapidly via bundling and cloud distribution inside the broader Microsoft stack.",
+                ),
+            ],
+        ),
+    ]
+    for section_title, insights in part2_sections:
+        with st.expander(section_title, expanded=True):
+            for code, title, text in insights:
+                st.markdown(f"**{code} — {title}**")
+                st.markdown(text)
+
+    st.markdown("### Part 3 — Dashboard Architecture")
+    st.markdown(
+        "Narrative flow recommendation: **Macro KPIs -> Globe/Map -> Competitive Ranking -> Market Cap Validation -> Time Machine -> Synthesis.**"
+    )
+    architecture_df = pd.DataFrame(
+        [
+            {
+                "ACT": "OPEN",
+                "Section": "Macro KPIs",
+                "What User Sees": "Hero numbers: total global subs, total market cap, global ad spend, revenue",
+                "Data Source": "Company_metrics_earnings_values, Company_subscribers_values",
+            },
+            {
+                "ACT": "ACT 1",
+                "Section": "3D Globe / World Map",
+                "What User Sees": "Interactive country-region exploration with media filters",
+                "Data Source": "Country_Advertising_Data_FullVi, Company_revenue_by_region",
+            },
+            {
+                "ACT": "ACT 2",
+                "Section": "Who's Winning",
+                "What User Sees": "Ranked company view by medium and service category",
+                "Data Source": "Company_subscribers_values, Company_advertising_revenue",
+            },
+            {
+                "ACT": "ACT 3",
+                "Section": "Market Cap Validation",
+                "What User Sees": "Financial validation of engagement and subscriber dominance",
+                "Data Source": "Company_metrics_earnings_values, Stocks & Crypto",
+            },
+            {
+                "ACT": "ACT 4",
+                "Section": "Time Machine",
+                "What User Sees": "Animated historical charts for market cap, subscribers, ad market",
+                "Data Source": "Company_metrics_earnings_values, Global_Adv_Aggregates",
+            },
+            {
+                "ACT": "CLOSE",
+                "Section": "Synthesis",
+                "What User Sees": "Company x medium x region summary + insight cards",
+                "Data Source": "Company_insights_text, Company_Segments_insights_text",
+            },
+        ]
+    )
+    st.dataframe(architecture_df, use_container_width=True, hide_index=True)
+
+    with st.expander("3.2 — Excel Sheet Templates for New Data Layers", expanded=False):
+        st.markdown("**Template A — `Earnings_Call_Highlights`**")
+        st.markdown(
+            "`Company`, `Year`, `Quarter`, `Speaker`, `Role`, `Topic`, `Verbatim Quote / Paraphrase`"
+        )
+        st.markdown("**Template B — `MDA_Highlights`**")
+        st.markdown(
+            "`Company`, `Year`, `Filing Type`, `Section`, `Key Management Narrative`"
+        )
+        st.markdown("**Template C — `Earnings_Call_Transcripts_Index`**")
+        st.markdown(
+            "`Company`, `Year`, `Quarter`, `Filename`, `Source`, `Status`"
+        )
+
+    st.markdown("### Part 4 — Data Layer Strategy")
+    st.markdown("**Two-layer architecture**")
+    st.markdown(
+        "- `Layer 1 (Excel display layer)`: KPI tables, segment revenue, pre-written insights, subscriber/ad/market data, call highlights."
+    )
+    st.markdown(
+        "- `Layer 2 (Document knowledge layer)`: full transcripts, MD&A extracts, press releases/decks, indexed for retrieval + synthesis."
+    )
+    st.markdown("**API query sequence**")
+    st.markdown(
+        "1. User query -> 2. Layer-1 fast check -> 3. Layer-2 retrieval -> 4. Synthesis with grounded chunks -> 5. Response with attribution."
+    )
+    st.markdown("**Recommended next steps**")
+    st.markdown(
+        "1. Add `Earnings_Call_Highlights` sheet.\n"
+        "2. Collect last 8 quarters of transcripts for all tracked companies.\n"
+        "3. Build `Earnings_Call_Transcripts_Index`.\n"
+        "4. Wire RAG query path using highlights + transcript chunks.\n"
+        "5. Move to vector search once document volume grows."
+    )
+
+    st.markdown("### Addendum — 6 New Insights (19-24)")
     st.markdown("#### Insight 19 — Apple Revenue Mix Shift")
     st.caption(
         "Track how Apple's Services share changes versus iPhone share. "
