@@ -189,7 +189,7 @@ def render_hero(logos_html="", show_spinner=False):
     .hero-shell {{
         border-radius: 18px;
         overflow: hidden;
-        margin-bottom: 2.5rem;
+        margin-bottom: 0.6rem;
         transform: translateZ(0);
     }}
 
@@ -389,8 +389,6 @@ logos_html = "".join(logo_links)
 render_hero(logos_html=logos_html, show_spinner=False)
 
 # Dashboard Pages Section (directly under hero)
-st.subheader("Dashboard Pages")
-
 st.markdown("""
 <style>
 /* Hide sidebar nav on Welcome */
@@ -400,11 +398,21 @@ section[data-testid="stSidebar"],
     display: none !important;
 }
 
+.welcome-nav-wrap {
+    margin-top: -2px;
+}
+.welcome-nav-head {
+    margin: 0 0 8px 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #1f2937;
+}
 .welcome-nav {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
     gap: 14px;
-    margin: 12px 0 28px;
+    margin: 0 0 24px;
 }
 .welcome-nav .nav-btn {
     display: flex;
@@ -469,12 +477,15 @@ section[data-testid="stSidebar"],
 """, unsafe_allow_html=True)
 
 st.markdown("""
-<div class="welcome-nav">
-  <a class="nav-btn nav-overview" href="?nav=overview"><span class="nav-icon nav-icon-search"></span><span class="nav-label">Overview</span></a>
-  <a class="nav-btn nav-earnings" href="?nav=earnings"><span class="nav-icon nav-icon-coin"></span><span class="nav-label">Earnings</span></a>
-  <a class="nav-btn nav-stocks" href="?nav=stocks"><span class="nav-icon nav-icon-line"></span><span class="nav-label">Stocks</span></a>
-  <a class="nav-btn nav-editorial" href="?nav=editorial"><span class="nav-icon nav-icon-book"></span><span class="nav-label">Editorial</span></a>
-  <a class="nav-btn nav-genie" href="?nav=genie"><span class="nav-icon nav-icon-bar"></span><span class="nav-label">Financial Genie (SPECIAL)</span></a>
+<div class="welcome-nav-wrap">
+  <div class="welcome-nav-head">Dashboard Pages</div>
+  <div class="welcome-nav">
+    <a class="nav-btn nav-overview" href="?nav=overview"><span class="nav-icon nav-icon-search"></span><span class="nav-label">Overview</span></a>
+    <a class="nav-btn nav-earnings" href="?nav=earnings"><span class="nav-icon nav-icon-coin"></span><span class="nav-label">Earnings</span></a>
+    <a class="nav-btn nav-stocks" href="?nav=stocks"><span class="nav-icon nav-icon-line"></span><span class="nav-label">Stocks</span></a>
+    <a class="nav-btn nav-editorial" href="?nav=editorial"><span class="nav-icon nav-icon-book"></span><span class="nav-label">Editorial</span></a>
+    <a class="nav-btn nav-genie" href="?nav=genie"><span class="nav-icon nav-icon-bar"></span><span class="nav-label">Financial Genie (SPECIAL)</span></a>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
