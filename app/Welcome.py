@@ -104,6 +104,14 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(BASE_DIR, "attached_assets")
+HERO_VIDEO_FILE = os.getenv("HERO_VIDEO_FILE", "HeroVideo.mp4")
+HERO_VIDEO_REMOTE_URL = os.getenv(
+    "HERO_VIDEO_REMOTE_URL",
+    (
+        "https://raw.githubusercontent.com/sebastianonoziglia-bit/earningscall/main/"
+        f"app/attached_assets/{HERO_VIDEO_FILE}"
+    ),
+)
 
 def get_greeting():
     """Return time-appropriate greeting"""
@@ -160,16 +168,32 @@ def get_hero_background_b64(path, max_width=2000, quality=85):
             return "", "image/png"
 
 
-def find_hero_video_path(assets_dir):
+def find_hero_video_path(assets_dir, preferred_file="HeroVideo.mp4"):
     if not assets_dir or not os.path.isdir(assets_dir):
         return ""
 
-    preferred_names = [
-        "HeroVideo.mp4",
-        "HeroVideo.webm",
-        "HeroVideo.mov",
-        "HeroVideo.m4v",
-    ]
+    preferred_names = []
+    if preferred_file:
+        preferred_names.append(preferred_file)
+        root_name, extension = os.path.splitext(preferred_file)
+        if not extension and root_name:
+            preferred_names.extend(
+                [
+                    f"{root_name}.mp4",
+                    f"{root_name}.webm",
+                    f"{root_name}.mov",
+                    f"{root_name}.m4v",
+                ]
+            )
+
+    preferred_names.extend(
+        [
+            "HeroVideo.mp4",
+            "HeroVideo.webm",
+            "HeroVideo.mov",
+            "HeroVideo.m4v",
+        ]
+    )
     for filename in preferred_names:
         candidate = os.path.join(assets_dir, filename)
         if os.path.exists(candidate):
@@ -218,13 +242,9 @@ def get_remote_hero_video_b64(url):
 # Hero image with loading state
 background_path = os.path.join(ASSETS_DIR, "FAQ MFE.png")
 background_b64, background_mime = get_hero_background_b64(background_path)
-hero_video_path = find_hero_video_path(ASSETS_DIR)
+hero_video_path = find_hero_video_path(ASSETS_DIR, HERO_VIDEO_FILE)
 hero_video_cache_buster = os.path.getmtime(hero_video_path) if hero_video_path else 0
 hero_video_b64, hero_video_mime = get_hero_video_b64(hero_video_path, hero_video_cache_buster)
-HERO_VIDEO_REMOTE_URL = (
-    "https://raw.githubusercontent.com/sebastianonoziglia-bit/earningscall/"
-    "main/app/attached_assets/HeroVideo.mp4"
-)
 hero_video_remote_b64, hero_video_remote_mime = get_remote_hero_video_b64(HERO_VIDEO_REMOTE_URL)
 
 hero_placeholder = st.empty()
