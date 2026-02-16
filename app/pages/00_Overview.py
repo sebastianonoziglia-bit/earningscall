@@ -759,6 +759,66 @@ def company_ticker(company: str) -> str:
     name = str(company or "").strip()
     return COMPANY_TICKERS.get(name, name[:5].upper() if name else "")
 
+
+STANDARD_OVERVIEW_COMMENTS = {
+    "Market Cap Share vs Nasdaq": (
+        "Shows how much of Nasdaq market capitalization is represented by the tracked companies versus the rest of the index."
+    ),
+    "Market Cap Treemap": (
+        "Shows each company market-cap share as area, so relative size differences are visible at a glance."
+    ),
+    "Advertising Revenue vs Total Revenue": (
+        "Splits each company's total revenue into advertising and non-advertising components to show ad-dependence."
+    ),
+    "Market Capitalization": (
+        "Ranks companies by equity value to compare market-implied scale and investor confidence."
+    ),
+    "Revenue": (
+        "Ranks companies by total top-line revenue to compare operating scale."
+    ),
+    "Net Income": (
+        "Ranks companies by after-tax profit to compare bottom-line performance."
+    ),
+    "Total Assets": (
+        "Ranks companies by total assets to compare balance-sheet scale."
+    ),
+    "Cash Balance": (
+        "Ranks companies by available cash and equivalents to compare liquidity strength."
+    ),
+    "R&D Spending": (
+        "Ranks companies by research and development investment to compare innovation intensity."
+    ),
+    "Employee Count": (
+        "Ranks companies by workforce size to compare operating footprint."
+    ),
+    "Long-Term Debt": (
+        "Ranks companies by long-term debt to compare leverage exposure."
+    ),
+    "Operating Income": (
+        "Ranks companies by core operating profit before non-operating items."
+    ),
+    "Cost of Revenue": (
+        "Ranks companies by direct costs required to deliver products and services."
+    ),
+    "Capital Expenditure (Capex)": (
+        "Ranks companies by long-term capital spending on infrastructure and equipment."
+    ),
+}
+
+
+def render_standard_overview_comment(section_title: str, selected_period=None, period_label: str = "Year") -> None:
+    note = STANDARD_OVERVIEW_COMMENTS.get(section_title)
+    if not note:
+        return
+    if selected_period is None:
+        period_scope = period_label
+    else:
+        period_scope = f"{period_label} {selected_period}"
+    st.caption(
+        f"Standard note — {note} Scope: {period_scope}. Values update automatically when filters change."
+    )
+
+
 # Helper functions
 def format_large_number(value):
     """Format large numbers to billions/trillions with proper rounding"""
@@ -1388,12 +1448,12 @@ def _render_quarterly_intelligence_briefing(
         ),
     ]
     for section_title, insights in part1_sections:
-        with st.expander(section_title, expanded=True):
-            for code, title, text in insights:
-                st.markdown(f"**{code} — {title}**")
-                st.markdown(text)
+        st.markdown(f"#### {section_title}")
+        for code, title, text in insights:
+            st.markdown(f"- **{code} — {title}**: {text}")
 
     st.markdown("#### Correlation Validation Charts (Part 1)")
+    rendered_part1_charts = 0
     try:
         if getattr(data_processor, "df_ad_revenue", None) is None or data_processor.df_ad_revenue.empty:
             data_processor._load_ad_revenue()
@@ -1456,6 +1516,7 @@ def _render_quarterly_intelligence_briefing(
                 )
                 fig_duopoly.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
                 st.plotly_chart(fig_duopoly, use_container_width=True, config=plotly_config)
+                rendered_part1_charts += 1
 
     if not groupm_granular.empty:
         tv_net_df = groupm_granular.copy()
@@ -1489,6 +1550,7 @@ def _render_quarterly_intelligence_briefing(
         )
         fig_tv.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
         st.plotly_chart(fig_tv, use_container_width=True, config=plotly_config)
+        rendered_part1_charts += 1
 
     metrics_df = getattr(data_processor, "df_metrics", None)
     employees_df = getattr(data_processor, "df_employees", None)
@@ -1544,6 +1606,7 @@ def _render_quarterly_intelligence_briefing(
                     yaxis_title="",
                 )
                 st.plotly_chart(fig_mult, use_container_width=True, config=plotly_config)
+                rendered_part1_charts += 1
 
         focus_leverage = ["Comcast", "Disney", "Alphabet", "Meta Platforms"]
         lev_rows = []
@@ -1581,6 +1644,65 @@ def _render_quarterly_intelligence_briefing(
                 yaxis_title="",
             )
             st.plotly_chart(fig_lev, use_container_width=True, config=plotly_config)
+            rendered_part1_charts += 1
+
+    if rendered_part1_charts == 0:
+        st.info(
+            "No Part 1 chart inputs were found with the current workbook fields. "
+            "Showing fallback validation from core company metrics."
+        )
+        if metrics_df is not None and not metrics_df.empty:
+            fallback = metrics_df[["year", "market_cap", "revenue"]].copy()
+            fallback["year"] = _coerce_numeric(fallback["year"])
+            fallback["market_cap"] = _coerce_numeric(fallback["market_cap"])
+            fallback["revenue"] = _coerce_numeric(fallback["revenue"])
+            fallback = fallback.dropna(subset=["year"]).copy()
+            fallback["year"] = fallback["year"].astype(int)
+            fallback = fallback[(fallback["year"] >= 2010) & (fallback["year"] <= 2024)]
+            if not fallback.empty:
+                fallback_year = (
+                    fallback.groupby("year", as_index=False)[["market_cap", "revenue"]]
+                    .sum(min_count=1)
+                    .dropna(subset=["market_cap", "revenue"], how="all")
+                )
+                if not fallback_year.empty:
+                    fallback_year["market_cap_t"] = fallback_year["market_cap"] / 1_000_000.0
+                    fallback_year["revenue_t"] = fallback_year["revenue"] / 1_000_000.0
+                    fig_fallback = go.Figure()
+                    fig_fallback.add_trace(
+                        go.Scatter(
+                            x=fallback_year["year"],
+                            y=fallback_year["market_cap_t"],
+                            mode="lines+markers",
+                            name="Aggregate market cap (T USD)",
+                            line=dict(color="#2563EB", width=3),
+                        )
+                    )
+                    fig_fallback.add_trace(
+                        go.Scatter(
+                            x=fallback_year["year"],
+                            y=fallback_year["revenue_t"],
+                            mode="lines+markers",
+                            name="Aggregate revenue (T USD)",
+                            line=dict(color="#F59E0B", width=3),
+                        )
+                    )
+                    fig_fallback.update_layout(
+                        height=360,
+                        margin=dict(l=40, r=20, t=20, b=40),
+                        xaxis_title="Year",
+                        yaxis_title="USD trillions",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        legend=dict(orientation="h", y=1.12, x=0.0),
+                    )
+                    fig_fallback.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
+                    st.plotly_chart(fig_fallback, use_container_width=True, config=plotly_config)
+                    rendered_part1_charts += 1
+        if rendered_part1_charts == 0:
+            st.warning(
+                "Charts could not be rendered because required numeric series were not detected in the workbook."
+            )
 
     st.markdown("### Part 2 — Company & Segment Deep Dives (Insights 11-14, 18, 13)")
     part2_sections = [
@@ -3476,6 +3598,7 @@ st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 # Market Cap vs Nasdaq (Pie)
 begin_snap_section("nasdaq_pie")
 st.subheader("Market Cap Share vs Nasdaq")
+render_standard_overview_comment("Market Cap Share vs Nasdaq", selected_year)
 nasdaq_market_cap = None
 try:
     nasdaq_market_cap = data_processor.get_nasdaq_market_cap(selected_year, method="year_end")
@@ -3624,6 +3747,7 @@ st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
 # Market Cap Treemap (one rectangle split into company boxes)
 begin_snap_section("market_cap_treemap")
 st.subheader("Market Cap Treemap")
+render_standard_overview_comment("Market Cap Treemap", selected_year)
 if market_cap_data:
     treemap_companies = [d["Company"] for d in market_cap_data]
     treemap_labels = [company_ticker(c) for c in treemap_companies]
@@ -3713,6 +3837,7 @@ end_snap_section()
 # Advertising Revenue vs Total Revenue (Stacked)
 begin_snap_section("ad_vs_total")
 st.subheader("Advertising Revenue vs Total Revenue")
+render_standard_overview_comment("Advertising Revenue vs Total Revenue", selected_year)
 ad_stack_rows = []
 for company in companies:
     metrics = data_processor.get_metrics(company, selected_year)
@@ -3873,6 +3998,7 @@ end_snap_section()
 begin_snap_section("market_cap_animation")
 
 st.subheader("Market Capitalization")
+render_standard_overview_comment("Market Capitalization", selected_year)
 
 # Create Market Cap visualization
 if market_cap_data:
@@ -3971,6 +4097,7 @@ st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 # Revenue Visualization
 begin_snap_section("revenue_animation")
 st.subheader("Revenue")
+render_standard_overview_comment("Revenue", selected_year)
 
 # Create Revenue visualization
 if revenue_data:
@@ -4069,6 +4196,7 @@ st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 # Net Income Visualization
 begin_snap_section("net_income_animation")
 st.subheader("Net Income")
+render_standard_overview_comment("Net Income", selected_year)
 
 # Create Net Income visualization
 if net_income_data:
@@ -4167,6 +4295,7 @@ st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 # Total Assets Visualization
 begin_snap_section("assets_animation")
 st.subheader("Total Assets")
+render_standard_overview_comment("Total Assets", selected_year)
 
 # Sort assets data
 if assets_data:
@@ -4265,6 +4394,7 @@ end_snap_section()
 st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 begin_snap_section("cash_animation")
 st.subheader("Cash Balance")
+render_standard_overview_comment("Cash Balance", selected_year)
 
 # Sort cash balance data
 if cash_balance_data:
@@ -4363,6 +4493,7 @@ end_snap_section()
 st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 begin_snap_section("rd_animation")
 st.subheader("R&D Spending")
+render_standard_overview_comment("R&D Spending", selected_year)
 
 # Sort R&D data
 if rd_data:
@@ -4461,6 +4592,7 @@ end_snap_section()
 st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 begin_snap_section("employees_animation")
 st.subheader("Employee Count")
+render_standard_overview_comment("Employee Count", selected_year)
 
 # Sort employee data
 if employee_data:
@@ -4567,6 +4699,7 @@ end_snap_section()
 st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 begin_snap_section("debt_animation")
 st.subheader("Long-Term Debt")
+render_standard_overview_comment("Long-Term Debt", selected_year)
 
 # Sort debt data
 if debt_data:
@@ -4665,6 +4798,7 @@ end_snap_section()
 st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 begin_snap_section("operating_income_animation")
 st.subheader("Operating Income")
+render_standard_overview_comment("Operating Income", selected_year)
 
 # Sort operating income data
 if operating_income_data:
@@ -4763,6 +4897,7 @@ end_snap_section()
 st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 begin_snap_section("cost_of_revenue_animation")
 st.subheader("Cost of Revenue")
+render_standard_overview_comment("Cost of Revenue", selected_year)
 
 # Sort cost of revenue data
 if cost_of_revenue_data:
@@ -4861,6 +4996,7 @@ end_snap_section()
 st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 begin_snap_section("capex_animation")
 st.subheader("Capital Expenditure (Capex)")
+render_standard_overview_comment("Capital Expenditure (Capex)", selected_year)
 
 # Sort capex data
 if capex_data:
