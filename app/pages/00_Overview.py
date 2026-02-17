@@ -761,52 +761,6 @@ def company_ticker(company: str) -> str:
     return COMPANY_TICKERS.get(name, name[:5].upper() if name else "")
 
 
-STANDARD_OVERVIEW_COMMENTS = {
-    "Market Cap Share vs Nasdaq": (
-        "Shows how much of Nasdaq market capitalization is represented by the tracked companies versus the rest of the index."
-    ),
-    "Market Cap Treemap": (
-        "Shows each company market-cap share as area, so relative size differences are visible at a glance."
-    ),
-    "Advertising Revenue vs Total Revenue": (
-        "Splits each company's total revenue into advertising and non-advertising components to show ad-dependence."
-    ),
-    "Market Capitalization": (
-        "Ranks companies by equity value to compare market-implied scale and investor confidence."
-    ),
-    "Revenue": (
-        "Ranks companies by total top-line revenue to compare operating scale."
-    ),
-    "Net Income": (
-        "Ranks companies by after-tax profit to compare bottom-line performance."
-    ),
-    "Total Assets": (
-        "Ranks companies by total assets to compare balance-sheet scale."
-    ),
-    "Cash Balance": (
-        "Ranks companies by available cash and equivalents to compare liquidity strength."
-    ),
-    "R&D Spending": (
-        "Ranks companies by research and development investment to compare innovation intensity."
-    ),
-    "Employee Count": (
-        "Ranks companies by workforce size to compare operating footprint."
-    ),
-    "Long-Term Debt": (
-        "Ranks companies by long-term debt to compare leverage exposure."
-    ),
-    "Operating Income": (
-        "Ranks companies by core operating profit before non-operating items."
-    ),
-    "Cost of Revenue": (
-        "Ranks companies by direct costs required to deliver products and services."
-    ),
-    "Capital Expenditure (Capex)": (
-        "Ranks companies by long-term capital spending on infrastructure and equipment."
-    ),
-}
-
-
 def _clean_overview_text(value) -> str:
     text = str(value if value is not None else "").strip()
     return "" if text.lower() in {"nan", "none", "null"} else text
@@ -817,123 +771,69 @@ def _normalize_quarter_label(value) -> str:
     return f"Q{q}" if q else ""
 
 
-def _row_period_rank(year_value, quarter_value, period_value) -> int:
-    period = _normalize_overview_period(year_value, quarter_value, period_value)
-    return _period_sort_key(period)[0]
-
-
-def _pick_rows_for_period(df: pd.DataFrame, selected_year: int | None, selected_quarter: str | None) -> tuple[pd.DataFrame, str]:
-    if df is None or df.empty:
-        return pd.DataFrame(), "No data"
-
-    scoped = df.copy()
-    scoped["_year_int"] = pd.to_numeric(scoped.get("year"), errors="coerce")
-    scoped["_quarter_norm"] = scoped.get("quarter", "").apply(_normalize_quarter_label)
-    quarter_norm = _normalize_quarter_label(selected_quarter)
-
-    if selected_year is not None:
-        year_exact = scoped[scoped["_year_int"] == int(selected_year)].copy()
-        if quarter_norm:
-            exact = year_exact[year_exact["_quarter_norm"] == quarter_norm].copy()
-            if not exact.empty:
-                return exact, f"{int(selected_year)}-{quarter_norm}"
-            yearly = year_exact[year_exact["_quarter_norm"] == ""].copy()
-            if not yearly.empty:
-                return yearly, f"{int(selected_year)} (yearly)"
-        else:
-            if not year_exact.empty:
-                return year_exact, str(int(selected_year))
-
-    if quarter_norm:
-        quarter_only = scoped[(scoped["_year_int"].isna()) & (scoped["_quarter_norm"] == quarter_norm)].copy()
-        if not quarter_only.empty:
-            return quarter_only, quarter_norm
-
-    defaults = scoped[(scoped["_year_int"].isna()) & (scoped["_quarter_norm"] == "")].copy()
-    if not defaults.empty:
-        return defaults, "Default"
-
-    scoped["_period_rank"] = scoped.apply(
-        lambda row: _row_period_rank(row.get("year"), row.get("quarter"), row.get("period")),
-        axis=1,
-    )
-    top_rank = scoped["_period_rank"].max()
-    latest = scoped[scoped["_period_rank"] == top_rank].copy()
-    if latest.empty:
-        return pd.DataFrame(), "No data"
-    first = latest.iloc[0]
-    latest_label = _normalize_overview_period(first.get("year"), first.get("quarter"), first.get("period")) or "Latest"
-    return latest, latest_label
-
-
-def _lookup_chart_comment_from_overview_sheet(
+def _lookup_chart_comments_from_overview_sheet(
     section_title: str,
     selected_year: int | None,
     selected_quarter: str | None,
-    selected_company: str | None,
-) -> tuple[str, str]:
+    selected_chart_key: str | None = None,
+) -> tuple[str, str, str]:
     data_processor = get_data_processor()
     excel_path = getattr(data_processor, "data_path", "")
     if not excel_path:
-        return "", ""
-    df = _load_overview_insights_sheet(excel_path)
+        return "", "", ""
+    df = _load_overview_charts_sheet(excel_path)
     if df.empty:
-        return "", ""
+        return "", "", ""
 
-    chart_rows = df[df["scope_type"] == "chart_comment"].copy()
+    title_norm = _normalize_overview_colname(section_title)
+    chart_key_norm = _normalize_overview_colname(selected_chart_key or "")
+    chart_rows = df[
+        (df["_title_norm"] == title_norm)
+        | ((chart_key_norm != "") & (df["_chart_key_norm"] == chart_key_norm))
+    ].copy()
     if chart_rows.empty:
-        return "", ""
-    key_norm = _normalize_overview_colname(section_title)
-    chart_rows["_scope_norm"] = chart_rows["scope_key"].apply(_normalize_overview_colname)
-    chart_rows = chart_rows[chart_rows["_scope_norm"] == key_norm].copy()
-    if chart_rows.empty:
-        return "", ""
+        return "", "", ""
 
-    company_candidates = []
-    company = _clean_overview_text(selected_company) or "Global"
-    if company:
-        company_candidates.append(company)
-    if "Global" not in company_candidates:
-        company_candidates.append("Global")
-    company_candidates.append("")
-
-    for candidate in company_candidates:
-        subset = chart_rows if candidate == "" else chart_rows[chart_rows["company"] == candidate].copy()
-        if subset.empty:
-            continue
-        scoped, period_label = _pick_rows_for_period(subset, selected_year, selected_quarter)
-        if scoped.empty:
-            continue
-        scoped = scoped.sort_values(["sort_order", "insight_code", "scope_key", "title"])
-        row = scoped.iloc[0]
-        note = _clean_overview_text(row.get("overview_comment")) or _clean_overview_text(row.get("chart_comment"))
-        if note:
-            return note, period_label
-
-    return "", ""
+    scoped, period_label = _pick_rows_for_period(chart_rows, selected_year, selected_quarter)
+    if scoped.empty:
+        return "", "", ""
+    row = scoped.sort_values(["year", "_quarter_num", "chart_key"], ascending=[False, False, True]).iloc[0]
+    pre_comment = _clean_overview_text(row.get("pre_comment"))
+    post_comment = _clean_overview_text(row.get("post_comment"))
+    return pre_comment, post_comment, period_label
 
 
-def render_standard_overview_comment(section_title: str, selected_period=None, period_label: str = "Year") -> None:
-    selected_quarter = st.session_state.get("overview_selected_quarter", "All")
-    selected_company = st.session_state.get("overview_insights_company", "Global")
-    excel_note, excel_period = _lookup_chart_comment_from_overview_sheet(
+def render_standard_overview_comment(
+    section_title: str,
+    selected_period=None,
+    period_label: str = "Year",
+    chart_key: str | None = None,
+) -> None:
+    selected_quarter = st.session_state.get("overview_selected_quarter", "Q4")
+    pre_comment, _, _ = _lookup_chart_comments_from_overview_sheet(
         section_title=section_title,
         selected_year=selected_period if selected_period is not None else None,
         selected_quarter=selected_quarter,
-        selected_company=selected_company,
+        selected_chart_key=chart_key,
     )
+    if pre_comment:
+        st.caption(pre_comment)
 
-    note = excel_note or STANDARD_OVERVIEW_COMMENTS.get(section_title, "")
-    if not note:
-        return
 
-    if excel_period:
-        scope_label = excel_period
-    elif selected_period is None:
-        scope_label = period_label
-    else:
-        scope_label = f"{period_label} {selected_period}"
-    st.caption(f"Overview note ({scope_label}) — {note}")
+def render_standard_overview_post_comment(
+    section_title: str,
+    selected_period=None,
+    chart_key: str | None = None,
+) -> None:
+    selected_quarter = st.session_state.get("overview_selected_quarter", "Q4")
+    _, post_comment, _ = _lookup_chart_comments_from_overview_sheet(
+        section_title=section_title,
+        selected_year=selected_period if selected_period is not None else None,
+        selected_quarter=selected_quarter,
+        selected_chart_key=chart_key,
+    )
+    if post_comment:
+        st.caption(post_comment)
 
 
 # Helper functions
@@ -1462,23 +1362,37 @@ def _latest_subscriber_history(subscriber_df: pd.DataFrame, services: list[str])
     return latest
 
 
-_OVERVIEW_INSIGHT_COLUMN_ALIASES = {
-    "company": ["company", "entity", "brand"],
+_OVERVIEW_MACRO_COLUMN_ALIASES = {
     "year": ["year"],
-    "quarter": ["quarter", "qtr", "quarter_label"],
-    "period": ["period", "period_label"],
-    "scope_type": ["scope_type", "entry_type", "comment_type"],
-    "scope_key": ["scope_key", "section_title", "chart_category", "chart_scope"],
-    "insight_code": ["insight_code", "code", "insight_id", "id", "bullet_no", "num"],
+    "quarter": ["quarter", "qtr"],
+    "m2_value": ["m2_value", "m2", "m2_usd_b"],
+    "global_ad_market": ["global_ad_market", "global_ad_market_size", "total_ad_market"],
+    "duopoly_share": ["duopoly_share", "duopoly_share_pct", "google_meta_share"],
+    "tv_ad_spend": ["tv_ad_spend", "tv_spend"],
+    "internet_ad_spend": ["internet_ad_spend", "internet_spend"],
+    "retail_media": ["retail_media", "retail_media_spend"],
+    "macro_comment": ["macro_comment", "comment", "macro_overview"],
+}
+
+_OVERVIEW_INSIGHTS_COLUMN_ALIASES = {
+    "insight_id": ["insight_id", "id", "insight_code"],
     "sort_order": ["sort_order", "order", "rank"],
     "category": ["category", "cat", "section"],
     "title": ["title", "insight_title"],
-    "stat": ["stat", "metric", "kpi"],
-    "stat_label": ["stat_label", "metric_label", "kpi_label", "statlabel"],
-    "overview_comment": ["overview_comment", "comment", "overview", "insight", "body", "text"],
+    "year": ["year"],
+    "quarter": ["quarter", "qtr"],
+    "comment": ["comment", "overview_comment", "insight", "body", "text"],
     "chart_key": ["chart_key", "chart", "chart_id"],
-    "chart_comment": ["chart_comment", "chart_note", "chart_notes"],
     "is_active": ["is_active", "active", "enabled"],
+}
+
+_OVERVIEW_CHARTS_COLUMN_ALIASES = {
+    "chart_key": ["chart_key", "chart", "chart_id"],
+    "year": ["year"],
+    "quarter": ["quarter", "qtr"],
+    "title": ["title", "section_title", "chart_title"],
+    "pre_comment": ["pre_comment", "comment_before", "comment_above", "overview_comment"],
+    "post_comment": ["post_comment", "comment_after", "comment_below", "chart_comment"],
 }
 
 _OVERVIEW_INSIGHT_CATEGORY_ORDER = [
@@ -1488,6 +1402,7 @@ _OVERVIEW_INSIGHT_CATEGORY_ORDER = [
     "Attention",
     "Streaming",
     "Business Model",
+    "Demographics",
 ]
 
 
@@ -1495,7 +1410,7 @@ def _normalize_overview_colname(name: str) -> str:
     return re.sub(r"[^a-z0-9_]", "_", str(name or "").strip().lower().replace(" ", "_"))
 
 
-def _normalize_overview_period(year_value, quarter_value, period_value) -> str:
+def _normalize_overview_period(year_value, quarter_value, period_value=None) -> str:
     period_str = str(period_value or "").strip().upper()
     if period_str:
         m = re.search(r"(\d{4}).*Q([1-4])", period_str)
@@ -1505,7 +1420,6 @@ def _normalize_overview_period(year_value, quarter_value, period_value) -> str:
         if y:
             return y.group(1)
         return period_str
-
     year_num = pd.to_numeric(year_value, errors="coerce")
     year_int = int(year_num) if pd.notna(year_num) else None
     quarter_num = _parse_quarter_number(quarter_value)
@@ -1520,11 +1434,11 @@ def _period_sort_key(period_label: str) -> tuple[int, str]:
     p = str(period_label or "").strip().upper()
     m = re.search(r"(\d{4})-?Q([1-4])", p)
     if m:
-        return (int(m.group(1)) * 10 + int(m.group(2)), p)
+        return int(m.group(1)) * 10 + int(m.group(2)), p
     y = re.search(r"(\d{4})", p)
     if y:
-        return (int(y.group(1)) * 10, p)
-    return (-1, p)
+        return int(y.group(1)) * 10, p
+    return -1, p
 
 
 def _parse_is_active_flag(value) -> bool:
@@ -1534,115 +1448,218 @@ def _parse_is_active_flag(value) -> bool:
     return s not in {"0", "false", "no", "n", "off"}
 
 
-@st.cache_data(show_spinner=False)
-def _load_overview_insights_sheet(excel_path: str) -> pd.DataFrame:
+def _row_period_rank(year_value, quarter_value, period_value=None) -> int:
+    period = _normalize_overview_period(year_value, quarter_value, period_value)
+    return _period_sort_key(period)[0]
+
+
+def _pick_rows_for_period(df: pd.DataFrame, selected_year: int | None, selected_quarter: str | None) -> tuple[pd.DataFrame, str]:
+    if df is None or df.empty:
+        return pd.DataFrame(), "No data"
+
+    scoped = df.copy()
+    scoped["_year_int"] = pd.to_numeric(scoped.get("year"), errors="coerce")
+    scoped["_quarter_norm"] = scoped.get("quarter", pd.Series(dtype=str)).apply(_normalize_quarter_label)
+    quarter_norm = _normalize_quarter_label(selected_quarter)
+
+    if selected_year is not None:
+        year_exact = scoped[scoped["_year_int"] == int(selected_year)].copy()
+        if quarter_norm:
+            exact = year_exact[year_exact["_quarter_norm"] == quarter_norm].copy()
+            if not exact.empty:
+                return exact, f"{int(selected_year)}-{quarter_norm}"
+            year_fallback = year_exact[year_exact["_quarter_norm"] == ""].copy()
+            if not year_fallback.empty:
+                return year_fallback, f"{int(selected_year)} (yearly)"
+        else:
+            if not year_exact.empty:
+                return year_exact, str(int(selected_year))
+
+    if quarter_norm:
+        quarter_only = scoped[(scoped["_year_int"].isna()) & (scoped["_quarter_norm"] == quarter_norm)].copy()
+        if not quarter_only.empty:
+            return quarter_only, quarter_norm
+
+    defaults = scoped[(scoped["_year_int"].isna()) & (scoped["_quarter_norm"] == "")].copy()
+    if not defaults.empty:
+        return defaults, "Default"
+
+    scoped["_period_rank"] = scoped.apply(
+        lambda row: _row_period_rank(row.get("year"), row.get("quarter"), row.get("period")),
+        axis=1,
+    )
+    top_rank = scoped["_period_rank"].max()
+    latest = scoped[scoped["_period_rank"] == top_rank].copy()
+    if latest.empty:
+        return pd.DataFrame(), "No data"
+    first = latest.iloc[0]
+    latest_label = _normalize_overview_period(first.get("year"), first.get("quarter"), first.get("period")) or "Latest"
+    return latest, latest_label
+
+
+def _read_excel_overview_sheet(excel_path: str, sheet_name: str) -> pd.DataFrame:
     try:
-        raw = pd.read_excel(excel_path, sheet_name="Overview insights")
+        raw = pd.read_excel(excel_path, sheet_name=sheet_name)
     except Exception:
         return pd.DataFrame()
     if raw is None or raw.empty:
         return pd.DataFrame()
-
     raw = raw.copy()
     raw.columns = [str(c).strip() for c in raw.columns]
+    return raw
+
+
+def _rename_overview_columns(raw: pd.DataFrame, aliases: dict[str, list[str]]) -> pd.DataFrame:
     normalized_lookup = {_normalize_overview_colname(c): c for c in raw.columns}
     rename_map = {}
-    for canonical, aliases in _OVERVIEW_INSIGHT_COLUMN_ALIASES.items():
-        for alias in aliases:
+    for canonical, names in aliases.items():
+        for alias in names:
             key = _normalize_overview_colname(alias)
             if key in normalized_lookup:
                 rename_map[normalized_lookup[key]] = canonical
                 break
-    df = raw.rename(columns=rename_map).copy()
+    return raw.rename(columns=rename_map).copy()
 
-    required = ["company", "category", "overview_comment"]
+
+@st.cache_data(show_spinner=False)
+def _load_overview_macro_sheet(excel_path: str) -> pd.DataFrame:
+    raw = _read_excel_overview_sheet(excel_path, "Overview_Macro")
+    if raw.empty:
+        return pd.DataFrame()
+    df = _rename_overview_columns(raw, _OVERVIEW_MACRO_COLUMN_ALIASES)
+
+    required = ["year", "quarter", "m2_value", "global_ad_market", "duopoly_share", "tv_ad_spend", "internet_ad_spend", "retail_media", "macro_comment"]
+    for col in required:
+        if col not in df.columns:
+            df[col] = np.nan if col not in {"quarter", "macro_comment"} else ""
+
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    df = df.dropna(subset=["year"]).copy()
+    if df.empty:
+        return pd.DataFrame()
+    df["year"] = df["year"].astype(int)
+    df["quarter"] = df["quarter"].apply(_normalize_quarter_label).replace("", "Q4")
+    for col in ["m2_value", "global_ad_market", "duopoly_share", "tv_ad_spend", "internet_ad_spend", "retail_media"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df["macro_comment"] = df["macro_comment"].apply(_clean_overview_text)
+    return df
+
+
+@st.cache_data(show_spinner=False)
+def _load_overview_insights_sheet(excel_path: str) -> pd.DataFrame:
+    raw = _read_excel_overview_sheet(excel_path, "Overview_Insights")
+    if raw.empty:
+        return pd.DataFrame()
+    df = _rename_overview_columns(raw, _OVERVIEW_INSIGHTS_COLUMN_ALIASES)
+
+    required = ["insight_id", "sort_order", "category", "title", "year", "quarter", "comment", "chart_key", "is_active"]
     for col in required:
         if col not in df.columns:
             df[col] = ""
 
-    if "insight_code" not in df.columns:
-        df["insight_code"] = np.arange(1, len(df) + 1)
-    if "sort_order" not in df.columns:
-        df["sort_order"] = pd.to_numeric(df["insight_code"], errors="coerce")
-    if "is_active" not in df.columns:
-        df["is_active"] = True
-    if "scope_type" not in df.columns:
-        df["scope_type"] = "overview_bullet"
-    if "scope_key" not in df.columns:
-        df["scope_key"] = ""
-    if "year" not in df.columns:
-        df["year"] = np.nan
-    if "quarter" not in df.columns:
-        df["quarter"] = ""
-    if "period" not in df.columns:
-        df["period"] = ""
-    if "stat" not in df.columns:
-        df["stat"] = ""
-    if "stat_label" not in df.columns:
-        df["stat_label"] = ""
-    if "chart_key" not in df.columns:
-        df["chart_key"] = ""
-    if "chart_comment" not in df.columns:
-        df["chart_comment"] = ""
-    if "title" not in df.columns:
-        df["title"] = ""
-
-    df["company"] = df["company"].apply(_clean_overview_text).replace("", "Global")
-    df.loc[df["company"] == "", "company"] = "Global"
-    df["category"] = df["category"].apply(_clean_overview_text).replace("", "General")
-    df.loc[df["category"] == "", "category"] = "General"
-    df["scope_type"] = df["scope_type"].apply(_clean_overview_text).str.lower().replace("", "overview_bullet")
-    df["scope_key"] = df["scope_key"].apply(_clean_overview_text)
-    df["title"] = df["title"].apply(_clean_overview_text)
-    df["overview_comment"] = df["overview_comment"].apply(_clean_overview_text)
-    df["stat"] = df["stat"].apply(_clean_overview_text)
-    df["stat_label"] = df["stat_label"].apply(_clean_overview_text)
-    df["chart_key"] = df["chart_key"].apply(_clean_overview_text)
-    df["chart_comment"] = df["chart_comment"].apply(_clean_overview_text)
-    df["quarter"] = df["quarter"].apply(_normalize_quarter_label)
-
-    df = df[df["is_active"].apply(_parse_is_active_flag)].copy()
-    bullet_rows = (df["scope_type"] == "overview_bullet") & (df["title"] != "") & (df["overview_comment"] != "")
-    chart_rows = (df["scope_type"] == "chart_comment") & (df["scope_key"] != "") & (df["overview_comment"] != "")
-    df = df[bullet_rows | chart_rows].copy()
-    if df.empty:
-        return pd.DataFrame()
-
-    df["period"] = df.apply(
-        lambda row: _normalize_overview_period(row.get("year"), row.get("quarter"), row.get("period")),
-        axis=1,
-    )
-    df["insight_code"] = df["insight_code"].astype(str).str.strip()
+    df["insight_id"] = df["insight_id"].astype(str).str.strip()
     df["sort_order"] = pd.to_numeric(df["sort_order"], errors="coerce")
     missing_sort = df["sort_order"].isna()
     if missing_sort.any():
-        extracted = pd.to_numeric(df.loc[missing_sort, "insight_code"].str.extract(r"(\d+)", expand=False), errors="coerce")
-        df.loc[missing_sort, "sort_order"] = extracted
+        df.loc[missing_sort, "sort_order"] = pd.to_numeric(
+            df.loc[missing_sort, "insight_id"].str.extract(r"(\d+)", expand=False),
+            errors="coerce",
+        )
     df["sort_order"] = df["sort_order"].fillna(9_999).astype(int)
+    df["category"] = df["category"].apply(_clean_overview_text).replace("", "General")
+    df["title"] = df["title"].apply(_clean_overview_text)
+    df["comment"] = df["comment"].apply(_clean_overview_text)
+    df["chart_key"] = df["chart_key"].apply(_clean_overview_text)
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    df["quarter"] = df["quarter"].apply(_normalize_quarter_label)
+    df = df[df["is_active"].apply(_parse_is_active_flag)].copy()
+    df = df.dropna(subset=["year"]).copy()
+    if df.empty:
+        return pd.DataFrame()
+    df["year"] = df["year"].astype(int)
+    df = df[(df["title"] != "") & (df["comment"] != "")].copy()
+    return df.sort_values(["year", "quarter", "sort_order", "insight_id"]).reset_index(drop=True)
+
+
+@st.cache_data(show_spinner=False)
+def _load_overview_charts_sheet(excel_path: str) -> pd.DataFrame:
+    raw = _read_excel_overview_sheet(excel_path, "Overview_Charts")
+    if raw.empty:
+        return pd.DataFrame()
+    df = _rename_overview_columns(raw, _OVERVIEW_CHARTS_COLUMN_ALIASES)
+
+    required = ["chart_key", "year", "quarter", "title", "pre_comment", "post_comment"]
+    for col in required:
+        if col not in df.columns:
+            df[col] = ""
+
+    df["chart_key"] = df["chart_key"].apply(_clean_overview_text)
+    df["title"] = df["title"].apply(_clean_overview_text)
+    df["pre_comment"] = df["pre_comment"].apply(_clean_overview_text)
+    df["post_comment"] = df["post_comment"].apply(_clean_overview_text)
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    df = df.dropna(subset=["year"]).copy()
+    if df.empty:
+        return pd.DataFrame()
+    df["year"] = df["year"].astype(int)
+    df["quarter"] = df["quarter"].apply(_normalize_quarter_label)
+    df["_quarter_num"] = df["quarter"].apply(_parse_quarter_number).fillna(0).astype(int)
+    df["_title_norm"] = df["title"].apply(_normalize_overview_colname)
+    df["_chart_key_norm"] = df["chart_key"].apply(_normalize_overview_colname)
     return df
 
 
-def _available_overview_quarters_for_year(data_processor: FinancialDataProcessor, selected_year: int | None) -> list[str]:
+def _format_macro_metric(value, suffix: str = "") -> str:
+    try:
+        if value is None or pd.isna(value):
+            return "N/A"
+        number = float(value)
+        if suffix == "%":
+            return f"{number:,.1f}%"
+        if suffix == "B":
+            return f"${number:,.1f}B"
+        return f"{number:,.1f}"
+    except Exception:
+        return "N/A"
+
+
+def _render_excel_macro_section(
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    selected_quarter: str,
+) -> bool:
     excel_path = getattr(data_processor, "data_path", "")
     if not excel_path:
-        return ["Q1", "Q2", "Q3", "Q4"]
-    df = _load_overview_insights_sheet(excel_path)
-    if df.empty:
-        return ["Q1", "Q2", "Q3", "Q4"]
-    bullets = df[df["scope_type"] == "overview_bullet"].copy()
-    if bullets.empty:
-        return ["Q1", "Q2", "Q3", "Q4"]
-    bullets["_year_int"] = pd.to_numeric(bullets["year"], errors="coerce")
-    if selected_year is not None:
-        bullets = bullets[bullets["_year_int"] == int(selected_year)].copy()
-    quarters = sorted(
-        {
-            _normalize_quarter_label(q)
-            for q in bullets.get("quarter", pd.Series(dtype=str))
-            if _normalize_quarter_label(q)
-        }
-    )
-    return quarters or ["Q1", "Q2", "Q3", "Q4"]
+        return False
+    macro_df = _load_overview_macro_sheet(excel_path)
+    if macro_df.empty:
+        return False
+
+    scoped_df, selected_period = _pick_rows_for_period(macro_df, selected_year, selected_quarter)
+    if scoped_df.empty:
+        return False
+    row = scoped_df.sort_values(["year", "quarter"], ascending=[False, False]).iloc[0]
+
+    st.markdown("### Macro KPI Bar")
+    st.caption(f"Source: `Overview_Macro` · Period: {selected_period}")
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1:
+        st.metric("M2", _format_macro_metric(row.get("m2_value"), "B"))
+    with c2:
+        st.metric("Global Ad Market", _format_macro_metric(row.get("global_ad_market"), "B"))
+    with c3:
+        st.metric("Duopoly Share", _format_macro_metric(row.get("duopoly_share"), "%"))
+    with c4:
+        st.metric("TV Ad Spend", _format_macro_metric(row.get("tv_ad_spend"), "B"))
+    with c5:
+        st.metric("Internet Ad Spend", _format_macro_metric(row.get("internet_ad_spend"), "B"))
+    with c6:
+        st.metric("Retail Media", _format_macro_metric(row.get("retail_media"), "B"))
+
+    macro_comment = _clean_overview_text(row.get("macro_comment"))
+    if macro_comment:
+        st.markdown(macro_comment)
+    return True
 
 
 def _render_excel_overview_insights(
@@ -1653,47 +1670,17 @@ def _render_excel_overview_insights(
     excel_path = getattr(data_processor, "data_path", "")
     if not excel_path:
         return False
-
-    overview_df = _load_overview_insights_sheet(excel_path)
-    if overview_df.empty:
+    insights_df = _load_overview_insights_sheet(excel_path)
+    if insights_df.empty:
         return False
 
-    overview_df = overview_df[overview_df["scope_type"] == "overview_bullet"].copy()
-    if overview_df.empty:
-        return False
-
-    company_options = sorted(overview_df["company"].dropna().astype(str).unique().tolist())
-    if not company_options:
-        return False
-    if "Global" in company_options:
-        company_options = ["Global"] + [c for c in company_options if c != "Global"]
-
-    default_company = "Global" if "Global" in company_options else company_options[0]
-    selected_company = st.selectbox(
-        "Overview comments company",
-        options=company_options,
-        index=company_options.index(default_company),
-        key="overview_insights_company",
-        help="Rows are read from the `Overview insights` sheet. Use `Global` for baseline comments and add per-company overrides only when needed.",
-    )
-
-    company_df = overview_df[overview_df["company"] == selected_company].copy()
-    if company_df.empty:
-        company_df = overview_df[overview_df["company"] == "Global"].copy()
-        selected_company = "Global"
-
-    scoped_df, selected_period = _pick_rows_for_period(company_df, selected_year, selected_quarter)
-    if scoped_df.empty and selected_company != "Global":
-        fallback_global = overview_df[overview_df["company"] == "Global"].copy()
-        scoped_df, selected_period = _pick_rows_for_period(fallback_global, selected_year, selected_quarter)
-        selected_company = "Global"
+    scoped_df, selected_period = _pick_rows_for_period(insights_df, selected_year, selected_quarter)
     if scoped_df.empty:
         return False
+    scoped_df = scoped_df.sort_values(["sort_order", "insight_id", "title"]).copy()
 
-    scoped_df = scoped_df.sort_values(["sort_order", "insight_code", "title"])
-    st.caption(
-        f"Source: `Overview insights` sheet · Company: {selected_company} · Period: {selected_period} · {len(scoped_df)} bullet points"
-    )
+    st.markdown("### Insights by Category")
+    st.caption(f"Source: `Overview_Insights` · Period: {selected_period} · {len(scoped_df)} insights")
 
     categories_present = scoped_df["category"].dropna().astype(str).str.strip().unique().tolist()
     ordered_categories = [
@@ -1706,31 +1693,29 @@ def _render_excel_overview_insights(
             continue
         st.markdown(f"#### {category}")
         for _, row in cat_df.iterrows():
-            code = _clean_overview_text(row.get("insight_code")) or "—"
+            insight_id = _clean_overview_text(row.get("insight_id")) or "—"
             title = _clean_overview_text(row.get("title"))
-            comment = _clean_overview_text(row.get("overview_comment"))
-            stat = _clean_overview_text(row.get("stat"))
-            stat_label = _clean_overview_text(row.get("stat_label"))
+            comment = _clean_overview_text(row.get("comment"))
             chart_key = _clean_overview_text(row.get("chart_key"))
-            chart_comment = _clean_overview_text(row.get("chart_comment"))
-
-            st.markdown(f"- **{code} — {title}**")
-            meta_parts = []
-            if stat and stat_label:
-                meta_parts.append(f"{stat} · {stat_label}")
-            elif stat:
-                meta_parts.append(stat)
-            elif stat_label:
-                meta_parts.append(stat_label)
+            st.markdown(f"- **{insight_id} — {title}**")
             if chart_key:
-                meta_parts.append(f"Chart: {chart_key}")
-            if chart_comment:
-                meta_parts.append(f"Chart note: {chart_comment}")
-            if meta_parts:
-                st.caption(" | ".join(meta_parts))
+                st.caption(f"Chart: {chart_key}")
             st.markdown(comment)
-
     return True
+
+
+def _render_excel_overview_layers(
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    selected_quarter: str,
+) -> None:
+    st.markdown("---")
+    macro_rendered = _render_excel_macro_section(data_processor, selected_year, selected_quarter)
+    if not macro_rendered:
+        st.info("No `Overview_Macro` row found for the selected period.")
+    insights_rendered = _render_excel_overview_insights(data_processor, selected_year, selected_quarter)
+    if not insights_rendered:
+        st.info("No active `Overview_Insights` rows found for the selected period.")
 
 
 def _render_quarterly_intelligence_briefing(
@@ -2435,11 +2420,10 @@ with year_col:
         index=len(available_years)-1  # Default to most recent year
     )
 with quarter_col:
-    quarter_options = _available_overview_quarters_for_year(data_processor, selected_year)
     selected_quarter = st.selectbox(
         "Select Quarter",
-        ["All"] + quarter_options,
-        index=0,
+        ["Q1", "Q2", "Q3", "Q4"],
+        index=3,
         key="overview_selected_quarter",
         help="Used by Excel-backed overview comments (quarterly/yearly).",
     )
@@ -3348,7 +3332,7 @@ else:
 
 
 end_snap_section()
-_render_quarterly_intelligence_briefing(data_processor, selected_year, selected_quarter, plotly_config)
+_render_excel_overview_layers(data_processor, selected_year, selected_quarter)
 
 # Calculate summary metrics
 market_cap_data = []
@@ -4009,6 +3993,7 @@ if market_cap_data and nasdaq_market_cap:
         uniformtext=dict(minsize=8, mode="hide"),
     )
     st.plotly_chart(pie_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Market Cap Share vs Nasdaq", selected_year)
 else:
     st.info("Nasdaq market cap data is not available for the selected year.")
 
@@ -4102,6 +4087,7 @@ if market_cap_data:
         uniformtext=dict(minsize=10, mode="hide"),
     )
     st.plotly_chart(treemap_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Market Cap Treemap", selected_year)
 else:
     st.info("Market cap data is not available for the selected year.")
 
@@ -4262,6 +4248,7 @@ if ad_stack_rows:
         title_font=dict(color=label_color),
     )
     st.plotly_chart(ad_bar_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Advertising Revenue vs Total Revenue", selected_year)
 else:
     st.info("Advertising revenue data is not available for the selected year.")
 
@@ -4359,6 +4346,7 @@ if market_cap_data:
     
     # Display the chart
     st.plotly_chart(market_cap_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Market Capitalization", selected_year)
 else:
     st.info(f"No market cap data available for {selected_year}")
 
@@ -4458,6 +4446,7 @@ if revenue_data:
     
     # Display the chart
     st.plotly_chart(revenue_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Revenue", selected_year)
 else:
     st.info(f"No revenue data available for {selected_year}")
 
@@ -4557,6 +4546,7 @@ if net_income_data:
     
     # Display the chart
     st.plotly_chart(net_income_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Net Income", selected_year)
 else:
     st.info(f"No net income data available for {selected_year}")
 
@@ -4658,6 +4648,7 @@ if assets_data:
     
     # Display the chart
     st.plotly_chart(assets_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Total Assets", selected_year)
 else:
     st.info(f"No total assets data available for {selected_year}")
 
@@ -4757,6 +4748,7 @@ if cash_balance_data:
     
     # Display the chart
     st.plotly_chart(cash_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Cash Balance", selected_year)
 else:
     st.info(f"No cash balance data available for {selected_year}")
 
@@ -4856,6 +4848,7 @@ if rd_data:
     
     # Display the chart
     st.plotly_chart(rd_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("R&D Spending", selected_year)
 else:
     st.info(f"No R&D spending data available for {selected_year}")
 
@@ -4963,6 +4956,7 @@ if employee_data:
     
     # Display the chart
     st.plotly_chart(employee_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Employee Count", selected_year)
 else:
     st.info(f"No employee count data available for {selected_year}")
 
@@ -5062,6 +5056,7 @@ if debt_data:
     
     # Display the chart
     st.plotly_chart(debt_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Long-Term Debt", selected_year)
 else:
     st.info(f"No debt data available for {selected_year}")
 
@@ -5161,6 +5156,7 @@ if operating_income_data:
     
     # Display the chart
     st.plotly_chart(operating_income_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Operating Income", selected_year)
 else:
     st.info(f"No operating income data available for {selected_year}")
 
@@ -5260,6 +5256,7 @@ if cost_of_revenue_data:
     
     # Display the chart
     st.plotly_chart(cost_of_revenue_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Cost of Revenue", selected_year)
 else:
     st.info(f"No cost of revenue data available for {selected_year}")
 
@@ -5359,6 +5356,7 @@ if capex_data:
     
     # Display the chart
     st.plotly_chart(capex_fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Capital Expenditure (Capex)", selected_year)
 else:
     st.info(f"No capex data available for {selected_year}")
 
