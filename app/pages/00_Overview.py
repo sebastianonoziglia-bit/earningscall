@@ -1757,26 +1757,78 @@ def _load_m2_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
 
     out = df.copy()
     out.columns = [str(c).strip() for c in out.columns]
-    if "USD observation_date" not in out.columns:
-        return pd.DataFrame()
-    value_col = "WM2NS" if "WM2NS" in out.columns else ("WM2" if "WM2" in out.columns else None)
+
+    value_col = _find_column_by_alias(out, ["WM2NS", "WM2", "M2", "M2 Value", "M2_values"])
     if not value_col:
         return pd.DataFrame()
 
-    out["USD observation_date"] = pd.to_datetime(out["USD observation_date"], errors="coerce")
+    date_col = _find_column_by_alias(
+        out,
+        [
+            "USD observation_date",
+            "observation_date",
+            "observation",
+            "date",
+            "period",
+        ],
+    )
+    year_col = _find_column_by_alias(out, ["Year", "year"])
+    quarter_col = _find_column_by_alias(out, ["Quarter", "quarter", "Qtr", "qtr"])
+
+    # Google-sheet XLSX exports can occasionally mutate header text;
+    # detect a date-like column from values when the header lookup fails.
+    if not date_col:
+        min_valid = max(3, int(len(out) * 0.4))
+        for col in out.columns:
+            if col == value_col:
+                continue
+            series = out[col]
+            if pd.api.types.is_datetime64_any_dtype(series):
+                date_col = col
+                break
+            parsed = pd.to_datetime(series, errors="coerce")
+            if parsed.notna().sum() >= min_valid:
+                out[col] = parsed
+                date_col = col
+                break
+
     out["M2"] = pd.to_numeric(out[value_col], errors="coerce")
-    out = out.dropna(subset=["USD observation_date", "M2"]).copy()
+
+    if date_col:
+        out["_date"] = pd.to_datetime(out[date_col], errors="coerce")
+        out["Year"] = out["_date"].dt.year
+        out["QuarterNum"] = out["_date"].dt.quarter
+    elif year_col:
+        out["Year"] = pd.to_numeric(out[year_col], errors="coerce")
+        out["QuarterNum"] = out[quarter_col].apply(_parse_quarter_number) if quarter_col else 4
+    else:
+        return pd.DataFrame()
+
+    out["QuarterNum"] = pd.to_numeric(out["QuarterNum"], errors="coerce").fillna(4).clip(lower=1, upper=4)
+    out = out.dropna(subset=["Year", "M2"]).copy()
     if out.empty:
         return pd.DataFrame()
-    out["Year"] = out["USD observation_date"].dt.year.astype(int)
-    out = (
-        out.sort_values(["Year", "USD observation_date"])
+
+    out["Year"] = out["Year"].astype(int)
+    out["QuarterNum"] = out["QuarterNum"].astype(int)
+    sort_cols = ["Year", "QuarterNum"]
+    if "_date" in out.columns:
+        sort_cols.append("_date")
+
+    quarterly = (
+        out.sort_values(sort_cols)
+        .groupby(["Year", "QuarterNum"], as_index=False)
+        .tail(1)
+        .copy()
+    )
+    yearly = (
+        quarterly.sort_values(["Year", "QuarterNum"])
         .groupby("Year", as_index=False)
         .tail(1)
         .copy()
     )
-    out["M2_B"] = out["M2"]
-    return out[["Year", "M2_B"]].sort_values("Year").reset_index(drop=True)
+    yearly["M2_B"] = yearly["M2"]
+    return yearly[["Year", "M2_B"]].sort_values("Year").reset_index(drop=True)
 
 
 @st.cache_data(ttl=3600)
@@ -1795,17 +1847,38 @@ def _load_inflation_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.Data
 
     out = df.copy()
     out.columns = [str(c).strip() for c in out.columns]
-    year_col = "Year" if "Year" in out.columns else ("year" if "year" in out.columns else None)
-    infl_col = "Official Headline CPI" if "Official Headline CPI" in out.columns else None
-    if not year_col or not infl_col:
+
+    year_col = _find_column_by_alias(out, ["Year", "year"])
+    date_col = _find_column_by_alias(out, ["date", "period", "observation_date", "observation"])
+    infl_col = _find_column_by_alias(
+        out,
+        [
+            "Official Headline CPI",
+            "official_headline_cpi",
+            "Inflation",
+            "Inflation YoY",
+            "CPI YoY",
+        ],
+    )
+
+    if not infl_col:
         return pd.DataFrame()
 
-    out["Year"] = pd.to_numeric(out[year_col], errors="coerce")
+    if year_col:
+        out["Year"] = pd.to_numeric(out[year_col], errors="coerce")
+    elif date_col:
+        out["Year"] = pd.to_datetime(out[date_col], errors="coerce").dt.year
+    else:
+        return pd.DataFrame()
+
     out["Inflation_YoY"] = _coerce_percent_series(out[infl_col])
     out = out.dropna(subset=["Year", "Inflation_YoY"]).copy()
     if out.empty:
         return pd.DataFrame()
     out["Year"] = out["Year"].astype(int)
+
+    # If monthly/quarterly rows are present, aggregate to annual for bridge charts.
+    out = out.groupby("Year", as_index=False)["Inflation_YoY"].mean()
     return out[["Year", "Inflation_YoY"]].sort_values("Year").reset_index(drop=True)
 
 
@@ -3353,9 +3426,9 @@ def _render_macro_expansion_sections(
         if not structural_started:
             st.markdown("### Demographics & Attention Shift")
             structural_started = True
-        title = "Daily Internet Time Spent by Country"
+        title = "Daily Internet Time Spent by Country on Internet"
         st.markdown(f"#### {title}")
-        top = internet_time_df.head(20).copy().sort_values("DailyInternetHours", ascending=True)
+        top = internet_time_df.copy().sort_values("DailyInternetHours", ascending=True)
         fig = px.bar(
             top,
             x="DailyInternetHours",
@@ -3366,7 +3439,7 @@ def _render_macro_expansion_sections(
             color_continuous_scale="Blues",
         )
         fig.update_layout(
-            height=max(340, min(760, 28 * len(top))),
+            height=max(420, min(2600, 24 * len(top))),
             margin=_overview_chart_margin(left=30, right=20, top=24),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
@@ -3563,8 +3636,8 @@ def _overview_legend_style() -> dict:
     dark_mode = get_theme_mode() == "dark"
     return dict(
         orientation="h",
-        yanchor="bottom",
-        y=1.12,
+        yanchor="top",
+        y=-0.22,
         x=0.0,
         xanchor="left",
         bgcolor="rgba(15,23,42,0.40)" if dark_mode else "rgba(248,250,252,0.92)",
@@ -3574,7 +3647,7 @@ def _overview_legend_style() -> dict:
     )
 
 
-def _overview_chart_margin(left: int = 30, right: int = 20, bottom: int = 20, top: int = 94) -> dict:
+def _overview_chart_margin(left: int = 30, right: int = 20, bottom: int = 88, top: int = 94) -> dict:
     return dict(l=left, r=right, t=top, b=bottom)
 
 
@@ -6629,13 +6702,18 @@ for company in companies:
         ad_value = float(ad_value)
     except (TypeError, ValueError):
         continue
+    if not np.isfinite(total_revenue) or not np.isfinite(ad_value):
+        continue
     if total_revenue <= 0:
         continue
     # Metrics revenue is stored as USD millions; advertising revenue sheet is USD billions.
     total_revenue_b = total_revenue / 1000.0
     if total_revenue_b <= 0:
         continue
+    ad_value = max(ad_value, 0.0)
     ad_pct = (ad_value / total_revenue_b) * 100.0 if total_revenue_b else 0.0
+    if not np.isfinite(ad_pct):
+        continue
     ad_stack_rows.append(
         {
             "Company": company,

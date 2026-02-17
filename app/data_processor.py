@@ -704,6 +704,9 @@ class FinancialDataProcessor:
                 row = self.df_ad_revenue[year_series == year]
                 if not row.empty:
                     value = self._to_number(pd.Series([row.iloc[0][column]])).iloc[0]
+                    if pd.isna(value) or not np.isfinite(float(value)):
+                        self._ad_revenue_cache[cache_key] = None
+                        return None
                     ad_data = {
                         'value': value,
                         'is_estimate': False,

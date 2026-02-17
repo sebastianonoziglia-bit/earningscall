@@ -47,7 +47,25 @@ def _load_m2_from_excel_cached(path: str, source_stamp: int) -> pd.DataFrame:
     lowered = {str(c).strip().lower(): c for c in df.columns}
     date_col = lowered.get("usd observation_date") or lowered.get("observation_date") or lowered.get("date")
     value_col = lowered.get("wm2ns") or lowered.get("m2") or lowered.get("value")
-    if not date_col or not value_col:
+    if not value_col:
+        return pd.DataFrame()
+
+    # Some Google-exported workbook versions can mangle the date header text.
+    if not date_col:
+        min_valid = max(3, int(len(df) * 0.4))
+        for col in df.columns:
+            if col == value_col:
+                continue
+            series = df[col]
+            if pd.api.types.is_datetime64_any_dtype(series):
+                date_col = col
+                break
+            parsed = pd.to_datetime(series, errors="coerce")
+            if parsed.notna().sum() >= min_valid:
+                df[col] = parsed
+                date_col = col
+                break
+    if not date_col:
         return pd.DataFrame()
 
     out = df[[date_col, value_col]].copy().rename(columns={date_col: "date", value_col: "value"})
@@ -56,6 +74,8 @@ def _load_m2_from_excel_cached(path: str, source_stamp: int) -> pd.DataFrame:
     out = out.dropna(subset=["date", "value"]).sort_values("date").reset_index(drop=True)
     out["year"] = out["date"].dt.year.astype(int)
     out["month"] = out["date"].dt.month.astype(int)
+    out["quarter"] = out["date"].dt.quarter.astype(int)
+    out["quarter_label"] = out["quarter"].map(lambda q: f"Q{int(q)}")
     out["monthly_growth"] = out["value"].pct_change() * 100.0
     return out
 
@@ -232,6 +252,70 @@ def get_m2_annual_data(start_year=1999, end_year=None):
     
     except Exception as e:
         logger.error(f"Error retrieving M2 annual data: {e}")
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600)
+def get_m2_quarterly_data(start_year=1999, end_year=None):
+    """
+    Get quarter-end M2 series between the specified years.
+
+    Returns:
+        DataFrame with columns:
+        - year
+        - quarter
+        - quarter_label
+        - date (quarter-end observation date)
+        - value
+        - quarterly_growth
+    """
+    if end_year is None:
+        end_year = datetime.now().year
+
+    # Prefer Excel-backed monthly series, then fold to quarter-end values.
+    try:
+        excel_df = _load_m2_from_excel()
+        if excel_df is not None and not excel_df.empty:
+            sub = excel_df[(excel_df["year"] >= int(start_year)) & (excel_df["year"] <= int(end_year))].copy()
+            if sub.empty:
+                return pd.DataFrame()
+            quarterly = (
+                sub.sort_values("date")
+                .groupby(["year", "quarter"], as_index=False)
+                .tail(1)
+                .sort_values("date")
+                .reset_index(drop=True)
+            )
+            quarterly["quarter_label"] = quarterly["quarter"].map(lambda q: f"Q{int(q)}")
+            quarterly["quarterly_growth"] = quarterly["value"].pct_change() * 100.0
+            return quarterly[["year", "quarter", "quarter_label", "date", "value", "quarterly_growth"]]
+    except Exception:
+        pass
+
+    # Fallback: derive quarterly endpoints from DB monthly data.
+    try:
+        monthly = get_m2_monthly_data(start_year=start_year, end_year=end_year)
+        if monthly is None or monthly.empty or "date" not in monthly.columns:
+            return pd.DataFrame()
+        work = monthly.copy()
+        work["date"] = pd.to_datetime(work["date"], errors="coerce")
+        work = work.dropna(subset=["date", "value"])
+        if work.empty:
+            return pd.DataFrame()
+        work["year"] = work["date"].dt.year.astype(int)
+        work["quarter"] = work["date"].dt.quarter.astype(int)
+        quarterly = (
+            work.sort_values("date")
+            .groupby(["year", "quarter"], as_index=False)
+            .tail(1)
+            .sort_values("date")
+            .reset_index(drop=True)
+        )
+        quarterly["quarter_label"] = quarterly["quarter"].map(lambda q: f"Q{int(q)}")
+        quarterly["quarterly_growth"] = quarterly["value"].pct_change() * 100.0
+        return quarterly[["year", "quarter", "quarter_label", "date", "value", "quarterly_growth"]]
+    except Exception as e:
+        logger.error(f"Error retrieving M2 quarterly data: {e}")
         return pd.DataFrame()
 
 def create_m2_visualization(show_growth_rate=False, time_period="annual"):
