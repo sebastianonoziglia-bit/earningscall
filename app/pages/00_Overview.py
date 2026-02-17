@@ -667,8 +667,9 @@ def _fmt_compact(value: float) -> str:
     return f"{v:.0f}"
 
 def begin_snap_section(section_id: str) -> None:
+    safe_id = re.sub(r"[^a-zA-Z0-9_-]+", "-", str(section_id or "").strip()).strip("-") or "section"
     st.markdown(
-        f"<section class='ov-snap-section' data-ov-section='{section_id}'>",
+        f"<section id='ov-{safe_id}' class='ov-snap-section' data-ov-section='{safe_id}'>",
         unsafe_allow_html=True,
     )
 
@@ -2065,7 +2066,9 @@ def _load_company_metrics_yearly_df(excel_path: str, source_stamp: int = 0) -> p
         "Net Income": "NetIncome",
         "Cost Of Revenue": "CostOfRevenue",
         "Total Assets": "TotalAssets",
+        "R&D": "RD",
         "Capex": "Capex",
+        "Cash Balance": "CashBalance",
     }
     for src, dst in col_map.items():
         if src not in out.columns:
@@ -2074,7 +2077,18 @@ def _load_company_metrics_yearly_df(excel_path: str, source_stamp: int = 0) -> p
 
     out["Company"] = out["Company"].astype(str).str.strip()
     out["Year"] = pd.to_numeric(out["Year"], errors="coerce")
-    for col in ["Revenue", "Debt", "MarketCap", "OperatingIncome", "NetIncome", "CostOfRevenue", "TotalAssets", "Capex"]:
+    for col in [
+        "Revenue",
+        "Debt",
+        "MarketCap",
+        "OperatingIncome",
+        "NetIncome",
+        "CostOfRevenue",
+        "TotalAssets",
+        "RD",
+        "Capex",
+        "CashBalance",
+    ]:
         out[col] = pd.to_numeric(out[col], errors="coerce")
     out = out.dropna(subset=["Company", "Year"]).copy()
     if out.empty:
@@ -2604,6 +2618,7 @@ def _load_macro_wealth_by_generation_df(excel_path: str, source_stamp: int = 0) 
     generation_col = _find_column_by_alias(out, ["generation_label", "generation", "age_group"])
     share_col = _find_column_by_alias(out, ["wealth_share_pct", "wealth_share", "share_pct"])
     total_col = _find_column_by_alias(out, ["total_wealth_billion_usd", "total_wealth", "wealth_billion"])
+    people_col = _find_column_by_alias(out, ["number_of_people_m", "people_m", "population_m", "population"])
     if not country_col or not year_col or not generation_col:
         return pd.DataFrame()
     out = out.rename(
@@ -2624,11 +2639,17 @@ def _load_macro_wealth_by_generation_df(excel_path: str, source_stamp: int = 0) 
         out["TotalWealthBUSD"] = pd.to_numeric(out[total_col], errors="coerce")
     else:
         out["TotalWealthBUSD"] = np.nan
+    if people_col:
+        out["PeopleM"] = pd.to_numeric(out[people_col], errors="coerce")
+    else:
+        out["PeopleM"] = np.nan
     out = out.dropna(subset=["Country", "Year", "Generation"]).copy()
     if out.empty:
         return pd.DataFrame()
     out["Year"] = out["Year"].astype(int)
-    return out[["Country", "Year", "Generation", "WealthSharePct", "TotalWealthBUSD"]].sort_values(["Year", "Country", "Generation"])
+    return out[
+        ["Country", "Year", "Generation", "WealthSharePct", "TotalWealthBUSD", "PeopleM"]
+    ].sort_values(["Year", "Country", "Generation"])
 
 
 @st.cache_data(ttl=3600)
@@ -2645,23 +2666,48 @@ def _load_hardware_smartphone_shipments_df(excel_path: str, source_stamp: int = 
     out = raw.copy()
     out.columns = [str(c).strip() for c in out.columns]
     year_col = _find_column_by_alias(out, ["year"])
-    apple_col = _find_column_by_alias(out, ["apple_iphone_units_m", "apple_iphone_units", "iphone_units"])
     total_col = _find_column_by_alias(out, ["total_global_units_m", "total_global_units", "total_units"])
-    if not year_col or not apple_col or not total_col:
+    if not year_col or not total_col:
         return pd.DataFrame()
-    out = out.rename(columns={year_col: "Year", apple_col: "Apple_iPhone_Units_M", total_col: "Total_Global_Units_M"})
+    out = out.rename(columns={year_col: "Year", total_col: "Total_Global_Units_M"})
+    # Keep all manufacturer unit columns to build market-share and comparison charts.
+    unit_cols = [
+        col for col in out.columns
+        if col != "Total_Global_Units_M"
+        and col.lower().endswith("_units_m")
+        and "total_global" not in col.lower()
+    ]
+    apple_col = _find_column_by_alias(
+        out,
+        ["apple_iphone_units_m", "apple_iphone_units", "iphone_units"],
+    )
+    if apple_col and apple_col not in unit_cols:
+        unit_cols.append(apple_col)
     out["Year"] = pd.to_numeric(out["Year"], errors="coerce")
-    out["Apple_iPhone_Units_M"] = pd.to_numeric(out["Apple_iPhone_Units_M"], errors="coerce")
     out["Total_Global_Units_M"] = pd.to_numeric(out["Total_Global_Units_M"], errors="coerce")
-    out = out.dropna(subset=["Year", "Apple_iPhone_Units_M", "Total_Global_Units_M"]).copy()
+    for col in unit_cols:
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+    out = out.dropna(subset=["Year", "Total_Global_Units_M"]).copy()
     if out.empty:
         return pd.DataFrame()
     out = out[out["Total_Global_Units_M"] > 0].copy()
     if out.empty:
         return pd.DataFrame()
     out["Year"] = out["Year"].astype(int)
-    out["AppleSharePct"] = (out["Apple_iPhone_Units_M"] / out["Total_Global_Units_M"]) * 100.0
-    return out[["Year", "Apple_iPhone_Units_M", "Total_Global_Units_M", "AppleSharePct"]].sort_values("Year")
+    if apple_col:
+        out["Apple_iPhone_Units_M"] = pd.to_numeric(out[apple_col], errors="coerce")
+        out["AppleSharePct"] = np.where(
+            out["Total_Global_Units_M"] > 0,
+            (out["Apple_iPhone_Units_M"] / out["Total_Global_Units_M"]) * 100.0,
+            np.nan,
+        )
+    else:
+        out["Apple_iPhone_Units_M"] = np.nan
+        out["AppleSharePct"] = np.nan
+
+    keep_cols = ["Year", "Total_Global_Units_M", "Apple_iPhone_Units_M", "AppleSharePct"] + unit_cols
+    keep_cols = list(dict.fromkeys([col for col in keep_cols if col in out.columns]))
+    return out[keep_cols].sort_values("Year").reset_index(drop=True)
 
 
 def _parse_hours_minutes(value) -> float:
@@ -2711,6 +2757,160 @@ def _load_country_avg_internet_time_df(excel_path: str, source_stamp: int = 0) -
     if out.empty:
         return pd.DataFrame()
     return out[["Country", "DailyInternetHours"]].sort_values("DailyInternetHours", ascending=False)
+
+
+_COMPANY_TO_TICKER = {
+    "Alphabet": "GOOGL",
+    "Amazon": "AMZN",
+    "Apple": "AAPL",
+    "Comcast": "CMCSA",
+    "Disney": "DIS",
+    "Meta Platforms": "META",
+    "Meta": "META",
+    "Microsoft": "MSFT",
+    "Netflix": "NFLX",
+    "Paramount Global": "PARA",
+    "Paramount": "PARA",
+    "Roku": "ROKU",
+    "Spotify": "SPOT",
+    "Warner Bros. Discovery": "WBD",
+    "Warner Bros Discovery": "WBD",
+}
+
+_TICKER_TO_COMPANY = {
+    value: key for key, value in _COMPANY_TO_TICKER.items()
+    if key in {
+        "Alphabet",
+        "Amazon",
+        "Apple",
+        "Comcast",
+        "Disney",
+        "Meta Platforms",
+        "Microsoft",
+        "Netflix",
+        "Paramount Global",
+        "Roku",
+        "Spotify",
+        "Warner Bros. Discovery",
+    }
+}
+
+_STREAMING_SERVICE_TO_COMPANY = {
+    "netflix": "Netflix",
+    "disney+": "Disney",
+    "hulu": "Disney",
+    "espn+": "Disney",
+    "max": "Warner Bros. Discovery",
+    "hbo max": "Warner Bros. Discovery",
+    "paramount+": "Paramount Global",
+    "spotify": "Spotify",
+}
+
+
+@st.cache_data(ttl=3600)
+def _load_company_quarterly_kpis_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name="Company_Quarterly_segments_valu")
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    out = df.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    required_base = {"Ticker", "Year", "Revenue", "Net Income", "Operating Income", "Debt", "Capex", "R&D", "Cash Balance"}
+    for col in required_base:
+        if col not in out.columns:
+            out[col] = np.nan if col != "Ticker" else ""
+    out["Ticker"] = out["Ticker"].astype(str).str.strip().str.upper()
+    out["Year"] = pd.to_numeric(out["Year"], errors="coerce")
+    out = out.dropna(subset=["Ticker", "Year"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["Year"] = out["Year"].astype(int)
+
+    for col in ["Revenue", "Net Income", "Operating Income", "Debt", "Capex", "R&D", "Cash Balance"]:
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+
+    out = out.sort_index().copy()
+    out["QuarterNum"] = out.groupby(["Ticker", "Year"]).cumcount() + 1
+    out = out[out["QuarterNum"].between(1, 4)].copy()
+    out["Quarter"] = "Q" + out["QuarterNum"].astype(int).astype(str)
+    out["Company"] = out["Ticker"].map(_TICKER_TO_COMPANY).fillna(out["Ticker"])
+    return out.sort_values(["Company", "Year", "QuarterNum"]).reset_index(drop=True)
+
+
+@st.cache_data(ttl=3600)
+def _load_company_minute_dollar_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name="Company_minute&dollar_earned")
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    out = df.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    platform_col = _find_column_by_alias(out, ["platform", "service", "company"])
+    minutes_col = _find_column_by_alias(out, ["total_minutes_watched_t", "total_minutes_watched", "minutes"])
+    rev_col = _find_column_by_alias(out, ["revenue_b", "revenue", "revenue_usd_b", "revenue_$b"])
+    rate_col = _find_column_by_alias(out, ["$_per_minute_watched", "dollar_per_minute_watched", "revenue_per_minute"])
+    if not platform_col:
+        return pd.DataFrame()
+    out = out.rename(columns={platform_col: "Platform"})
+    out["Platform"] = out["Platform"].astype(str).str.strip()
+    out["TotalMinutesT"] = pd.to_numeric(out[minutes_col], errors="coerce") if minutes_col else np.nan
+    out["RevenueB"] = pd.to_numeric(out[rev_col], errors="coerce") if rev_col else np.nan
+    out["DollarPerMinute"] = pd.to_numeric(out[rate_col], errors="coerce") if rate_col else np.nan
+    out = out[out["Platform"] != ""].copy()
+    if out.empty:
+        return pd.DataFrame()
+    return out[["Platform", "TotalMinutesT", "RevenueB", "DollarPerMinute"]].sort_values("Platform")
+
+
+@st.cache_data(ttl=3600)
+def _load_company_subscribers_quarterly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name="Company_subscribers_values")
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    out = df.copy()
+    out.columns = [str(c).strip().lower() for c in out.columns]
+    required = {"service", "year", "quarter", "subscribers"}
+    if not required.issubset(set(out.columns)):
+        return pd.DataFrame()
+    out["service"] = out["service"].astype(str).str.strip()
+    out["year"] = pd.to_numeric(out["year"], errors="coerce")
+    out["subscribers"] = pd.to_numeric(out["subscribers"], errors="coerce")
+    out["quarter_num"] = out["quarter"].apply(_parse_quarter_number)
+    out = out.dropna(subset=["service", "year", "quarter_num", "subscribers"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["year"] = out["year"].astype(int)
+    out["quarter_num"] = out["quarter_num"].astype(int)
+    out["company"] = out["service"].str.lower().map(_STREAMING_SERVICE_TO_COMPANY)
+    out = out.dropna(subset=["company"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    return out.sort_values(["company", "year", "quarter_num", "service"]).reset_index(drop=True)
 
 
 def _is_international_region_label(name: str) -> bool:
@@ -3199,6 +3399,57 @@ def _compute_duopoly_share_series(
     return merged[["Year", "Duopoly_Share_Pct"]].sort_values("Year").reset_index(drop=True)
 
 
+def _compute_duopoly_triopoly_share_series(
+    data_processor: FinancialDataProcessor,
+    excel_path: str,
+    source_stamp: int = 0,
+) -> pd.DataFrame:
+    try:
+        if getattr(data_processor, "df_ad_revenue", None) is None or data_processor.df_ad_revenue.empty:
+            data_processor._load_ad_revenue()
+    except Exception:
+        pass
+    ad_df = getattr(data_processor, "df_ad_revenue", None)
+    if ad_df is None or ad_df.empty:
+        return pd.DataFrame()
+
+    ad = ad_df.copy()
+    ad.columns = [str(c).strip() for c in ad.columns]
+    if "year" in ad.columns and "Year" not in ad.columns:
+        ad = ad.rename(columns={"year": "Year"})
+    required_cols = {"Year", "Google_Ads", "Meta_Ads", "Amazon_Ads"}
+    if not required_cols.issubset(ad.columns):
+        return pd.DataFrame()
+
+    for col in ["Year", "Google_Ads", "Meta_Ads", "Amazon_Ads"]:
+        ad[col] = _coerce_numeric(ad[col])
+    ad = ad.dropna(subset=["Year", "Google_Ads", "Meta_Ads", "Amazon_Ads"]).copy()
+    if ad.empty:
+        return pd.DataFrame()
+    ad["Year"] = ad["Year"].astype(int)
+
+    groupm = _load_groupm_granular_df(excel_path, source_stamp)
+    if groupm.empty:
+        return pd.DataFrame()
+    totals = groupm[["Year", "Total Advertising"]].copy()
+    totals["Year"] = _coerce_numeric(totals["Year"]).astype("Int64")
+    totals["Global_Ad_B"] = _coerce_numeric(totals["Total Advertising"]) / 1000.0
+    totals = totals.dropna(subset=["Year", "Global_Ad_B"])
+    if totals.empty:
+        return pd.DataFrame()
+    totals["Year"] = totals["Year"].astype(int)
+
+    merged = ad.merge(totals[["Year", "Global_Ad_B"]], on="Year", how="inner")
+    merged = merged[merged["Global_Ad_B"] > 0].copy()
+    if merged.empty:
+        return pd.DataFrame()
+    merged["Duopoly_Share_Pct"] = ((merged["Google_Ads"] + merged["Meta_Ads"]) / merged["Global_Ad_B"]) * 100.0
+    merged["Triopoly_Share_Pct"] = (
+        (merged["Google_Ads"] + merged["Meta_Ads"] + merged["Amazon_Ads"]) / merged["Global_Ad_B"]
+    ) * 100.0
+    return merged[["Year", "Google_Ads", "Meta_Ads", "Amazon_Ads", "Duopoly_Share_Pct", "Triopoly_Share_Pct"]].sort_values("Year").reset_index(drop=True)
+
+
 def render_macro_kpi_panel(
     data_processor: FinancialDataProcessor,
     selected_year: int,
@@ -3545,7 +3796,6 @@ def _render_macro_expansion_sections(
     country_channel_df = _load_country_ad_channel_yearly_df(excel_path, source_stamp)
     revenue_region_df = _load_company_revenue_by_region_yearly_df(excel_path, source_stamp)
     wealth_df = _load_macro_wealth_by_generation_df(excel_path, source_stamp)
-    smartphone_df = _load_hardware_smartphone_shipments_df(excel_path, source_stamp)
     internet_time_df = _load_country_avg_internet_time_df(excel_path, source_stamp)
 
     rendered_any = False
@@ -3854,46 +4104,6 @@ def _render_macro_expansion_sections(
                     st.caption(f"Year shown: {target_year}")
                 rendered_any = True
 
-    if not smartphone_df.empty:
-        if not structural_started:
-            st.markdown("### Demographics & Attention Shift")
-            structural_started = True
-        title = "Smartphone Shipments & Apple Share (Attention Shift Proxy)"
-        st.markdown(f"#### {title}")
-        fig = go.Figure()
-        fig.add_trace(
-            go.Scatter(
-                x=smartphone_df["Year"],
-                y=smartphone_df["Total_Global_Units_M"],
-                mode="lines+markers",
-                name="Global smartphone shipments (M units)",
-                line=dict(color="#2563EB", width=3),
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=smartphone_df["Year"],
-                y=smartphone_df["AppleSharePct"],
-                mode="lines+markers",
-                name="Apple shipment share (%)",
-                line=dict(color="#0EA5E9", width=3),
-                yaxis="y2",
-            )
-        )
-        fig.update_layout(
-            height=440,
-            margin=_overview_chart_margin(left=30, right=34, top=104),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            yaxis=dict(title="Units (Millions)"),
-            yaxis2=dict(title="Apple share (%)", overlaying="y", side="right", showgrid=False),
-            legend=_overview_legend_style(),
-        )
-        fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
-        st.plotly_chart(fig, use_container_width=True, config=plotly_config)
-        st.caption("Mobile distribution scale continues to dominate attention pathways, which pressures legacy linear-TV economics.")
-        rendered_any = True
-
     if not internet_time_df.empty:
         if not structural_started:
             st.markdown("### Demographics & Attention Shift")
@@ -3922,6 +4132,729 @@ def _render_macro_expansion_sections(
         rendered_any = True
 
     return rendered_any
+
+
+def _render_company_financial_deep_dives(
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    selected_quarter: str,
+    plotly_config: dict,
+) -> bool:
+    excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    if not excel_path:
+        return False
+
+    metrics_df = _load_company_metrics_yearly_df(excel_path, source_stamp)
+    if metrics_df.empty:
+        return False
+
+    quarterly_df = _load_company_quarterly_kpis_df(excel_path, source_stamp)
+    subs_df = _load_company_subscribers_quarterly_df(excel_path, source_stamp)
+    minute_df = _load_company_minute_dollar_df(excel_path, source_stamp)
+    market_structure_df = _compute_duopoly_triopoly_share_series(data_processor, excel_path, source_stamp)
+
+    year_min = int(metrics_df["Year"].min())
+    year_max = int(metrics_df["Year"].max())
+    metrics = _apply_year_window(metrics_df, year_min, year_max)
+    if metrics.empty:
+        return False
+
+    old_media = {"Comcast", "Disney", "Warner Bros. Discovery", "Paramount Global"}
+    tech_media = {"Alphabet", "Amazon", "Apple", "Meta Platforms", "Microsoft", "Netflix", "Roku", "Spotify"}
+
+    st.markdown("<div id='section-company-deep-dives'></div>", unsafe_allow_html=True)
+    st.markdown("### Company Financial Deep Dives")
+    st.caption("P/E, leverage, profitability, investment intensity, and market-structure signals from workbook company sheets.")
+
+    ctrl1, ctrl2, ctrl3 = st.columns([1.0, 2.1, 1.0])
+    with ctrl1:
+        sector_mode = st.radio(
+            "Sector View",
+            ["All", "Tech", "Old Media"],
+            horizontal=False,
+            key="overview_deepdive_sector_mode",
+        )
+    all_companies = sorted(metrics["Company"].dropna().astype(str).str.strip().unique().tolist())
+    if sector_mode == "Tech":
+        company_scope = [c for c in all_companies if c in tech_media]
+    elif sector_mode == "Old Media":
+        company_scope = [c for c in all_companies if c in old_media]
+    else:
+        company_scope = all_companies
+
+    latest_scope = metrics[metrics["Year"] <= int(selected_year)].copy()
+    default_companies = (
+        latest_scope[latest_scope["Company"].isin(company_scope)]
+        .sort_values(["Year", "MarketCap"], ascending=[False, False])
+        .drop_duplicates(subset=["Company"])
+        .head(3)["Company"]
+        .tolist()
+    )
+    if not default_companies:
+        default_companies = company_scope[:3]
+    with ctrl2:
+        chosen_companies = st.multiselect(
+            "Comparison Mode (overlay up to 3 companies)",
+            options=company_scope,
+            default=default_companies,
+            key="overview_deepdive_companies",
+            help="Select 2-3 companies to overlay in all deep-dive charts.",
+        )
+    if len(chosen_companies) > 3:
+        chosen_companies = chosen_companies[:3]
+        st.caption("Comparison mode supports up to 3 companies at once; using the first three selected.")
+    if not chosen_companies:
+        chosen_companies = default_companies[:3]
+
+    with ctrl3:
+        focus_company = st.selectbox(
+            "Focus Company",
+            ["All"] + chosen_companies,
+            index=0,
+            key="overview_deepdive_focus_company",
+            help="Use a single-company focus while keeping the comparison selection for quick toggling.",
+        )
+    chart_companies = chosen_companies if focus_company == "All" else [focus_company]
+    plot_df = metrics[metrics["Company"].isin(chart_companies)].copy()
+    if plot_df.empty:
+        return False
+
+    # Revenue-quality and unit economics features.
+    plot_df["PE_Ratio"] = np.where(plot_df["NetIncome"] > 0, plot_df["MarketCap"] / plot_df["NetIncome"], np.nan)
+    plot_df["Debt_to_Revenue"] = np.where(plot_df["Revenue"] > 0, plot_df["Debt"] / plot_df["Revenue"], np.nan)
+    plot_df["Operating_Margin_Pct"] = np.where(plot_df["Revenue"] > 0, (plot_df["OperatingIncome"] / plot_df["Revenue"]) * 100.0, np.nan)
+    plot_df["RD_Intensity_Pct"] = np.where(plot_df["Revenue"] > 0, (plot_df["RD"] / plot_df["Revenue"]) * 100.0, np.nan)
+    plot_df["Gross_Margin_Pct"] = np.where(plot_df["Revenue"] > 0, ((plot_df["Revenue"] - plot_df["CostOfRevenue"]) / plot_df["Revenue"]) * 100.0, np.nan)
+    plot_df["Capex_Intensity_Pct"] = np.where(plot_df["Revenue"] > 0, (plot_df["Capex"] / plot_df["Revenue"]) * 100.0, np.nan)
+
+    tabs = st.tabs(
+        [
+            "P/E Ratios",
+            "Debt Metrics",
+            "Operating Margins",
+            "R&D Intensity",
+            "Market Structure",
+        ]
+    )
+
+    with tabs[0]:
+        pe_df = plot_df.dropna(subset=["PE_Ratio"]).copy()
+        pe_df = pe_df[(pe_df["PE_Ratio"] > 0) & (pe_df["PE_Ratio"] < 250)].copy()
+        if pe_df.empty:
+            st.info("P/E ratio trend is unavailable for these selections (requires positive net income history).")
+        else:
+            fig = px.line(
+                pe_df,
+                x="Year",
+                y="PE_Ratio",
+                color="Company",
+                markers=True,
+                labels={"PE_Ratio": "P/E ratio (Market Cap / Net Income)", "Year": ""},
+            )
+            fig.update_layout(
+                height=440,
+                margin=_overview_chart_margin(),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=_overview_legend_style(),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+
+        # Quarterly sparkline row: Revenue QoQ + YoY + TTM for selected companies.
+        if quarterly_df is None or quarterly_df.empty:
+            st.caption("Quarterly sparkline cards are unavailable until `Company_Quarterly_segments_valu` is populated.")
+        else:
+            st.markdown("#### Quarterly Momentum (QoQ, YoY, TTM)")
+            qnum = _parse_quarter_number(selected_quarter) or 4
+            card_cols = st.columns(min(len(chart_companies), 3)) if chart_companies else []
+            for col, company in zip(card_cols, chart_companies):
+                with col:
+                    ticker = _COMPANY_TO_TICKER.get(company, "")
+                    q_scope = quarterly_df[
+                        (quarterly_df["Ticker"] == ticker)
+                        & (
+                            (quarterly_df["Year"] < int(selected_year))
+                            | (
+                                (quarterly_df["Year"] == int(selected_year))
+                                & (quarterly_df["QuarterNum"] <= int(qnum))
+                            )
+                        )
+                    ].copy()
+                    if q_scope.empty:
+                        st.caption(f"{company}: no quarterly rows yet.")
+                        continue
+                    q_scope = q_scope.sort_values(["Year", "QuarterNum"])
+                    latest = q_scope.iloc[-1]
+                    prev = q_scope.iloc[-2] if len(q_scope) > 1 else None
+                    prev_y = q_scope[
+                        (q_scope["Year"] == int(latest["Year"]) - 1)
+                        & (q_scope["QuarterNum"] == int(latest["QuarterNum"]))
+                    ]
+                    prev_y_row = prev_y.iloc[-1] if not prev_y.empty else None
+                    curr_rev = float(latest["Revenue"]) if pd.notna(latest["Revenue"]) else np.nan
+                    qoq = (
+                        ((curr_rev - float(prev["Revenue"])) / float(prev["Revenue"])) * 100.0
+                        if prev is not None and pd.notna(prev["Revenue"]) and float(prev["Revenue"]) != 0
+                        else np.nan
+                    )
+                    yoy = (
+                        ((curr_rev - float(prev_y_row["Revenue"])) / float(prev_y_row["Revenue"])) * 100.0
+                        if prev_y_row is not None and pd.notna(prev_y_row["Revenue"]) and float(prev_y_row["Revenue"]) != 0
+                        else np.nan
+                    )
+                    ttm = (
+                        q_scope.tail(4)["Revenue"].sum(min_count=1)
+                        if len(q_scope) >= 4
+                        else np.nan
+                    )
+                    st.metric(
+                        f"{company} Revenue",
+                        _format_macro_metric(curr_rev / 1000.0 if pd.notna(curr_rev) else np.nan, "B"),
+                        f"{qoq:+.1f}% QoQ" if pd.notna(qoq) else "QoQ N/A",
+                    )
+                    st.caption(
+                        f"{yoy:+.1f}% YoY · TTM {_format_macro_metric(ttm / 1000.0 if pd.notna(ttm) else np.nan, 'B')}"
+                    )
+                    spark = q_scope.tail(8).copy()
+                    spark["Label"] = spark["Year"].astype(str) + "Q" + spark["QuarterNum"].astype(str)
+                    spark_fig = go.Figure(
+                        go.Scatter(
+                            x=spark["Label"],
+                            y=spark["Revenue"] / 1000.0,
+                            mode="lines+markers",
+                            line=dict(color="#2563EB", width=2),
+                            marker=dict(size=4),
+                            hovertemplate="%{x}<br>$%{y:.2f}B<extra></extra>",
+                            showlegend=False,
+                        )
+                    )
+                    spark_fig.update_layout(
+                        height=120,
+                        margin=dict(l=4, r=4, t=6, b=6),
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        xaxis=dict(visible=False),
+                        yaxis=dict(visible=False),
+                    )
+                    st.plotly_chart(spark_fig, use_container_width=True, config=plotly_config)
+
+    with tabs[1]:
+        debt_df = plot_df.dropna(subset=["Debt_to_Revenue"]).copy()
+        if debt_df.empty:
+            st.info("Debt-to-revenue ratio is unavailable for the selected companies.")
+        else:
+            fig = px.line(
+                debt_df,
+                x="Year",
+                y="Debt_to_Revenue",
+                color="Company",
+                markers=True,
+                labels={"Debt_to_Revenue": "Debt / Revenue", "Year": ""},
+            )
+            fig.update_layout(
+                height=420,
+                margin=_overview_chart_margin(),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=_overview_legend_style(),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+
+            heat_df = debt_df.pivot_table(index="Company", columns="Year", values="Debt_to_Revenue", aggfunc="mean")
+            if not heat_df.empty:
+                fig_h = px.imshow(
+                    heat_df,
+                    aspect="auto",
+                    color_continuous_scale="Blues",
+                    labels=dict(x="Year", y="Company", color="Debt / Revenue"),
+                )
+                fig_h.update_layout(
+                    height=320,
+                    margin=dict(l=20, r=20, t=10, b=20),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                )
+                st.plotly_chart(fig_h, use_container_width=True, config=plotly_config)
+
+    with tabs[2]:
+        margin_df = plot_df.dropna(subset=["Operating_Margin_Pct", "Gross_Margin_Pct"], how="all").copy()
+        if margin_df.empty:
+            st.info("Operating/Gross margin trends are unavailable for selected companies.")
+        else:
+            op_long = margin_df[["Company", "Year", "Operating_Margin_Pct"]].rename(
+                columns={"Operating_Margin_Pct": "MarginPct"}
+            )
+            op_long["Metric"] = "Operating Margin %"
+            gm_long = margin_df[["Company", "Year", "Gross_Margin_Pct"]].rename(
+                columns={"Gross_Margin_Pct": "MarginPct"}
+            )
+            gm_long["Metric"] = "Gross Margin %"
+            long_df = pd.concat([op_long, gm_long], ignore_index=True).dropna(subset=["MarginPct"])
+            fig = px.line(
+                long_df,
+                x="Year",
+                y="MarginPct",
+                color="Company",
+                line_dash="Metric",
+                markers=True,
+                labels={"MarginPct": "Margin (%)", "Year": ""},
+            )
+            fig.update_layout(
+                height=440,
+                margin=_overview_chart_margin(),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=_overview_legend_style(),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+
+            cap_cash = margin_df.groupby("Year", as_index=False)[["CashBalance", "Capex"]].sum(min_count=1)
+            if not cap_cash.empty:
+                fig2 = go.Figure()
+                fig2.add_trace(
+                    go.Bar(
+                        x=cap_cash["Year"],
+                        y=cap_cash["Capex"] / 1000.0,
+                        name="CapEx (B USD)",
+                        marker_color="#2563EB",
+                        opacity=0.65,
+                    )
+                )
+                fig2.add_trace(
+                    go.Scatter(
+                        x=cap_cash["Year"],
+                        y=cap_cash["CashBalance"] / 1000.0,
+                        mode="lines+markers",
+                        name="Cash Balance (B USD)",
+                        line=dict(color="#0EA5E9", width=3),
+                    )
+                )
+                fig2.update_layout(
+                    height=360,
+                    margin=_overview_chart_margin(),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    yaxis_title="USD billions",
+                    legend=_overview_legend_style(),
+                )
+                fig2.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig2, use_container_width=True, config=plotly_config)
+                st.caption("Cash flow is not available in the workbook; cash balance is used as an investment-capacity proxy vs CapEx.")
+
+    with tabs[3]:
+        rd_df = plot_df.dropna(subset=["RD_Intensity_Pct"]).copy()
+        if rd_df.empty:
+            st.info("R&D intensity is unavailable for selected companies.")
+        else:
+            fig = px.line(
+                rd_df,
+                x="Year",
+                y="RD_Intensity_Pct",
+                color="Company",
+                markers=True,
+                labels={"RD_Intensity_Pct": "R&D / Revenue (%)", "Year": ""},
+            )
+            fig.update_layout(
+                height=420,
+                margin=_overview_chart_margin(),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=_overview_legend_style(),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+
+    with tabs[4]:
+        if market_structure_df.empty:
+            st.info("Duopoly/Triopoly concentration history is not available in current ad sheets.")
+        else:
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=market_structure_df["Year"],
+                    y=market_structure_df["Duopoly_Share_Pct"],
+                    mode="lines+markers",
+                    name="Google + Meta share (%)",
+                    line=dict(color="#1D4ED8", width=3),
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=market_structure_df["Year"],
+                    y=market_structure_df["Triopoly_Share_Pct"],
+                    mode="lines+markers",
+                    name="Google + Meta + Amazon share (%)",
+                    line=dict(color="#0EA5E9", width=3),
+                )
+            )
+            fig.update_layout(
+                height=420,
+                margin=_overview_chart_margin(),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis_title="Share of global ad market (%)",
+                legend=_overview_legend_style(),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+
+        if not subs_df.empty:
+            subs_annual = (
+                subs_df[subs_df["company"].isin(chart_companies)]
+                .groupby(["company", "year"], as_index=False)["subscribers"]
+                .mean()
+                .rename(columns={"company": "Company", "year": "Year", "subscribers": "SubscribersMAvg"})
+            )
+            arpu_df = plot_df.merge(subs_annual, on=["Company", "Year"], how="inner")
+            arpu_df = arpu_df[arpu_df["SubscribersMAvg"] > 0].copy()
+            arpu_df["ARPU_USD_Proxy"] = arpu_df["Revenue"] / arpu_df["SubscribersMAvg"]
+            if not arpu_df.empty:
+                fig_arpu = px.line(
+                    arpu_df,
+                    x="Year",
+                    y="ARPU_USD_Proxy",
+                    color="Company",
+                    markers=True,
+                    labels={"ARPU_USD_Proxy": "Annual ARPU proxy (USD per subscriber)", "Year": ""},
+                )
+                fig_arpu.update_layout(
+                    height=360,
+                    margin=_overview_chart_margin(),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    legend=_overview_legend_style(),
+                )
+                fig_arpu.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig_arpu, use_container_width=True, config=plotly_config)
+                st.caption("ARPU proxy = annual revenue (USD millions) / average reported subscribers (millions).")
+
+        if minute_df is not None and not minute_df.empty:
+            md = minute_df.dropna(subset=["RevenueB", "TotalMinutesT", "DollarPerMinute"]).copy()
+            if not md.empty:
+                fig_md = px.scatter(
+                    md,
+                    x="TotalMinutesT",
+                    y="RevenueB",
+                    size="DollarPerMinute",
+                    color="Platform",
+                    text="Platform",
+                    labels={
+                        "TotalMinutesT": "Total internet hours proxy (trillion minutes watched)",
+                        "RevenueB": "Revenue (USD billions)",
+                        "DollarPerMinute": "$ per minute watched",
+                    },
+                    size_max=45,
+                )
+                fig_md.update_traces(textposition="top center")
+                fig_md.update_layout(
+                    height=400,
+                    margin=_overview_chart_margin(),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    legend=_overview_legend_style(),
+                )
+                fig_md.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
+                fig_md.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig_md, use_container_width=True, config=plotly_config)
+
+        st.caption("Customer acquisition cost trends are not available in current workbook sheets.")
+
+    return True
+
+
+def _render_device_platform_market_share(
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    plotly_config: dict,
+) -> bool:
+    excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    if not excel_path:
+        return False
+
+    smartphone_df = _load_hardware_smartphone_shipments_df(excel_path, source_stamp)
+    country_ad_df = _load_country_advertising_df(excel_path, source_stamp)
+    if smartphone_df.empty and country_ad_df.empty:
+        return False
+
+    st.markdown("<div id='section-device-platform'></div>", unsafe_allow_html=True)
+    st.markdown("### Device & Platform Market Share")
+    st.caption("Device shipment concentration and device-category ad allocation after macro regime validation.")
+    rendered = False
+
+    if not smartphone_df.empty:
+        unit_cols = [
+            c for c in smartphone_df.columns
+            if c not in {"Year", "Total_Global_Units_M", "Apple_iPhone_Units_M", "AppleSharePct"}
+            and c.lower().endswith("_units_m")
+        ]
+        if unit_cols:
+            pretty_map = {
+                "Apple_iPhone_Units_M": "Apple iPhone",
+                "Samsung_Units_M": "Samsung",
+                "Xiaomi_Units_M": "Xiaomi",
+                "Huawei_Units_M": "Huawei",
+                "Oppo_Units_M": "Oppo",
+                "Vivo_Units_M": "Vivo",
+                "Motorola_Units_M": "Motorola",
+                "Google_Pixel_Units_M": "Google Pixel",
+                "OnePlus_Units_M": "OnePlus",
+                "Other_Brands_Units_M": "Other Brands",
+            }
+            major_cols = [c for c in ["Apple_iPhone_Units_M", "Samsung_Units_M", "Xiaomi_Units_M", "Huawei_Units_M"] if c in smartphone_df.columns]
+            other_known = [c for c in unit_cols if c not in major_cols and c != "Other_Brands_Units_M"]
+            sp = smartphone_df.copy()
+            if "Other_Brands_Units_M" in sp.columns:
+                sp["Other_Manufacturers_M"] = pd.to_numeric(sp["Other_Brands_Units_M"], errors="coerce").fillna(0.0)
+            else:
+                known_sum = sp[major_cols + other_known].sum(axis=1, min_count=1)
+                sp["Other_Manufacturers_M"] = (sp["Total_Global_Units_M"] - known_sum).clip(lower=0.0)
+
+            stacked_cols = major_cols + ["Other_Manufacturers_M"]
+            long_units = sp.melt(
+                id_vars=["Year"],
+                value_vars=stacked_cols,
+                var_name="ManufacturerRaw",
+                value_name="Units_M",
+            ).dropna(subset=["Units_M"])
+            long_units["Manufacturer"] = long_units["ManufacturerRaw"].map(pretty_map).fillna(
+                long_units["ManufacturerRaw"].str.replace("_Units_M", "", regex=False).str.replace("_", " ", regex=False)
+            )
+            long_units["SharePct"] = np.where(
+                long_units["Units_M"] > 0,
+                (long_units["Units_M"] / long_units.groupby("Year")["Units_M"].transform("sum")) * 100.0,
+                np.nan,
+            )
+
+            st.markdown("#### Apple iPhone vs Other Mobile Manufacturers")
+            fig = px.area(
+                long_units,
+                x="Year",
+                y="Units_M",
+                color="Manufacturer",
+                labels={"Units_M": "Units shipped (millions)", "Year": ""},
+            )
+            fig.update_layout(
+                height=430,
+                margin=_overview_chart_margin(),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=_overview_legend_style(),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+
+            st.markdown("#### Device Market Share Evolution by Manufacturer")
+            fig_share = px.line(
+                long_units,
+                x="Year",
+                y="SharePct",
+                color="Manufacturer",
+                markers=True,
+                labels={"SharePct": "Market share (%)", "Year": ""},
+            )
+            fig_share.update_layout(
+                height=410,
+                margin=_overview_chart_margin(),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=_overview_legend_style(),
+            )
+            fig_share.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig_share, use_container_width=True, config=plotly_config)
+            rendered = True
+
+    if not country_ad_df.empty:
+        cad = country_ad_df.copy()
+        cad["MetricLower"] = cad["Metric_type"].astype(str).str.strip().str.lower()
+        cad["DeviceCategory"] = np.select(
+            [
+                cad["MetricLower"].str.contains("mobile", na=False),
+                cad["MetricLower"].str.contains("desktop", na=False),
+                cad["MetricLower"].str.contains("tv", na=False),
+            ],
+            ["Mobile", "Desktop", "TV"],
+            default="Other",
+        )
+        cad = cad[cad["DeviceCategory"].isin(["Mobile", "Desktop", "TV"])].copy()
+        if not cad.empty:
+            country_to_region = {}
+            for region, names in CONTINENT_MAPPINGS.items():
+                for name in names:
+                    country_to_region[str(name)] = str(region)
+            cad["Region"] = cad["Country"].map(country_to_region).fillna("Other")
+
+            year_focus = int(selected_year)
+            cad_year = cad[cad["Year"] == year_focus].copy()
+            if cad_year.empty:
+                fallback = cad[cad["Year"] <= year_focus]
+                if not fallback.empty:
+                    year_focus = int(fallback["Year"].max())
+                    cad_year = cad[cad["Year"] == year_focus].copy()
+
+            if not cad_year.empty:
+                reg = cad_year.groupby(["Region", "DeviceCategory"], as_index=False)["Value"].sum(min_count=1)
+                reg["SharePct"] = np.where(
+                    reg.groupby("Region")["Value"].transform("sum") > 0,
+                    (reg["Value"] / reg.groupby("Region")["Value"].transform("sum")) * 100.0,
+                    np.nan,
+                )
+                st.markdown("#### Advertising Split by Device Category and Region")
+                fig_reg = px.bar(
+                    reg,
+                    x="Region",
+                    y="SharePct",
+                    color="DeviceCategory",
+                    barmode="stack",
+                    labels={"SharePct": "Share of regional ad spend (%)", "Region": ""},
+                    color_discrete_map={"Mobile": "#2563EB", "Desktop": "#0EA5E9", "TV": "#F59E0B"},
+                )
+                fig_reg.update_layout(
+                    height=430,
+                    margin=_overview_chart_margin(),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    legend=_overview_legend_style(),
+                )
+                fig_reg.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig_reg, use_container_width=True, config=plotly_config)
+                st.caption(f"Year shown: {year_focus}")
+                rendered = True
+
+    return rendered
+
+
+def _render_global_media_economy_extras(
+    country_ad_df: pd.DataFrame,
+    data_processor: FinancialDataProcessor,
+    map_year: int,
+    plotly_config: dict,
+) -> bool:
+    if country_ad_df is None or country_ad_df.empty:
+        return False
+    rendered = False
+
+    # Time trajectories for top countries by selected map year.
+    country_totals = country_ad_df.groupby(["Country", "Year"], as_index=False)["Value"].sum(min_count=1)
+    top_countries = (
+        country_totals[country_totals["Year"] == int(map_year)]
+        .sort_values("Value", ascending=False)
+        .head(8)["Country"]
+        .tolist()
+    )
+    if top_countries:
+        trend_df = country_totals[country_totals["Country"].isin(top_countries)].copy()
+        st.markdown("#### Country Advertising Growth Trajectories")
+        fig_trend = px.line(
+            trend_df,
+            x="Year",
+            y="Value",
+            color="Country",
+            markers=True,
+            labels={"Value": "Advertising spend (USD millions)", "Year": ""},
+        )
+        fig_trend.update_layout(
+            height=410,
+            margin=_overview_chart_margin(),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            legend=_overview_legend_style(),
+        )
+        fig_trend.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+        st.plotly_chart(fig_trend, use_container_width=True, config=plotly_config)
+        rendered = True
+
+    # Per-capita advertising spend (when population proxies are available in Macro_Wealth_by_Generation).
+    wealth_df = _load_macro_wealth_by_generation_df(
+        getattr(data_processor, "data_path", ""),
+        int(getattr(data_processor, "source_stamp", 0) or 0),
+    )
+    if wealth_df is not None and not wealth_df.empty and "PeopleM" in wealth_df.columns:
+        population = (
+            wealth_df.groupby(["Country", "Year"], as_index=False)["PeopleM"]
+            .sum(min_count=1)
+            .dropna(subset=["PeopleM"])
+        )
+        population = population[population["PeopleM"] > 0].copy()
+        year_country = country_totals[country_totals["Year"] == int(map_year)].copy()
+        per_capita = year_country.merge(population, on=["Country", "Year"], how="inner")
+        if not per_capita.empty:
+            per_capita["AdPerCapitaUSD"] = per_capita["Value"] / per_capita["PeopleM"]
+            rank = per_capita.sort_values("AdPerCapitaUSD", ascending=False).head(20).sort_values("AdPerCapitaUSD")
+            if not rank.empty:
+                st.markdown("#### Per-Capita Advertising Spend by Country")
+                fig_pc = px.bar(
+                    rank,
+                    x="AdPerCapitaUSD",
+                    y="Country",
+                    orientation="h",
+                    color="AdPerCapitaUSD",
+                    color_continuous_scale="Blues",
+                    labels={"AdPerCapitaUSD": "Ad spend per capita (USD)", "Country": ""},
+                )
+                fig_pc.update_layout(
+                    height=560,
+                    margin=_overview_chart_margin(),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    coloraxis_showscale=False,
+                )
+                fig_pc.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig_pc, use_container_width=True, config=plotly_config)
+                rendered = True
+
+    # Mobile vs Desktop split by region.
+    cad = country_ad_df.copy()
+    cad["MetricLower"] = cad["Metric_type"].astype(str).str.strip().str.lower()
+    cad["DeviceClass"] = np.select(
+        [
+            cad["MetricLower"].str.contains("mobile", na=False),
+            cad["MetricLower"].str.contains("desktop", na=False),
+        ],
+        ["Mobile", "Desktop"],
+        default="Other",
+    )
+    cad = cad[cad["DeviceClass"].isin(["Mobile", "Desktop"])].copy()
+    if not cad.empty:
+        country_to_region = {}
+        for region, names in CONTINENT_MAPPINGS.items():
+            for name in names:
+                country_to_region[str(name)] = str(region)
+        cad["Region"] = cad["Country"].map(country_to_region).fillna("Other")
+        cad = cad[cad["Year"] == int(map_year)].copy()
+        if not cad.empty:
+            reg = cad.groupby(["Region", "DeviceClass"], as_index=False)["Value"].sum(min_count=1)
+            reg["SharePct"] = np.where(
+                reg.groupby("Region")["Value"].transform("sum") > 0,
+                (reg["Value"] / reg.groupby("Region")["Value"].transform("sum")) * 100.0,
+                np.nan,
+            )
+            st.markdown("#### Mobile vs Desktop Split by Region")
+            fig_split = px.bar(
+                reg,
+                x="Region",
+                y="SharePct",
+                color="DeviceClass",
+                barmode="group",
+                labels={"SharePct": "Share of device-class ad spend (%)", "Region": ""},
+                color_discrete_map={"Mobile": "#2563EB", "Desktop": "#0EA5E9"},
+            )
+            fig_split.update_layout(
+                height=420,
+                margin=_overview_chart_margin(),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=_overview_legend_style(),
+            )
+            fig_split.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig_split, use_container_width=True, config=plotly_config)
+            rendered = True
+
+    return rendered
 
 
 def _render_excel_macro_section(
@@ -3983,6 +4916,7 @@ def _render_excel_overview_insights(
         return False
     scoped_df = scoped_df.sort_values(["sort_order", "insight_id", "title"]).copy()
 
+    st.markdown("<div id='section-overview-insights'></div>", unsafe_allow_html=True)
     st.markdown("### Insights by Category")
     st.caption(f"Source: Overview_Insights · Period: {selected_period} · {len(scoped_df)} insights")
     company_logos = load_company_logos()
@@ -4274,6 +5208,7 @@ def _render_macro_bridge_charts(
 ) -> bool:
     excel_path = getattr(data_processor, "data_path", "")
     source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    st.markdown("<div id='section-macro-bridge'></div>", unsafe_allow_html=True)
     st.markdown("### Macro Regime Bridge Charts")
     if not excel_path:
         st.info("Workbook source is not available, so macro regime charts cannot load yet.")
@@ -4814,6 +5749,7 @@ def _render_transcript_topic_growth_chart(
         "Small and fading": "#94A3B8",
     }
 
+    st.markdown("<div id='section-topic-signal'></div>", unsafe_allow_html=True)
     st.markdown("### Topic Signal Map")
     st.caption(
         f"Source: earningscall_transcripts/topic_metrics.csv · Period: {selected_period} · "
@@ -4902,18 +5838,41 @@ def _render_excel_overview_layers(
     insights_rendered = _render_excel_overview_insights(data_processor, selected_year, selected_quarter)
     if not insights_rendered:
         st.info("No active `Overview_Insights` rows found for the selected period.")
-    macro_expansion_rendered = _render_macro_expansion_sections(
-        data_processor,
-        selected_year,
-        selected_quarter,
-        plotly_config,
-    )
-    if not macro_expansion_rendered:
-        st.caption(
-            "Expanded macro cross-sheet charts will auto-populate when matching rate/GDP/labor/currency fields "
-            "exist in your Google Sheets tabs (name does not need to follow `Macro_*`)."
+
+    with st.expander("Expanded Macro Cross-Sheet Charts", expanded=True):
+        macro_expansion_rendered = _render_macro_expansion_sections(
+            data_processor,
+            selected_year,
+            selected_quarter,
+            plotly_config,
         )
-    _render_macro_bridge_charts(data_processor, selected_year, selected_quarter, plotly_config)
+        if not macro_expansion_rendered:
+            st.caption(
+                "Expanded macro cross-sheet charts will auto-populate when matching rate/GDP/labor/currency fields "
+                "exist in your Google Sheets tabs (name does not need to follow `Macro_*`)."
+            )
+
+    with st.expander("Company Financial Deep Dives", expanded=True):
+        deep_dive_rendered = _render_company_financial_deep_dives(
+            data_processor,
+            selected_year,
+            selected_quarter,
+            plotly_config,
+        )
+        if not deep_dive_rendered:
+            st.caption("Company deep-dive charts need annual company metrics (Revenue, Net Income, Debt, CapEx, R&D).")
+
+    with st.expander("Macro Regime Bridge Charts", expanded=True):
+        _render_macro_bridge_charts(data_processor, selected_year, selected_quarter, plotly_config)
+
+    with st.expander("Device & Platform Market Share", expanded=True):
+        device_rendered = _render_device_platform_market_share(data_processor, selected_year, plotly_config)
+        if not device_rendered:
+            st.caption(
+                "Device/platform section auto-loads when `Hardware_Smartphone_Shipments` or "
+                "`Country_Advertising_Data_FullVi` contains device-class fields."
+            )
+
     topic_chart_rendered = _render_transcript_topic_growth_chart(selected_year, selected_quarter, plotly_config)
     if not topic_chart_rendered:
         st.info(
@@ -5376,6 +6335,26 @@ with gran_col:
         help="Auto uses each chart's native frequency. Annual/Quarterly/Monthly/Daily enables extra period controls when data exists.",
     )
 
+ux_col1, ux_col2 = st.columns([1.0, 2.0])
+with ux_col1:
+    chart_export_format = st.selectbox(
+        "Chart Export Format",
+        ["png", "svg"],
+        index=0,
+        key="overview_chart_export_format",
+        help="Controls Plotly per-chart download format from the modebar.",
+    )
+with ux_col2:
+    st.markdown(
+        "**Jump to section:** "
+        "[Global Map](#section-global-media-economy) · "
+        "[Insights](#section-overview-insights) · "
+        "[Deep Dives](#section-company-deep-dives) · "
+        "[Macro Bridge](#section-macro-bridge) · "
+        "[Device](#section-device-platform) · "
+        "[Topic Signal](#section-topic-signal)"
+    )
+
 selected_month = None
 selected_day = None
 if selected_granularity == "Monthly":
@@ -5420,6 +6399,41 @@ st.session_state["overview_time_context"] = update_global_time_context(
     excel_path=excel_path,
 )
 
+plotly_config["toImageButtonOptions"]["format"] = chart_export_format
+
+# Sticky summary sidebar (period-aware, updates with filters).
+with st.sidebar:
+    st.markdown("### Key Insights Summary")
+    st.caption(f"Period: {int(selected_year)} · {selected_quarter}")
+    excel_source = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    if excel_source:
+        macro_sidebar_df = _load_overview_macro_sheet(excel_source, source_stamp)
+        insights_sidebar_df = _load_overview_insights_sheet(excel_source, source_stamp)
+        macro_scope, _ = _pick_rows_for_period(macro_sidebar_df, int(selected_year), selected_quarter)
+        insights_scope, _ = _pick_rows_for_period(insights_sidebar_df, int(selected_year), selected_quarter)
+        if not insights_scope.empty and "is_active" in insights_scope.columns:
+            insights_scope = insights_scope[insights_scope["is_active"].fillna(0).astype(int) == 1]
+
+        if not macro_scope.empty:
+            row = macro_scope.sort_values(["year", "_quarter_num"], ascending=[False, False]).iloc[0]
+            st.metric("Global Ad Market", _format_macro_metric(row.get("global_ad_market"), "B"))
+            st.metric("Duopoly Share", _format_macro_metric(row.get("duopoly_share"), "%"))
+        if not insights_scope.empty:
+            st.metric("Active Insights", f"{len(insights_scope)}")
+            top_cats = (
+                insights_scope["category"].astype(str).str.strip().value_counts().head(3).to_dict()
+                if "category" in insights_scope.columns
+                else {}
+            )
+            if top_cats:
+                st.caption(
+                    "Top categories: "
+                    + " · ".join([f"{k}: {v}" for k, v in top_cats.items()])
+                )
+        else:
+            st.caption("No active Overview insights found for this period.")
+
 st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
 
 # NEW SECTION — MACRO KPI PANEL
@@ -5438,6 +6452,7 @@ if not macro_context_rendered:
     )
 
 # SECTION 1 — GLOBAL CONTEXT (WORLD MAP)
+st.markdown("<div id='section-global-media-economy'></div>", unsafe_allow_html=True)
 st.subheader("The Global Media Economy")
 st.markdown(
     "Global advertising is geographically distributed across regions and markets. "
@@ -5493,10 +6508,26 @@ if not country_ad_df.empty:
         )
 
     available_ad_years = sorted(country_ad_df["Year"].dropna().unique().tolist())
-    # Use the app's selected year when available; otherwise pick the closest available <= selected year.
-    year_for_map = selected_year
-    if year_for_map not in available_ad_years:
+    # Time slider for country ad map animation context.
+    map_year_default = selected_year
+    if map_year_default not in available_ad_years:
         prior_years = [y for y in available_ad_years if y <= selected_year]
+        map_year_default = max(prior_years) if prior_years else max(available_ad_years)
+    if len(available_ad_years) > 1:
+        map_year_selected = st.select_slider(
+            "Map Year (country advertising)",
+            options=available_ad_years,
+            value=map_year_default,
+            key="overview_map_year_slider",
+            help="Scrub across years to see country-level ad market evolution.",
+        )
+    else:
+        map_year_selected = map_year_default
+
+    # Use the map year when available; otherwise pick closest available <= map selection.
+    year_for_map = int(map_year_selected)
+    if year_for_map not in available_ad_years:
+        prior_years = [y for y in available_ad_years if y <= int(map_year_selected)]
         year_for_map = max(prior_years) if prior_years else max(available_ad_years)
 
     macro_prev_years = [y for y in available_ad_years if y < year_for_map]
@@ -6346,6 +7377,15 @@ if not country_ad_df.empty:
         )
         if year_for_map != selected_year:
             st.caption(f"Country advertising data is not available for {selected_year}; showing {year_for_map} instead.")
+
+        extras_rendered = _render_global_media_economy_extras(
+            country_ad_df=country_ad_df,
+            data_processor=data_processor,
+            map_year=int(year_for_map),
+            plotly_config=plotly_config,
+        )
+        if not extras_rendered:
+            st.caption("Additional country/per-capita/device context will appear when matching rows are available.")
     else:
         st.info("No country advertising values available for the selected metric/year.")
 else:
