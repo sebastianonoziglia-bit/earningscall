@@ -1334,8 +1334,7 @@ def _load_groupm_channels_df(excel_path: str) -> pd.DataFrame:
     df.columns = [str(c).strip() for c in df.columns]
     if "year" in df.columns and "Year" not in df.columns:
         df = df.rename(columns={"year": "Year"})
-    required = [
-        "Year",
+    known = [
         "Traditional_TV",
         "Connected_TV",
         "Traditional_OOH",
@@ -1344,12 +1343,17 @@ def _load_groupm_channels_df(excel_path: str) -> pd.DataFrame:
         "NonSearch",
         "Retail_Media",
     ]
-    if not set(required).issubset(df.columns):
+    if "Year" not in df.columns:
         return pd.DataFrame()
 
-    out = df[required].copy()
+    present = [col for col in known if col in df.columns]
+    out = df[["Year"] + present].copy()
+    for col in known:
+        if col not in out.columns:
+            out[col] = np.nan
+    out = out[["Year"] + known]
     out["Year"] = _coerce_numeric(out["Year"])
-    for col in required[1:]:
+    for col in known:
         out[col] = _coerce_numeric(out[col])
     out = out.dropna(subset=["Year"]).copy()
     out["Year"] = out["Year"].astype(int)
@@ -1375,13 +1379,24 @@ def _load_groupm_granular_df(excel_path: str) -> pd.DataFrame:
     df.columns = [str(c).strip() for c in df.columns]
     if "year" in df.columns and "Year" not in df.columns:
         df = df.rename(columns={"year": "Year"})
-    required = ["Year", "TV / Pro Video", "Internet", "Total Advertising"]
+    required = ["Year", "TV / Pro Video", "Internet"]
     if not set(required).issubset(df.columns):
         return pd.DataFrame()
 
-    out = df[required].copy()
-    for col in required:
+    optional = ["Audio", "Newspapers", "Magazines", "OOH", "Cinema", "Total Advertising"]
+    present_optional = [col for col in optional if col in df.columns]
+    out = df[required + present_optional].copy()
+    for col in optional:
+        if col not in out.columns:
+            out[col] = np.nan
+    out = out[required + optional]
+
+    for col in required + optional:
         out[col] = _coerce_numeric(out[col])
+    if out["Total Advertising"].isna().all():
+        component_cols = [col for col in ["TV / Pro Video", "Internet", "Audio", "Newspapers", "Magazines", "OOH", "Cinema"] if col in out.columns]
+        if component_cols:
+            out["Total Advertising"] = out[component_cols].sum(axis=1, min_count=1)
     out = out.dropna(subset=["Year"]).copy()
     out["Year"] = out["Year"].astype(int)
     out = out.sort_values("Year")
@@ -1918,19 +1933,20 @@ def _render_excel_macro_section(
 
     st.markdown("### Macro KPI Bar")
     st.caption(f"Source: `Overview_Macro` · Period: {selected_period}")
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    with c1:
-        st.metric("M2", _format_macro_metric(row.get("m2_value"), "B"))
-    with c2:
-        st.metric("Global Ad Market", _format_macro_metric(row.get("global_ad_market"), "B"))
-    with c3:
-        st.metric("Duopoly Share", _format_macro_metric(row.get("duopoly_share"), "%"))
-    with c4:
-        st.metric("TV Ad Spend", _format_macro_metric(row.get("tv_ad_spend"), "B"))
-    with c5:
-        st.metric("Internet Ad Spend", _format_macro_metric(row.get("internet_ad_spend"), "B"))
-    with c6:
-        st.metric("Retail Media", _format_macro_metric(row.get("retail_media"), "B"))
+    metric_items = [
+        ("M2", row.get("m2_value"), "B"),
+        ("Global Ad Market", row.get("global_ad_market"), "B"),
+        ("Duopoly Share", row.get("duopoly_share"), "%"),
+        ("TV Ad Spend", row.get("tv_ad_spend"), "B"),
+        ("Internet Ad Spend", row.get("internet_ad_spend"), "B"),
+    ]
+    retail_value = row.get("retail_media")
+    if pd.notna(retail_value):
+        metric_items.append(("Retail Media", retail_value, "B"))
+    columns = st.columns(len(metric_items))
+    for col, (label, value, suffix) in zip(columns, metric_items):
+        with col:
+            st.metric(label, _format_macro_metric(value, suffix))
 
     macro_comment = _clean_overview_text(row.get("macro_comment"))
     if macro_comment:
@@ -2199,30 +2215,59 @@ def _render_macro_bridge_charts(
             base = tvi[["Year", "TV / Pro Video", "Internet"]].copy()
             base["TV / Pro Video"] = base["TV / Pro Video"] / 1000.0
             base["Internet"] = base["Internet"] / 1000.0
-            third_label = "Retail Media"
-            if not channel.empty and "Retail_Media" in channel.columns and channel["Retail_Media"].fillna(0).abs().sum() > 0:
-                third = channel[["Year", "Retail_Media"]].copy()
-                third["Third"] = third["Retail_Media"] / 1000.0
-            elif not channel.empty and {"Search", "NonSearch"}.issubset(channel.columns):
-                third_label = "Search + Non-Search"
-                third = channel[["Year", "Search", "NonSearch"]].copy()
-                third["Third"] = (third["Search"] + third["NonSearch"]) / 1000.0
-            else:
-                third_label = "Digital OOH + Connected TV"
-                third = pd.DataFrame(columns=["Year", "Third"])
-                if not channel.empty:
-                    temp = channel.copy()
-                    temp["Third"] = (temp.get("Digital_OOH", 0) + temp.get("Connected_TV", 0)) / 1000.0
+            third_label = None
+            third = pd.DataFrame(columns=["Year", "Third"])
+
+            if not channel.empty and {"Search", "NonSearch"}.issubset(channel.columns):
+                temp = channel[["Year", "Search", "NonSearch"]].copy()
+                temp["Third"] = (temp["Search"] + temp["NonSearch"]) / 1000.0
+                if temp["Third"].fillna(0).abs().sum() > 0:
+                    third_label = "Search + Non-Search"
                     third = temp[["Year", "Third"]]
-            merged = base.merge(third[["Year", "Third"]], on="Year", how="left")
-            merged["Third"] = merged["Third"].fillna(0.0)
+
+            if third_label is None and "OOH" in tvi.columns:
+                temp = tvi[["Year", "OOH"]].copy()
+                temp["Third"] = temp["OOH"] / 1000.0
+                if temp["Third"].fillna(0).abs().sum() > 0:
+                    third_label = "OOH"
+                    third = temp[["Year", "Third"]]
+
+            if third_label is None and {"Audio", "Newspapers", "Magazines"}.issubset(tvi.columns):
+                temp = tvi[["Year", "Audio", "Newspapers", "Magazines"]].copy()
+                temp["Third"] = (temp["Audio"] + temp["Newspapers"] + temp["Magazines"]) / 1000.0
+                if temp["Third"].fillna(0).abs().sum() > 0:
+                    third_label = "Audio + Print"
+                    third = temp[["Year", "Third"]]
+
+            if third_label is None and not channel.empty and {"Digital_OOH", "Connected_TV"}.issubset(channel.columns):
+                temp = channel[["Year", "Digital_OOH", "Connected_TV"]].copy()
+                temp["Third"] = (temp["Digital_OOH"] + temp["Connected_TV"]) / 1000.0
+                if temp["Third"].fillna(0).abs().sum() > 0:
+                    third_label = "Digital OOH + Connected TV"
+                    third = temp[["Year", "Third"]]
+
+            if third_label is None and not channel.empty and "Retail_Media" in channel.columns:
+                temp = channel[["Year", "Retail_Media"]].copy()
+                temp["Third"] = temp["Retail_Media"] / 1000.0
+                if temp["Third"].fillna(0).abs().sum() > 0:
+                    third_label = "Retail Media"
+                    third = temp[["Year", "Third"]]
+
+            merged = base.copy()
+            value_vars = ["TV / Pro Video", "Internet"]
+            if third_label is not None:
+                merged = merged.merge(third[["Year", "Third"]], on="Year", how="left")
+                merged["Third"] = merged["Third"].fillna(0.0)
+                value_vars.append("Third")
+
             area_df = merged.melt(
                 id_vars="Year",
-                value_vars=["TV / Pro Video", "Internet", "Third"],
+                value_vars=value_vars,
                 var_name="Channel",
                 value_name="USD Billions",
             )
-            area_df["Channel"] = area_df["Channel"].replace({"Third": third_label})
+            if third_label is not None:
+                area_df["Channel"] = area_df["Channel"].replace({"Third": third_label})
             fig = px.area(
                 area_df,
                 x="Year",
