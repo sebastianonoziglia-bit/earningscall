@@ -28,6 +28,13 @@ from utils.components import load_company_logos
 from utils.header import display_header
 from utils.data_loader import CONTINENT_MAPPINGS, AD_MACRO_CATEGORIES
 from utils.theme import get_theme_mode
+from utils.data_granularity import (
+    get_available_granularity_options,
+    get_day_labels_for_year,
+    get_month_labels_for_year,
+    get_quarter_labels_for_year,
+    update_global_time_context,
+)
 
 st.markdown(get_page_style(), unsafe_allow_html=True)
 display_header()
@@ -291,8 +298,8 @@ st.markdown(
 
         .ov-insight-item {
             border-top: 1px solid rgba(15, 23, 42, 0.08);
-            padding-top: 10px;
-            margin-top: 10px;
+            padding-top: 18px;
+            margin-top: 22px;
         }
 
         .ov-insight-item:first-child {
@@ -302,10 +309,10 @@ st.markdown(
         }
 
         .ov-insight-head {
-            font-size: 0.98rem;
-            line-height: 1.4;
+            font-size: 1.04rem;
+            line-height: 1.45;
             color: #0F172A;
-            margin-bottom: 4px;
+            margin-bottom: 8px;
             font-weight: 700;
         }
 
@@ -313,8 +320,9 @@ st.markdown(
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 10px;
+            gap: 14px;
             flex-wrap: wrap;
+            margin-bottom: 10px;
         }
 
         .ov-insight-local-index {
@@ -326,18 +334,19 @@ st.markdown(
         .ov-insight-logos {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
+            gap: 10px;
             margin-left: auto;
+            flex-wrap: wrap;
         }
 
         .ov-insight-logo {
-            width: 22px;
-            height: 22px;
+            width: 72px;
+            height: 72px;
             border-radius: 999px;
             object-fit: contain;
             background: rgba(255, 255, 255, 0.72);
             border: 1px solid rgba(15, 23, 42, 0.12);
-            padding: 2px;
+            padding: 4px;
         }
 
         .ov-insight-meta {
@@ -362,10 +371,10 @@ st.markdown(
         }
 
         .ov-insight-body {
-            font-size: 0.94rem;
-            line-height: 1.52;
+            font-size: 0.98rem;
+            line-height: 1.72;
             color: #1E293B;
-            margin: 0;
+            margin: 0 0 6px 0;
         }
 
         .ov-insight-stat {
@@ -1399,6 +1408,7 @@ def _inline_insight_company_logos_html(companies: list[str], logos: dict, size_p
             f"alt='{html.escape(company)} logo' "
             f"title='{html.escape(company)}' "
             f"class='ov-insight-logo' "
+            "onerror='this.style.display=\"none\";' "
             f"style='width:{int(size_px)}px; height:{int(size_px)}px;'"
             "/>"
         )
@@ -2311,6 +2321,11 @@ def _pick_macro_row_for_period(df: pd.DataFrame, selected_year: int, selected_qu
     if eligible.empty:
         return None
     return eligible.sort_values(["Year", "QuarterNum"]).iloc[-1]
+
+
+def _get_overview_granularity_options(data_processor: FinancialDataProcessor) -> list[str]:
+    excel_path = getattr(data_processor, "data_path", "")
+    return get_available_granularity_options(excel_path, include_auto=True)
 
 
 @st.cache_data(ttl=3600)
@@ -3740,45 +3755,92 @@ def _render_macro_expansion_sections(
             if not structural_started:
                 st.markdown("### Demographics & Attention Shift")
                 structural_started = True
-            year_df["IsBoomer"] = year_df["Generation"].str.lower().str.contains("boomer", na=False)
-            share = (
-                year_df.groupby(["Country", "IsBoomer"], as_index=False)["WealthSharePct"]
-                .sum(min_count=1)
-                .pivot(index="Country", columns="IsBoomer", values="WealthSharePct")
-                .fillna(0.0)
-                .rename(columns={True: "Boomer Share", False: "Non-Boomer Share"})
-                .reset_index()
-            )
-            if "Boomer Share" not in share.columns:
-                share["Boomer Share"] = 0.0
-            if "Non-Boomer Share" not in share.columns:
-                share["Non-Boomer Share"] = 0.0
-            share = share.sort_values("Boomer Share", ascending=True)
-            if not share.empty:
-                title = "Wealth Concentration by Generation (Boomer vs Rest)"
-                st.markdown(f"#### {title}")
-                fig = go.Figure()
-                fig.add_trace(
-                    go.Bar(
-                        y=share["Country"],
-                        x=share["Non-Boomer Share"],
-                        name="Non-Boomer wealth share (%)",
-                        orientation="h",
-                        marker_color="#94A3B8",
-                    )
+            gen_df = year_df.copy()
+            gen_df["Generation"] = gen_df["Generation"].astype(str).str.strip()
+            gen_df = gen_df[gen_df["Generation"] != ""].copy()
+
+            def _canon_generation(label: str) -> str:
+                low = str(label or "").strip().lower()
+                if "gen z" in low:
+                    return "Gen Z"
+                if "millennial" in low or "gen y" in low:
+                    return "Millennials"
+                if "gen x" in low:
+                    return "Gen X"
+                if "boomer" in low:
+                    return "Boomers"
+                if "silent" in low:
+                    return "Silent"
+                if "greatest" in low:
+                    return "Greatest"
+                return str(label).strip()
+
+            gen_df["Generation"] = gen_df["Generation"].apply(_canon_generation)
+            if gen_df["WealthSharePct"].notna().any():
+                share = (
+                    gen_df.groupby(["Country", "Generation"], as_index=False)["WealthSharePct"]
+                    .sum(min_count=1)
+                    .dropna(subset=["WealthSharePct"])
                 )
-                fig.add_trace(
-                    go.Bar(
-                        y=share["Country"],
-                        x=share["Boomer Share"],
-                        name="Boomer wealth share (%)",
-                        orientation="h",
-                        marker_color="#2563EB",
-                    )
+            elif gen_df["TotalWealthBUSD"].notna().any():
+                wealth_raw = (
+                    gen_df.groupby(["Country", "Generation"], as_index=False)["TotalWealthBUSD"]
+                    .sum(min_count=1)
+                    .dropna(subset=["TotalWealthBUSD"])
+                )
+                country_totals = wealth_raw.groupby("Country", as_index=False)["TotalWealthBUSD"].sum(min_count=1)
+                share = wealth_raw.merge(country_totals, on="Country", how="left", suffixes=("", "_Country"))
+                share["WealthSharePct"] = np.where(
+                    share["TotalWealthBUSD_Country"] > 0,
+                    (share["TotalWealthBUSD"] / share["TotalWealthBUSD_Country"]) * 100.0,
+                    np.nan,
+                )
+                share = share[["Country", "Generation", "WealthSharePct"]].dropna(subset=["WealthSharePct"])
+            else:
+                share = pd.DataFrame(columns=["Country", "Generation", "WealthSharePct"])
+
+            if not share.empty:
+                preferred_generation_order = ["Gen Z", "Millennials", "Gen X", "Boomers", "Silent", "Greatest"]
+                generations_present = share["Generation"].dropna().astype(str).unique().tolist()
+                generation_order = [
+                    *[g for g in preferred_generation_order if g in generations_present],
+                    *sorted([g for g in generations_present if g not in preferred_generation_order]),
+                ]
+
+                boomer_rank = share[share["Generation"] == "Boomers"][["Country", "WealthSharePct"]].rename(
+                    columns={"WealthSharePct": "BoomerShare"}
+                )
+                countries_rank = share.groupby("Country", as_index=False)["WealthSharePct"].sum(min_count=1)
+                countries_rank = countries_rank.merge(boomer_rank, on="Country", how="left")
+                countries_rank["BoomerShare"] = countries_rank["BoomerShare"].fillna(0.0)
+                countries_rank = countries_rank.sort_values(["BoomerShare", "Country"], ascending=[True, True])
+                country_order = countries_rank["Country"].astype(str).tolist()
+
+                generation_colors = {
+                    "Gen Z": "#22C55E",
+                    "Millennials": "#0EA5E9",
+                    "Gen X": "#6366F1",
+                    "Boomers": "#2563EB",
+                    "Silent": "#64748B",
+                    "Greatest": "#334155",
+                }
+                color_map = {g: generation_colors.get(g, "#94A3B8") for g in generation_order}
+
+                title = "Wealth Concentration by Generation"
+                st.markdown(f"#### {title}")
+                fig = px.bar(
+                    share,
+                    x="WealthSharePct",
+                    y="Country",
+                    color="Generation",
+                    orientation="h",
+                    color_discrete_map=color_map,
+                    category_orders={"Country": country_order, "Generation": generation_order},
+                    labels={"WealthSharePct": "Wealth share (%)", "Country": "", "Generation": "Generation"},
                 )
                 fig.update_layout(
                     barmode="stack",
-                    height=max(340, min(760, 32 * len(share))),
+                    height=max(380, min(860, 36 * len(country_order))),
                     margin=_overview_chart_margin(left=30, right=20, top=104),
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)",
@@ -3944,7 +4006,7 @@ def _render_excel_overview_insights(
             stat_label = _clean_overview_text(row.get("stat_label"))
             comment = _clean_insight_comment_text(row.get("overview_comment") or row.get("comment"))
             companies = _extract_insight_companies(title, comment)
-            logos_html = _inline_insight_company_logos_html(companies, company_logos, size_px=20)
+            logos_html = _inline_insight_company_logos_html(companies, company_logos, size_px=72)
 
             stat_badge = ""
             if stat:
@@ -5275,9 +5337,12 @@ data_processor = get_data_processor()
 # Get companies and available years
 companies = get_available_companies(data_processor)
 available_years = get_available_years(data_processor)
+if not available_years:
+    available_years = [datetime.now().year]
+excel_path = getattr(data_processor, "data_path", "")
 
-# Year + quarter selectors
-year_col, quarter_col = st.columns([1.0, 1.0])
+# Year + quarter + granularity selectors
+year_col, quarter_col, gran_col = st.columns([1.0, 1.0, 1.0])
 with year_col:
     selected_year = st.selectbox(
         "Select Year",
@@ -5285,13 +5350,75 @@ with year_col:
         index=len(available_years)-1  # Default to most recent year
     )
 with quarter_col:
+    quarter_options = get_quarter_labels_for_year(excel_path, int(selected_year))
+    if not quarter_options:
+        quarter_options = ["Q1", "Q2", "Q3", "Q4"]
+    current_q = st.session_state.get("overview_selected_quarter", quarter_options[-1])
+    if current_q not in quarter_options:
+        current_q = quarter_options[-1]
     selected_quarter = st.selectbox(
         "Select Quarter",
-        ["Q1", "Q2", "Q3", "Q4"],
-        index=3,
+        quarter_options,
+        index=quarter_options.index(current_q),
         key="overview_selected_quarter",
         help="Used by Excel-backed overview comments (quarterly/yearly).",
     )
+with gran_col:
+    granularity_options = _get_overview_granularity_options(data_processor)
+    current_granularity = st.session_state.get("overview_selected_granularity", "Auto")
+    if current_granularity not in granularity_options:
+        current_granularity = granularity_options[0] if granularity_options else "Auto"
+    selected_granularity = st.selectbox(
+        "Data Granularity",
+        granularity_options,
+        index=granularity_options.index(current_granularity),
+        key="overview_selected_granularity",
+        help="Auto uses each chart's native frequency. Annual/Quarterly/Monthly/Daily enables extra period controls when data exists.",
+    )
+
+selected_month = None
+selected_day = None
+if selected_granularity == "Monthly":
+    month_labels = get_month_labels_for_year(excel_path, int(selected_year))
+    if month_labels:
+        current_month = st.session_state.get("overview_selected_month", month_labels[-1])
+        if current_month not in month_labels:
+            current_month = month_labels[-1]
+        selected_month = st.selectbox(
+            "Select Month",
+            month_labels,
+            index=month_labels.index(current_month),
+            key="overview_selected_month",
+            help="Monthly controls are available for datasets that provide monthly time series.",
+        )
+    else:
+        st.caption("No monthly rows available for this selected year.")
+elif selected_granularity == "Daily":
+    day_labels = get_day_labels_for_year(excel_path, int(selected_year))
+    if day_labels:
+        current_day = st.session_state.get("overview_selected_day", day_labels[-1])
+        if current_day not in day_labels:
+            current_day = day_labels[-1]
+        selected_day = st.selectbox(
+            "Select Day",
+            day_labels,
+            index=day_labels.index(current_day),
+            key="overview_selected_day",
+            help="Daily controls are available for datasets with daily observations.",
+        )
+    else:
+        st.caption("No daily rows available for this selected year.")
+
+st.session_state["overview_time_context"] = update_global_time_context(
+    page="Overview",
+    granularity=selected_granularity,
+    year=int(selected_year),
+    quarter=selected_quarter,
+    month=selected_month,
+    day=selected_day,
+    year_range=(int(selected_year), int(selected_year)),
+    excel_path=excel_path,
+)
 
 st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
 

@@ -32,6 +32,13 @@ from utils.inflation_calculator import create_inflation_analysis_box, add_inflat
 from subscriber_data_processor import SubscriberDataProcessor
 import logging
 from functools import lru_cache
+from utils.data_granularity import (
+    get_available_granularity_options,
+    get_day_labels_for_year,
+    get_month_labels_for_year,
+    get_quarter_labels_for_year,
+    update_global_time_context,
+)
 
 # Import our Bitcoin integration module (optional; keep Genie functional if missing)
 try:
@@ -877,6 +884,94 @@ year_range = st.slider(
     max_value=max(all_years),
     value=(min(all_years), max(all_years)),
     key="year_range_selector"
+)
+
+# Cross-page temporal context (shared with Overview and future SQL assistant/widget).
+excel_path = getattr(data_processor, "data_path", "")
+granularity_options = get_available_granularity_options(excel_path, include_auto=True)
+current_granularity = st.session_state.get("genie_selected_granularity", "Auto")
+if current_granularity not in granularity_options:
+    current_granularity = granularity_options[0] if granularity_options else "Auto"
+
+time_col1, time_col2, time_col3 = st.columns([1.0, 1.0, 1.0])
+with time_col1:
+    selected_granularity = st.selectbox(
+        "Data Granularity",
+        options=granularity_options,
+        index=granularity_options.index(current_granularity),
+        key="genie_selected_granularity",
+        help="Auto uses each chart's native frequency. Other modes set a shared time context for Genie and future assistant widgets.",
+    )
+
+selected_quarter_focus = "All Quarters"
+selected_month_focus = None
+selected_day_focus = None
+focus_year = int(year_range[1])
+
+with time_col2:
+    quarter_labels = get_quarter_labels_for_year(
+        excel_path,
+        focus_year,
+        sheet_preferences=("Company_subscribers_values", "Overview_Insights", "Overview_Macro"),
+    )
+    if not quarter_labels:
+        quarter_labels = ["Q1", "Q2", "Q3", "Q4"]
+    quarter_focus_options = ["All Quarters"] + quarter_labels
+    current_q_focus = st.session_state.get("genie_selected_quarter_focus", "All Quarters")
+    if current_q_focus not in quarter_focus_options:
+        current_q_focus = "All Quarters"
+    selected_quarter_focus = st.selectbox(
+        f"Quarter Focus ({focus_year})",
+        options=quarter_focus_options,
+        index=quarter_focus_options.index(current_q_focus),
+        key="genie_selected_quarter_focus",
+        help="Context filter for quarterly-aware analysis and assistant responses.",
+        disabled=selected_granularity not in {"Auto", "Quarterly"},
+    )
+
+with time_col3:
+    if selected_granularity == "Monthly":
+        month_labels = get_month_labels_for_year(excel_path, focus_year)
+        if month_labels:
+            current_month_focus = st.session_state.get("genie_selected_month_focus", month_labels[-1])
+            if current_month_focus not in month_labels:
+                current_month_focus = month_labels[-1]
+            selected_month_focus = st.selectbox(
+                f"Month Focus ({focus_year})",
+                options=month_labels,
+                index=month_labels.index(current_month_focus),
+                key="genie_selected_month_focus",
+                help="Context filter for monthly-aware analysis.",
+            )
+        else:
+            st.caption(f"No monthly rows for {focus_year}.")
+    elif selected_granularity == "Daily":
+        day_labels = get_day_labels_for_year(excel_path, focus_year)
+        if day_labels:
+            current_day_focus = st.session_state.get("genie_selected_day_focus", day_labels[-1])
+            if current_day_focus not in day_labels:
+                current_day_focus = day_labels[-1]
+            selected_day_focus = st.selectbox(
+                f"Day Focus ({focus_year})",
+                options=day_labels,
+                index=day_labels.index(current_day_focus),
+                key="genie_selected_day_focus",
+                help="Context filter for daily-aware analysis.",
+            )
+        else:
+            st.caption(f"No daily rows for {focus_year}.")
+    else:
+        st.caption("Month/Day focus activates in Monthly or Daily mode.")
+
+st.session_state["genie_time_context"] = update_global_time_context(
+    page="Genie",
+    granularity=selected_granularity,
+    year=focus_year,
+    quarter=selected_quarter_focus if selected_quarter_focus != "All Quarters" else None,
+    month=selected_month_focus,
+    day=selected_day_focus,
+    year_range=(int(year_range[0]), int(year_range[1])),
+    excel_path=excel_path,
 )
 
 # Initialize inflation_type in session_state if not already present
@@ -2381,6 +2476,11 @@ try:
         'selected_metrics': selected_detailed_metrics,
         'selected_company_metrics': selected_company_metrics if 'selected_company_metrics' in locals() else [],
         'year_range': f"{year_range[0]}-{year_range[1]}" if 'year_range' in locals() else "unknown",
+        'data_granularity': selected_granularity if 'selected_granularity' in locals() else "Auto",
+        'quarter_focus': selected_quarter_focus if 'selected_quarter_focus' in locals() else "All Quarters",
+        'month_focus': selected_month_focus if 'selected_month_focus' in locals() else None,
+        'day_focus': selected_day_focus if 'selected_day_focus' in locals() else None,
+        'sheet_granularity_library': st.session_state.get("global_time_context", {}).get("sheet_granularity_library", {}),
         'show_m2_supply': bool(show_m2_supply) if 'show_m2_supply' in locals() else False,
         'show_inflation': bool(show_inflation) if 'show_inflation' in locals() else False,
         'show_fed_funds': bool(show_fed_funds) if 'show_fed_funds' in locals() else False,
