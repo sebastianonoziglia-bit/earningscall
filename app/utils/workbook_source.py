@@ -69,19 +69,11 @@ def resolve_financial_data_xlsx(local_candidates: Iterable[str] | None = None) -
     """Resolve the primary workbook path.
 
     Priority:
-    1) `FINANCIAL_DATA_XLSX` local override.
-    2) Google Sheet export (default behavior, can be disabled with `FINANCIAL_DATA_SOURCE=local`).
-    3) Provided local fallback candidates.
+    1) Google Sheet export (default behavior).
+    2) Local file only when explicitly requested (`FINANCIAL_DATA_SOURCE=local`).
     """
-
-    env_xlsx = os.getenv("FINANCIAL_DATA_XLSX")
-    if env_xlsx and os.path.exists(env_xlsx):
-        return os.path.abspath(env_xlsx)
-
     source_pref = str(os.getenv("FINANCIAL_DATA_SOURCE", "google")).strip().lower()
-    use_google = source_pref not in {"local", "file", "xlsx"}
-
-    if use_google:
+    if source_pref not in {"local", "file", "xlsx"}:
         sheet_ref = (
             os.getenv("FINANCIAL_DATA_GSHEET_URL")
             or os.getenv("FINANCIAL_DATA_GSHEET_ID")
@@ -93,6 +85,11 @@ def resolve_financial_data_xlsx(local_candidates: Iterable[str] | None = None) -
             downloaded = _download_google_sheet_xlsx(sheet_id, refresh_seconds=refresh_seconds)
             if downloaded and os.path.exists(downloaded):
                 return os.path.abspath(downloaded)
+        return None
+
+    env_xlsx = os.getenv("FINANCIAL_DATA_XLSX")
+    if env_xlsx and os.path.exists(env_xlsx):
+        return os.path.abspath(env_xlsx)
 
     for path in list(local_candidates or []):
         if path and os.path.exists(path):
