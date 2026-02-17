@@ -295,6 +295,37 @@ st.markdown(
             font-weight: 700;
         }
 
+        .ov-insight-head-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .ov-insight-local-index {
+            font-weight: 700;
+            color: #1E293B;
+            margin-right: 6px;
+        }
+
+        .ov-insight-logos {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: auto;
+        }
+
+        .ov-insight-logo {
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            object-fit: contain;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            padding: 2px;
+        }
+
         .ov-insight-meta {
             font-size: 0.84rem;
             color: #475569;
@@ -347,6 +378,15 @@ st.markdown(
 
         body.theme-dark .ov-insight-head {
             color: #F8FAFC;
+        }
+
+        body.theme-dark .ov-insight-local-index {
+            color: #CBD5E1;
+        }
+
+        body.theme-dark .ov-insight-logo {
+            background: rgba(15, 23, 42, 0.72);
+            border-color: rgba(148, 163, 184, 0.3);
         }
 
         body.theme-dark .ov-insight-meta {
@@ -1214,6 +1254,71 @@ def company_logo_html(company: str, logos: dict, size_px: int = 44) -> str:
         f"style='height:{size_px}px; width:{size_px}px; object-fit:contain; display:block;'"
         "/>"
     )
+
+
+_INSIGHT_COMPANY_PATTERNS: list[tuple[str, list[str]]] = [
+    ("Alphabet", [r"\balphabet\b", r"\bgoogle\b", r"\byoutube\b"]),
+    ("Amazon", [r"\bamazon\b"]),
+    ("Apple", [r"\bapple\b", r"\biphone\b"]),
+    ("Meta Platforms", [r"\bmeta\b", r"\bfacebook\b", r"\binstagram\b", r"\bwhatsapp\b"]),
+    ("Microsoft", [r"\bmicrosoft\b", r"\bazure\b"]),
+    ("Netflix", [r"\bnetflix\b"]),
+    ("Disney", [r"\bdisney\b", r"\bdisney\+\b"]),
+    ("Comcast", [r"\bcomcast\b"]),
+    ("Paramount Global", [r"\bparamount\b"]),
+    ("Warner Bros. Discovery", [r"\bwbd\b", r"\bwarner\s+bro(?:s|\.)?\b"]),
+    ("Spotify", [r"\bspotify\b"]),
+    ("Roku", [r"\broku\b"]),
+    ("TikTok", [r"\btiktok\b"]),
+]
+
+
+def _company_logo_base64_for_insight(company: str, logos: dict) -> str:
+    company_str = str(company).strip()
+    candidates = [
+        company_str,
+        company_str.replace("Meta Platforms", "Meta"),
+        company_str.replace("Warner Bros. Discovery", "Warner Bros Discovery"),
+        company_str.replace("Warner Bros Discovery", "Warner Bros. Discovery"),
+    ]
+    for key in candidates:
+        b64 = logos.get(key) or logos.get(str(key).strip())
+        if b64:
+            return b64
+    return ""
+
+
+def _extract_insight_companies(title: str, comment: str) -> list[str]:
+    text = f"{str(title or '')} {str(comment or '')}"
+    found: list[str] = []
+    lowered = text.lower()
+    for company, patterns in _INSIGHT_COMPANY_PATTERNS:
+        for pattern in patterns:
+            if re.search(pattern, lowered, flags=re.IGNORECASE):
+                if company not in found:
+                    found.append(company)
+                break
+    return found
+
+
+def _inline_insight_company_logos_html(companies: list[str], logos: dict, size_px: int = 22) -> str:
+    chips: list[str] = []
+    for company in companies:
+        b64 = _company_logo_base64_for_insight(company, logos)
+        if not b64:
+            continue
+        chips.append(
+            "<img "
+            f"src='data:image/png;base64,{b64}' "
+            f"alt='{html.escape(company)} logo' "
+            f"title='{html.escape(company)}' "
+            f"class='ov-insight-logo' "
+            f"style='width:{int(size_px)}px; height:{int(size_px)}px;'"
+            "/>"
+        )
+    if not chips:
+        return ""
+    return "<span class='ov-insight-logos'>" + "".join(chips) + "</span>"
 
 
 def get_kpi_icon_html(metric_key: str) -> str:
@@ -3332,6 +3437,7 @@ def _render_excel_overview_insights(
     if scoped_df.empty:
         return False
     scoped_df = scoped_df.sort_values(["sort_order", "insight_id", "title"]).copy()
+    insight_logos = load_company_logos() or {}
 
     st.markdown("### Insights by Category")
     st.caption(f"Source: Overview_Insights · Period: {selected_period} · {len(scoped_df)} insights")
@@ -3354,27 +3460,29 @@ def _render_excel_overview_insights(
             ),
             unsafe_allow_html=True,
         )
-        for _, row in cat_df.iterrows():
-            insight_id = _clean_overview_text(row.get("insight_id")) or "—"
+        for local_idx, (_, row) in enumerate(cat_df.iterrows(), start=1):
             title = _clean_overview_text(row.get("title"))
             comment = _clean_insight_comment_text(row.get("comment"))
             chart_key = _clean_overview_text(row.get("chart_key"))
-            chart_title = _lookup_chart_title_for_key(chart_key, selected_year, selected_quarter)
+            mentioned_companies = _extract_insight_companies(title, comment)
+            logos_html = _inline_insight_company_logos_html(mentioned_companies, insight_logos, size_px=22)
             meta_html = ""
             if chart_key:
-                chart_label = chart_title or chart_key
                 anchor_id = _chart_anchor_id(chart_key)
                 meta_html = (
                     f"<div class='ov-insight-meta'>"
                     f"<a class='ov-insight-chart-link' href='#{html.escape(anchor_id)}'>"
-                    f"Linked chart: {html.escape(chart_label)}"
+                    "View linked chart"
                     f"</a></div>"
                 )
             st.markdown(
                 _html_block(
                     f"""
                     <div class="ov-insight-item">
-                        <div class="ov-insight-head">{html.escape(str(insight_id))} — {html.escape(title)}</div>
+                        <div class="ov-insight-head ov-insight-head-row">
+                            <span><span class="ov-insight-local-index">{local_idx}.</span>{html.escape(title)}</span>
+                            {logos_html}
+                        </div>
                         {meta_html}
                         <p class="ov-insight-body">{html.escape(comment)}</p>
                     </div>
@@ -3428,13 +3536,25 @@ def _load_transcript_topic_metrics() -> pd.DataFrame:
 
 
 def _apply_year_window(df: pd.DataFrame, start_year: int, end_year: int, year_col: str = "Year") -> pd.DataFrame:
-    if df is None or df.empty or year_col not in df.columns:
-        return pd.DataFrame()
+    if df is None:
+        return pd.DataFrame(columns=[year_col])
+    if df.empty:
+        cols = list(df.columns)
+        if year_col not in cols:
+            cols.append(year_col)
+        return pd.DataFrame(columns=cols)
+    if year_col not in df.columns:
+        cols = list(df.columns)
+        cols.append(year_col)
+        return pd.DataFrame(columns=cols)
     out = df.copy()
     out[year_col] = pd.to_numeric(out[year_col], errors="coerce")
     out = out.dropna(subset=[year_col]).copy()
     if out.empty:
-        return pd.DataFrame()
+        cols = list(out.columns)
+        if year_col not in cols:
+            cols.append(year_col)
+        return pd.DataFrame(columns=cols)
     out[year_col] = out[year_col].astype(int)
     return out[(out[year_col] >= int(start_year)) & (out[year_col] <= int(end_year))].copy()
 
@@ -3456,6 +3576,10 @@ def _overview_legend_style() -> dict:
 
 def _overview_chart_margin(left: int = 30, right: int = 20, bottom: int = 20, top: int = 94) -> dict:
     return dict(l=left, r=right, t=top, b=bottom)
+
+
+def _df_has_cols(df: pd.DataFrame | None, cols: list[str]) -> bool:
+    return isinstance(df, pd.DataFrame) and not df.empty and all(col in df.columns for col in cols)
 
 
 def _render_macro_bridge_charts(
@@ -3511,8 +3635,10 @@ def _render_macro_bridge_charts(
     st.markdown(f"#### {title}")
     render_standard_overview_comment(title, selected_year)
     m2 = _apply_year_window(m2_df, start_year, end_year)
-    if metrics_df is not None and not metrics_df.empty:
+    if _df_has_cols(m2, ["Year", "M2_B"]) and _df_has_cols(metrics_df, ["Year", "Company", "MarketCap"]):
         mcap = _apply_year_window(metrics_df, start_year, end_year)
+        if not _df_has_cols(mcap, ["Year", "Company", "MarketCap"]):
+            mcap = pd.DataFrame(columns=["Year", "Company", "MarketCap"])
         mcap = mcap[mcap["Company"].isin(tech_media)].copy()
         mcap = mcap.groupby("Year", as_index=False)["MarketCap"].sum(min_count=1)
         mcap["Tech_MarketCap_B"] = mcap["MarketCap"] / 1000.0
@@ -3577,7 +3703,7 @@ def _render_macro_bridge_charts(
     st.markdown(f"#### {title}")
     render_standard_overview_comment(title, selected_year)
     tvi = _apply_year_window(country_channel_df, start_year, end_year)
-    if tvi.empty:
+    if (not _df_has_cols(tvi, ["Year", "Channel", "AdSpend_BUSD"])) or tvi.empty:
         st.info("No country advertising channel time series available for this chart.")
     else:
         channels = tvi[tvi["Channel"].isin(["TV", "Internet", "OOH"])].copy()
@@ -3612,7 +3738,7 @@ def _render_macro_bridge_charts(
     st.markdown(f"#### {title}")
     render_standard_overview_comment(title, selected_year)
     metrics = _apply_year_window(metrics_df, start_year, end_year)
-    if metrics.empty:
+    if not _df_has_cols(metrics, ["Year", "Company", "Debt", "MarketCap"]):
         st.info("No company metrics available for this chart.")
     else:
         old = metrics[metrics["Company"].isin(old_media)].groupby("Year", as_index=False)[["Debt", "MarketCap"]].sum(min_count=1)
@@ -3645,7 +3771,11 @@ def _render_macro_bridge_charts(
     render_standard_overview_comment(title, selected_year)
     m2 = _apply_year_window(m2_df, start_year, end_year)
     infl = _apply_year_window(inflation_df, start_year, end_year)
-    merged = m2.merge(infl, on="Year", how="inner").sort_values("Year")
+    merged = (
+        m2.merge(infl, on="Year", how="inner").sort_values("Year")
+        if _df_has_cols(m2, ["Year", "M2_B"]) and _df_has_cols(infl, ["Year", "Inflation_YoY"])
+        else pd.DataFrame()
+    )
     if merged.empty:
         st.info("Not enough M2 + inflation overlap for this chart.")
     else:
@@ -3673,7 +3803,7 @@ def _render_macro_bridge_charts(
     st.markdown(f"#### {title}")
     render_standard_overview_comment(title, selected_year)
     adgdp = _apply_year_window(ad_gdp_df, start_year, end_year)
-    if adgdp.empty:
+    if not _df_has_cols(adgdp, ["Year", "Ad_vs_GDP_pct"]):
         st.info("No global ad-vs-GDP data available for this chart.")
     else:
         fig = px.line(adgdp, x="Year", y="Ad_vs_GDP_pct", markers=True)
@@ -3696,9 +3826,13 @@ def _render_macro_bridge_charts(
     render_standard_overview_comment(title, selected_year)
     metrics = _apply_year_window(metrics_df, start_year, end_year)
     emps = _apply_year_window(employees_df, start_year, end_year)
-    merged = metrics.merge(emps, on=["Company", "Year"], how="inner")
-    merged = merged[(merged["Employees"] > 0) & merged["Revenue"].notna()].copy()
-    if merged.empty:
+    merged = (
+        metrics.merge(emps, on=["Company", "Year"], how="inner")
+        if _df_has_cols(metrics, ["Company", "Year", "Revenue"]) and _df_has_cols(emps, ["Company", "Year", "Employees"])
+        else pd.DataFrame()
+    )
+    merged = merged[(merged["Employees"] > 0) & merged["Revenue"].notna()].copy() if not merged.empty else merged
+    if merged is None or merged.empty:
         st.info("No revenue-per-employee overlap found.")
     else:
         merged["RevPerEmployee_MUSD"] = merged["Revenue"] / merged["Employees"]
@@ -3735,7 +3869,7 @@ def _render_macro_bridge_charts(
     render_standard_overview_comment(title, selected_year)
     metrics = _apply_year_window(metrics_df, start_year, end_year)
     infl = _apply_year_window(inflation_df, start_year, end_year)
-    if metrics.empty or infl.empty:
+    if (not _df_has_cols(metrics, ["Year", "Company", "Debt"])) or (not _df_has_cols(infl, ["Year", "Inflation_YoY"])):
         st.info("Need debt and inflation series for this chart.")
     else:
         old_debt = metrics[metrics["Company"].isin(old_media)].groupby("Year", as_index=False)["Debt"].sum(min_count=1)
@@ -3767,7 +3901,7 @@ def _render_macro_bridge_charts(
     st.markdown(f"#### {title}")
     render_standard_overview_comment(title, selected_year)
     metrics = _apply_year_window(metrics_df, start_year, end_year)
-    if metrics.empty:
+    if not _df_has_cols(metrics, ["Year", "Company", "MarketCap"]):
         st.info("No market cap data available for concentration chart.")
     else:
         m = metrics.dropna(subset=["MarketCap"]).copy()
@@ -3812,7 +3946,11 @@ def _render_macro_bridge_charts(
     render_standard_overview_comment(title, selected_year)
     m2 = _apply_year_window(m2_df, start_year, end_year)
     ad = _apply_year_window(ad_totals_df, start_year, end_year)
-    merged = m2.merge(ad[["Year", "TotalAdvertising_BUSD"]], on="Year", how="inner") if (not m2.empty and not ad.empty) else pd.DataFrame()
+    merged = (
+        m2.merge(ad[["Year", "TotalAdvertising_BUSD"]], on="Year", how="inner")
+        if _df_has_cols(m2, ["Year", "M2_B"]) and _df_has_cols(ad, ["Year", "TotalAdvertising_BUSD"])
+        else pd.DataFrame()
+    )
     if merged.empty:
         st.info("Not enough M2/ad-spend overlap for indexed chart.")
     else:
@@ -3840,7 +3978,7 @@ def _render_macro_bridge_charts(
     st.markdown(f"#### {title}")
     render_standard_overview_comment(title, selected_year)
     country_window = _apply_year_window(country_gdp_df, start_year, end_year)
-    if country_window.empty:
+    if not _df_has_cols(country_window, ["Year", "Country", "GDP_BUSD", "AdSpending_BUSD", "Ad_vs_GDP_pct"]):
         st.info("No country-level ad spend/GDP data found.")
     else:
         year_df = country_window[country_window["Year"] == int(selected_year)].copy()
@@ -3905,7 +4043,7 @@ def _render_macro_bridge_charts(
     st.markdown(f"#### {title}")
     render_standard_overview_comment(title, selected_year)
     country_window = _apply_year_window(country_gdp_df, start_year, end_year)
-    if country_window.empty:
+    if not _df_has_cols(country_window, ["Year", "Country", "Ad_vs_GDP_pct"]):
         st.info("No country-level ad spend/GDP data found.")
     else:
         year_df = country_window[country_window["Year"] == int(selected_year)].copy()
