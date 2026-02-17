@@ -252,6 +252,92 @@ st.markdown(
             stroke: rgba(148, 163, 184, 0.12) !important;
         }
 
+        .ov-insight-category-card {
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            border-radius: 14px;
+            background: rgba(248, 250, 252, 0.85);
+            padding: 12px 14px;
+            margin: 8px 0 14px 0;
+        }
+
+        .ov-insight-category-title {
+            font-size: 1.02rem;
+            font-weight: 700;
+            color: #0F172A;
+            margin-bottom: 8px;
+        }
+
+        .ov-insight-item {
+            border-top: 1px solid rgba(15, 23, 42, 0.08);
+            padding-top: 10px;
+            margin-top: 10px;
+        }
+
+        .ov-insight-item:first-child {
+            border-top: none;
+            padding-top: 0;
+            margin-top: 0;
+        }
+
+        .ov-insight-head {
+            font-size: 0.98rem;
+            line-height: 1.4;
+            color: #0F172A;
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+
+        .ov-insight-meta {
+            font-size: 0.84rem;
+            color: #475569;
+            margin-bottom: 4px;
+        }
+
+        .ov-insight-body {
+            font-size: 0.94rem;
+            line-height: 1.52;
+            color: #1E293B;
+            margin: 0;
+        }
+
+        .ov-macro-chart-wrap {
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            border-radius: 14px;
+            background: rgba(248, 250, 252, 0.72);
+            padding: 10px 12px 6px 12px;
+            margin-top: 8px;
+        }
+
+        body.theme-dark .ov-insight-category-card {
+            border-color: rgba(148, 163, 184, 0.22);
+            background: rgba(15, 23, 42, 0.45);
+        }
+
+        body.theme-dark .ov-insight-category-title {
+            color: #E2E8F0;
+        }
+
+        body.theme-dark .ov-insight-item {
+            border-top-color: rgba(148, 163, 184, 0.2);
+        }
+
+        body.theme-dark .ov-insight-head {
+            color: #F8FAFC;
+        }
+
+        body.theme-dark .ov-insight-meta {
+            color: #94A3B8;
+        }
+
+        body.theme-dark .ov-insight-body {
+            color: #CBD5E1;
+        }
+
+        body.theme-dark .ov-macro-chart-wrap {
+            border-color: rgba(148, 163, 184, 0.22);
+            background: rgba(15, 23, 42, 0.42);
+        }
+
         </style>
         """
     ),
@@ -1333,6 +1419,196 @@ def _load_groupm_total_ad_df(excel_path: str) -> pd.DataFrame:
     return out
 
 
+def _coerce_percent_series(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(
+        series.astype(str)
+        .str.replace("%", "", regex=False)
+        .str.replace(",", ".", regex=False)
+        .str.replace("$", "", regex=False)
+        .str.strip(),
+        errors="coerce",
+    )
+
+
+@st.cache_data(ttl=3600)
+def _load_m2_yearly_df(excel_path: str) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name="M2_values")
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    out = df.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    if "USD observation_date" not in out.columns:
+        return pd.DataFrame()
+    value_col = "WM2NS" if "WM2NS" in out.columns else ("WM2" if "WM2" in out.columns else None)
+    if not value_col:
+        return pd.DataFrame()
+
+    out["USD observation_date"] = pd.to_datetime(out["USD observation_date"], errors="coerce")
+    out["M2"] = pd.to_numeric(out[value_col], errors="coerce")
+    out = out.dropna(subset=["USD observation_date", "M2"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["Year"] = out["USD observation_date"].dt.year.astype(int)
+    out = (
+        out.sort_values(["Year", "USD observation_date"])
+        .groupby("Year", as_index=False)
+        .tail(1)
+        .copy()
+    )
+    out["M2_B"] = out["M2"]
+    return out[["Year", "M2_B"]].sort_values("Year").reset_index(drop=True)
+
+
+@st.cache_data(ttl=3600)
+def _load_inflation_yearly_df(excel_path: str) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name="USD Inflation")
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    out = df.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    year_col = "Year" if "Year" in out.columns else ("year" if "year" in out.columns else None)
+    infl_col = "Official Headline CPI" if "Official Headline CPI" in out.columns else None
+    if not year_col or not infl_col:
+        return pd.DataFrame()
+
+    out["Year"] = pd.to_numeric(out[year_col], errors="coerce")
+    out["Inflation_YoY"] = _coerce_percent_series(out[infl_col])
+    out = out.dropna(subset=["Year", "Inflation_YoY"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["Year"] = out["Year"].astype(int)
+    return out[["Year", "Inflation_YoY"]].sort_values("Year").reset_index(drop=True)
+
+
+@st.cache_data(ttl=3600)
+def _load_company_metrics_yearly_df(excel_path: str) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name="Company_metrics_earnings_values")
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    out = df.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    col_map = {
+        "Company": "Company",
+        "Year": "Year",
+        "Revenue": "Revenue",
+        "Debt": "Debt",
+        "Market Cap.": "MarketCap",
+        "Operating Income": "OperatingIncome",
+        "Net Income": "NetIncome",
+        "Cost Of Revenue": "CostOfRevenue",
+        "Total Assets": "TotalAssets",
+        "Capex": "Capex",
+    }
+    for src, dst in col_map.items():
+        if src not in out.columns:
+            out[src] = np.nan if src != "Company" else ""
+        out = out.rename(columns={src: dst})
+
+    out["Company"] = out["Company"].astype(str).str.strip()
+    out["Year"] = pd.to_numeric(out["Year"], errors="coerce")
+    for col in ["Revenue", "Debt", "MarketCap", "OperatingIncome", "NetIncome", "CostOfRevenue", "TotalAssets", "Capex"]:
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+    out = out.dropna(subset=["Company", "Year"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["Year"] = out["Year"].astype(int)
+    return out
+
+
+@st.cache_data(ttl=3600)
+def _load_employee_yearly_df(excel_path: str) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name="Company_Employees")
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    out = df.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    company_col = "Company" if "Company" in out.columns else None
+    year_col = "Year" if "Year" in out.columns else None
+    emp_col = "Employee Count" if "Employee Count" in out.columns else ("employees" if "employees" in out.columns else None)
+    if not company_col or not year_col or not emp_col:
+        return pd.DataFrame()
+
+    out = out.rename(columns={company_col: "Company", year_col: "Year", emp_col: "Employees"})
+    out["Company"] = out["Company"].astype(str).str.strip()
+    out["Year"] = pd.to_numeric(out["Year"], errors="coerce")
+    out["Employees"] = pd.to_numeric(out["Employees"], errors="coerce")
+    out = out.dropna(subset=["Company", "Year", "Employees"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["Year"] = out["Year"].astype(int)
+    return out[["Company", "Year", "Employees"]]
+
+
+@st.cache_data(ttl=3600)
+def _load_global_ad_vs_gdp_df(excel_path: str) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name="Country_Totals_vs_GDP")
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    out = df.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    required = ["Year", "AdSpending_USD", "GDP_USD"]
+    if not set(required).issubset(out.columns):
+        return pd.DataFrame()
+    out["Year"] = pd.to_numeric(out["Year"], errors="coerce")
+    out["AdSpending_USD"] = pd.to_numeric(out["AdSpending_USD"], errors="coerce")
+    out["GDP_USD"] = pd.to_numeric(out["GDP_USD"], errors="coerce")
+    out = out.dropna(subset=["Year", "AdSpending_USD", "GDP_USD"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["Year"] = out["Year"].astype(int)
+    agg = out.groupby("Year", as_index=False)[["AdSpending_USD", "GDP_USD"]].sum(min_count=1)
+    agg = agg[agg["GDP_USD"] > 0].copy()
+    if agg.empty:
+        return pd.DataFrame()
+    agg["Ad_vs_GDP_pct"] = (agg["AdSpending_USD"] / agg["GDP_USD"]) * 100.0
+    return agg.sort_values("Year").reset_index(drop=True)
+
+
 def _latest_subscriber_history(subscriber_df: pd.DataFrame, services: list[str]) -> pd.DataFrame:
     if subscriber_df is None or subscriber_df.empty:
         return pd.DataFrame()
@@ -1691,16 +1967,34 @@ def _render_excel_overview_insights(
         cat_df = scoped_df[scoped_df["category"] == category].copy()
         if cat_df.empty:
             continue
-        st.markdown(f"#### {category}")
+        st.markdown(
+            _html_block(
+                f"""
+                <div class="ov-insight-category-card">
+                    <div class="ov-insight-category-title">{html.escape(category)}</div>
+                """
+            ),
+            unsafe_allow_html=True,
+        )
         for _, row in cat_df.iterrows():
             insight_id = _clean_overview_text(row.get("insight_id")) or "—"
             title = _clean_overview_text(row.get("title"))
             comment = _clean_overview_text(row.get("comment"))
             chart_key = _clean_overview_text(row.get("chart_key"))
-            st.markdown(f"- **{insight_id} — {title}**")
-            if chart_key:
-                st.caption(f"Chart: {chart_key}")
-            st.markdown(comment)
+            meta_text = f"Chart: {chart_key}" if chart_key else ""
+            st.markdown(
+                _html_block(
+                    f"""
+                    <div class="ov-insight-item">
+                        <div class="ov-insight-head">{html.escape(str(insight_id))} — {html.escape(title)}</div>
+                        {"<div class='ov-insight-meta'>" + html.escape(meta_text) + "</div>" if meta_text else ""}
+                        <p class="ov-insight-body">{html.escape(comment)}</p>
+                    </div>
+                    """
+                ),
+                unsafe_allow_html=True,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
     return True
 
 
@@ -1743,6 +2037,437 @@ def _load_transcript_topic_metrics() -> pd.DataFrame:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df[df["topic"] != ""].copy()
     return df
+
+
+def _apply_year_window(df: pd.DataFrame, start_year: int, end_year: int, year_col: str = "Year") -> pd.DataFrame:
+    if df is None or df.empty or year_col not in df.columns:
+        return pd.DataFrame()
+    out = df.copy()
+    out[year_col] = pd.to_numeric(out[year_col], errors="coerce")
+    out = out.dropna(subset=[year_col]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out[year_col] = out[year_col].astype(int)
+    return out[(out[year_col] >= int(start_year)) & (out[year_col] <= int(end_year))].copy()
+
+
+def _render_macro_bridge_charts(
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    selected_quarter: str,
+    plotly_config: dict,
+) -> bool:
+    excel_path = getattr(data_processor, "data_path", "")
+    if not excel_path:
+        return False
+
+    m2_df = _load_m2_yearly_df(excel_path)
+    inflation_df = _load_inflation_yearly_df(excel_path)
+    granular_df = _load_groupm_granular_df(excel_path)
+    channels_df = _load_groupm_channels_df(excel_path)
+    metrics_df = _load_company_metrics_yearly_df(excel_path)
+    employees_df = _load_employee_yearly_df(excel_path)
+    ad_gdp_df = _load_global_ad_vs_gdp_df(excel_path)
+
+    year_candidates = []
+    for df in [m2_df, inflation_df, granular_df, channels_df, metrics_df, employees_df, ad_gdp_df]:
+        if df is not None and not df.empty:
+            col = "Year" if "Year" in df.columns else ("year" if "year" in df.columns else None)
+            if col:
+                vals = pd.to_numeric(df[col], errors="coerce").dropna().astype(int).tolist()
+                year_candidates.extend(vals)
+    if not year_candidates:
+        return False
+
+    min_year = int(min(year_candidates))
+    max_year = int(max(year_candidates))
+    default_end = min(max_year, int(selected_year))
+    default_start = max(min_year, default_end - 15)
+
+    st.markdown("### Macro Regime Bridge Charts")
+    col_range, col_chart = st.columns([1.25, 1.75])
+    with col_range:
+        year_range = st.slider(
+            "Macro chart year range",
+            min_value=min_year,
+            max_value=max_year,
+            value=(default_start, default_end),
+            step=1,
+            key="overview_macro_year_range",
+            help="Filters all macro bridge charts below.",
+        )
+    with col_chart:
+        chart_options = [
+            "1) M2 vs Big Tech Aggregate Market Cap",
+            "2) Inflation vs Advertising Spend Growth",
+            "3) TV vs Internet vs Digital Migration",
+            "4) Industry Debt vs Industry Market Cap",
+            "5) Real M2 (Inflation-Adjusted)",
+            "6) Ad Spend as % of GDP",
+            "7) Revenue per Employee: Old Media vs Tech",
+            "8) Debt vs Inflation Regime",
+            "9) Market Cap Share Concentration",
+            "10) M2 vs Global Advertising Spend (Indexed)",
+        ]
+        selected_chart = st.selectbox(
+            "Macro chart preset",
+            chart_options,
+            index=0,
+            key="overview_macro_chart_preset",
+        )
+
+    start_year, end_year = year_range
+
+    old_media = {"Comcast", "Disney", "Warner Bros. Discovery", "Paramount Global", "MFE"}
+    tech_media = {"Alphabet", "Amazon", "Apple", "Meta Platforms", "Microsoft", "Netflix", "Roku", "Spotify"}
+
+    st.markdown("<div class='ov-macro-chart-wrap'>", unsafe_allow_html=True)
+
+    if selected_chart.startswith("1)"):
+        title = "M2 vs Big Tech Aggregate Market Cap"
+        render_standard_overview_comment(title, selected_year)
+
+        m2 = _apply_year_window(m2_df, start_year, end_year)
+        if metrics_df is not None and not metrics_df.empty:
+            mcap = _apply_year_window(metrics_df, start_year, end_year)
+            mcap = mcap[mcap["Company"].isin(tech_media)].copy()
+            mcap = mcap.groupby("Year", as_index=False)["MarketCap"].sum(min_count=1)
+            mcap["Tech_MarketCap_B"] = mcap["MarketCap"] / 1000.0
+            merged = m2.merge(mcap[["Year", "Tech_MarketCap_B"]], on="Year", how="inner").sort_values("Year")
+        else:
+            merged = pd.DataFrame()
+
+        if merged.empty:
+            st.info("Not enough M2/market-cap series to build this chart.")
+        else:
+            merged["M2_YoY"] = merged["M2_B"].pct_change() * 100.0
+            merged["TechCap_YoY"] = merged["Tech_MarketCap_B"].pct_change() * 100.0
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=merged["Year"], y=merged["M2_B"], mode="lines+markers", name="US M2 (B USD)", line=dict(color="#0EA5E9", width=3)))
+            fig.add_trace(go.Scatter(x=merged["Year"], y=merged["Tech_MarketCap_B"], mode="lines+markers", name="Big Tech Market Cap (B USD)", line=dict(color="#1D4ED8", width=3)))
+            fig.add_trace(go.Scatter(x=merged["Year"], y=merged["M2_YoY"], mode="lines", name="M2 YoY %", line=dict(color="#0EA5E9", width=1.8, dash="dot"), yaxis="y2"))
+            fig.add_trace(go.Scatter(x=merged["Year"], y=merged["TechCap_YoY"], mode="lines", name="Tech Cap YoY %", line=dict(color="#F97316", width=1.8, dash="dot"), yaxis="y2"))
+            fig.update_layout(
+                height=460,
+                margin=dict(l=30, r=34, t=10, b=20),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(title="USD billions"),
+                yaxis2=dict(title="YoY %", overlaying="y", side="right", showgrid=False),
+                legend=dict(orientation="h", y=1.12, x=0),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        render_standard_overview_post_comment(title, selected_year)
+
+    elif selected_chart.startswith("2)"):
+        title = "Inflation vs Advertising Spend Growth"
+        render_standard_overview_comment(title, selected_year)
+        infl = _apply_year_window(inflation_df, start_year, end_year)
+        ad = _apply_year_window(granular_df, start_year, end_year)
+        if not ad.empty:
+            ad["Ad_YoY"] = ad["Total Advertising"].pct_change() * 100.0
+            ad = ad[["Year", "Ad_YoY"]]
+        merged = infl.merge(ad, on="Year", how="inner") if (not infl.empty and not ad.empty) else pd.DataFrame()
+        if merged.empty:
+            st.info("Not enough inflation/ad-spend data to build this chart.")
+        else:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=merged["Year"], y=merged["Inflation_YoY"], mode="lines+markers", name="Inflation YoY %", line=dict(color="#DC2626", width=3)))
+            fig.add_trace(go.Scatter(x=merged["Year"], y=merged["Ad_YoY"], mode="lines+markers", name="Global Ad Spend YoY %", line=dict(color="#2563EB", width=3)))
+            fig.update_layout(
+                height=430,
+                margin=dict(l=30, r=20, t=10, b=20),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis_title="YoY %",
+                legend=dict(orientation="h", y=1.1, x=0),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            fig.add_hline(y=0, line_dash="dot", line_color="rgba(15,23,42,0.5)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        render_standard_overview_post_comment(title, selected_year)
+
+    elif selected_chart.startswith("3)"):
+        title = "TV vs Internet vs Digital Migration"
+        render_standard_overview_comment(title, selected_year)
+        tvi = _apply_year_window(granular_df, start_year, end_year)
+        channel = _apply_year_window(channels_df, start_year, end_year)
+        if tvi.empty:
+            st.info("No GroupM channel time series available for this chart.")
+        else:
+            base = tvi[["Year", "TV / Pro Video", "Internet"]].copy()
+            base["TV / Pro Video"] = base["TV / Pro Video"] / 1000.0
+            base["Internet"] = base["Internet"] / 1000.0
+            third_label = "Retail Media"
+            if not channel.empty and "Retail_Media" in channel.columns and channel["Retail_Media"].fillna(0).abs().sum() > 0:
+                third = channel[["Year", "Retail_Media"]].copy()
+                third["Third"] = third["Retail_Media"] / 1000.0
+            elif not channel.empty and {"Search", "NonSearch"}.issubset(channel.columns):
+                third_label = "Search + Non-Search"
+                third = channel[["Year", "Search", "NonSearch"]].copy()
+                third["Third"] = (third["Search"] + third["NonSearch"]) / 1000.0
+            else:
+                third_label = "Digital OOH + Connected TV"
+                third = pd.DataFrame(columns=["Year", "Third"])
+                if not channel.empty:
+                    temp = channel.copy()
+                    temp["Third"] = (temp.get("Digital_OOH", 0) + temp.get("Connected_TV", 0)) / 1000.0
+                    third = temp[["Year", "Third"]]
+            merged = base.merge(third[["Year", "Third"]], on="Year", how="left")
+            merged["Third"] = merged["Third"].fillna(0.0)
+            area_df = merged.melt(
+                id_vars="Year",
+                value_vars=["TV / Pro Video", "Internet", "Third"],
+                var_name="Channel",
+                value_name="USD Billions",
+            )
+            area_df["Channel"] = area_df["Channel"].replace({"Third": third_label})
+            fig = px.area(
+                area_df,
+                x="Year",
+                y="USD Billions",
+                color="Channel",
+                color_discrete_sequence=["#F59E0B", "#2563EB", "#14B8A6"],
+            )
+            fig.update_layout(
+                height=460,
+                margin=dict(l=30, r=20, t=10, b=20),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis_title="USD billions",
+                legend=dict(orientation="h", y=1.1, x=0),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        render_standard_overview_post_comment(title, selected_year)
+
+    elif selected_chart.startswith("4)"):
+        title = "Industry Debt vs Industry Market Cap"
+        render_standard_overview_comment(title, selected_year)
+        metrics = _apply_year_window(metrics_df, start_year, end_year)
+        if metrics.empty:
+            st.info("No company metrics available for this chart.")
+        else:
+            old = metrics[metrics["Company"].isin(old_media)].groupby("Year", as_index=False)[["Debt", "MarketCap"]].sum(min_count=1)
+            tech = metrics[metrics["Company"].isin(tech_media)].groupby("Year", as_index=False)[["Debt", "MarketCap"]].sum(min_count=1)
+            comp = old.merge(tech, on="Year", how="outer", suffixes=("_old", "_tech")).sort_values("Year")
+            comp["OldMedia_Debt_to_MCap"] = np.where(comp["MarketCap_old"] > 0, comp["Debt_old"] / comp["MarketCap_old"], np.nan)
+            comp["Tech_Debt_to_MCap"] = np.where(comp["MarketCap_tech"] > 0, comp["Debt_tech"] / comp["MarketCap_tech"], np.nan)
+            comp = comp.dropna(subset=["OldMedia_Debt_to_MCap", "Tech_Debt_to_MCap"], how="all")
+            if comp.empty:
+                st.info("Not enough debt/market-cap overlap for this chart.")
+            else:
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=comp["Year"], y=comp["OldMedia_Debt_to_MCap"], mode="lines+markers", name="Old media debt / market cap", line=dict(color="#F97316", width=3)))
+                fig.add_trace(go.Scatter(x=comp["Year"], y=comp["Tech_Debt_to_MCap"], mode="lines+markers", name="Tech debt / market cap", line=dict(color="#2563EB", width=3)))
+                fig.update_layout(
+                    height=430,
+                    margin=dict(l=30, r=20, t=10, b=20),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    yaxis_title="Debt / Market Cap",
+                    legend=dict(orientation="h", y=1.1, x=0),
+                )
+                fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        render_standard_overview_post_comment(title, selected_year)
+
+    elif selected_chart.startswith("5)"):
+        title = "Real M2 (Inflation-Adjusted)"
+        render_standard_overview_comment(title, selected_year)
+        m2 = _apply_year_window(m2_df, start_year, end_year)
+        infl = _apply_year_window(inflation_df, start_year, end_year)
+        merged = m2.merge(infl, on="Year", how="inner").sort_values("Year")
+        if merged.empty:
+            st.info("Not enough M2 + inflation overlap for this chart.")
+        else:
+            merged["InflationFactor"] = 1.0 + (merged["Inflation_YoY"] / 100.0)
+            merged["CPI_Index"] = merged["InflationFactor"].cumprod()
+            base_index = merged["CPI_Index"].iloc[0] if merged["CPI_Index"].iloc[0] else 1.0
+            merged["Real_M2_B"] = merged["M2_B"] / (merged["CPI_Index"] / base_index)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=merged["Year"], y=merged["M2_B"], mode="lines+markers", name="Nominal M2", line=dict(color="#0EA5E9", width=3)))
+            fig.add_trace(go.Scatter(x=merged["Year"], y=merged["Real_M2_B"], mode="lines+markers", name="Real M2", line=dict(color="#1D4ED8", width=3)))
+            fig.update_layout(
+                height=430,
+                margin=dict(l=30, r=20, t=10, b=20),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis_title="USD billions",
+                legend=dict(orientation="h", y=1.1, x=0),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        render_standard_overview_post_comment(title, selected_year)
+
+    elif selected_chart.startswith("6)"):
+        title = "Ad Spend as % of GDP"
+        render_standard_overview_comment(title, selected_year)
+        adgdp = _apply_year_window(ad_gdp_df, start_year, end_year)
+        if adgdp.empty:
+            st.info("No global ad-vs-GDP data available for this chart.")
+        else:
+            fig = px.line(adgdp, x="Year", y="Ad_vs_GDP_pct", markers=True)
+            fig.update_traces(line=dict(color="#2563EB", width=3))
+            fig.update_layout(
+                height=420,
+                margin=dict(l=30, r=20, t=10, b=20),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis_title="Ad spend / GDP (%)",
+                showlegend=False,
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        render_standard_overview_post_comment(title, selected_year)
+
+    elif selected_chart.startswith("7)"):
+        title = "Revenue per Employee: Old Media vs Tech"
+        render_standard_overview_comment(title, selected_year)
+        metrics = _apply_year_window(metrics_df, start_year, end_year)
+        emps = _apply_year_window(employees_df, start_year, end_year)
+        merged = metrics.merge(emps, on=["Company", "Year"], how="inner")
+        merged = merged[(merged["Employees"] > 0) & merged["Revenue"].notna()].copy()
+        if merged.empty:
+            st.info("No revenue-per-employee overlap found.")
+        else:
+            merged["RevPerEmployee_MUSD"] = merged["Revenue"] / merged["Employees"]
+            old = merged[merged["Company"].isin(old_media)].groupby("Year", as_index=False)["RevPerEmployee_MUSD"].median().rename(columns={"RevPerEmployee_MUSD": "Old Media"})
+            tech = merged[merged["Company"].isin(tech_media)].groupby("Year", as_index=False)["RevPerEmployee_MUSD"].median().rename(columns={"RevPerEmployee_MUSD": "Tech"})
+            plot_df = old.merge(tech, on="Year", how="outer").sort_values("Year")
+            plot_long = plot_df.melt(id_vars="Year", value_vars=["Old Media", "Tech"], var_name="Cohort", value_name="Revenue per Employee (M USD)")
+            plot_long = plot_long.dropna(subset=["Revenue per Employee (M USD)"])
+            if plot_long.empty:
+                st.info("Insufficient cohort coverage for this chart.")
+            else:
+                fig = px.line(
+                    plot_long,
+                    x="Year",
+                    y="Revenue per Employee (M USD)",
+                    color="Cohort",
+                    markers=True,
+                    color_discrete_map={"Old Media": "#F97316", "Tech": "#2563EB"},
+                )
+                fig.update_layout(
+                    height=430,
+                    margin=dict(l=30, r=20, t=10, b=20),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    legend=dict(orientation="h", y=1.1, x=0),
+                )
+                fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        render_standard_overview_post_comment(title, selected_year)
+
+    elif selected_chart.startswith("8)"):
+        title = "Debt vs Inflation Regime"
+        render_standard_overview_comment(title, selected_year)
+        metrics = _apply_year_window(metrics_df, start_year, end_year)
+        infl = _apply_year_window(inflation_df, start_year, end_year)
+        if metrics.empty or infl.empty:
+            st.info("Need debt and inflation series for this chart.")
+        else:
+            old_debt = metrics[metrics["Company"].isin(old_media)].groupby("Year", as_index=False)["Debt"].sum(min_count=1)
+            tech_debt = metrics[metrics["Company"].isin(tech_media)].groupby("Year", as_index=False)["Debt"].sum(min_count=1)
+            plot_df = old_debt.merge(tech_debt, on="Year", how="outer", suffixes=("_old", "_tech"))
+            plot_df = plot_df.merge(infl, on="Year", how="left").sort_values("Year")
+            plot_df["Debt_old_B"] = plot_df["Debt_old"] / 1000.0
+            plot_df["Debt_tech_B"] = plot_df["Debt_tech"] / 1000.0
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=plot_df["Year"], y=plot_df["Debt_old_B"], mode="lines+markers", name="Old media debt (B USD)", line=dict(color="#F97316", width=3)))
+            fig.add_trace(go.Scatter(x=plot_df["Year"], y=plot_df["Debt_tech_B"], mode="lines+markers", name="Tech debt (B USD)", line=dict(color="#2563EB", width=3)))
+            fig.add_trace(go.Scatter(x=plot_df["Year"], y=plot_df["Inflation_YoY"], mode="lines", name="Inflation YoY %", line=dict(color="#DC2626", width=1.8, dash="dot"), yaxis="y2"))
+            fig.update_layout(
+                height=450,
+                margin=dict(l=30, r=34, t=10, b=20),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(title="Debt (USD billions)"),
+                yaxis2=dict(title="Inflation YoY %", overlaying="y", side="right", showgrid=False),
+                legend=dict(orientation="h", y=1.1, x=0),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        render_standard_overview_post_comment(title, selected_year)
+
+    elif selected_chart.startswith("9)"):
+        title = "Market Cap Share Concentration"
+        render_standard_overview_comment(title, selected_year)
+        metrics = _apply_year_window(metrics_df, start_year, end_year)
+        if metrics.empty:
+            st.info("No market cap data available for concentration chart.")
+        else:
+            m = metrics.dropna(subset=["MarketCap"]).copy()
+            if m.empty:
+                st.info("No market cap observations available.")
+            else:
+                top_companies = (
+                    m.groupby("Company", as_index=False)["MarketCap"]
+                    .mean()
+                    .sort_values("MarketCap", ascending=False)
+                    .head(8)["Company"]
+                    .tolist()
+                )
+                yearly = m.groupby("Year", as_index=False)["MarketCap"].sum(min_count=1).rename(columns={"MarketCap": "TotalCap"})
+                m = m.merge(yearly, on="Year", how="left")
+                m["SharePct"] = np.where(m["TotalCap"] > 0, (m["MarketCap"] / m["TotalCap"]) * 100.0, np.nan)
+                m["CompanyGroup"] = np.where(m["Company"].isin(top_companies), m["Company"], "Other")
+                share = m.groupby(["Year", "CompanyGroup"], as_index=False)["SharePct"].sum(min_count=1)
+                share = share.sort_values(["Year", "SharePct"], ascending=[True, False])
+                fig = px.area(
+                    share,
+                    x="Year",
+                    y="SharePct",
+                    color="CompanyGroup",
+                    groupnorm=None,
+                )
+                fig.update_layout(
+                    height=480,
+                    margin=dict(l=30, r=20, t=10, b=20),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    yaxis_title="Share of total market cap (%)",
+                    legend=dict(orientation="h", y=1.12, x=0),
+                )
+                fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        render_standard_overview_post_comment(title, selected_year)
+
+    else:
+        title = "M2 vs Global Advertising Spend (Indexed)"
+        render_standard_overview_comment(title, selected_year)
+        m2 = _apply_year_window(m2_df, start_year, end_year)
+        ad = _apply_year_window(granular_df, start_year, end_year)
+        if ad is not None and not ad.empty:
+            ad = ad[["Year", "Total Advertising"]].copy()
+            ad["GlobalAd_B"] = ad["Total Advertising"] / 1000.0
+        merged = m2.merge(ad[["Year", "GlobalAd_B"]], on="Year", how="inner") if (not m2.empty and ad is not None and not ad.empty) else pd.DataFrame()
+        if merged.empty:
+            st.info("Not enough M2/ad-spend overlap for indexed chart.")
+        else:
+            first_m2 = merged["M2_B"].iloc[0] if merged["M2_B"].iloc[0] else np.nan
+            first_ad = merged["GlobalAd_B"].iloc[0] if merged["GlobalAd_B"].iloc[0] else np.nan
+            merged["M2_Index100"] = (merged["M2_B"] / first_m2) * 100.0
+            merged["Ad_Index100"] = (merged["GlobalAd_B"] / first_ad) * 100.0
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=merged["Year"], y=merged["M2_Index100"], mode="lines+markers", name="M2 indexed (base=100)", line=dict(color="#0EA5E9", width=3)))
+            fig.add_trace(go.Scatter(x=merged["Year"], y=merged["Ad_Index100"], mode="lines+markers", name="Global ad spend indexed (base=100)", line=dict(color="#2563EB", width=3)))
+            fig.update_layout(
+                height=430,
+                margin=dict(l=30, r=20, t=10, b=20),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis_title="Index (base year = 100)",
+                legend=dict(orientation="h", y=1.1, x=0),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        render_standard_overview_post_comment(title, selected_year)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    return True
 
 
 def _render_transcript_topic_growth_chart(
@@ -1859,6 +2584,9 @@ def _render_excel_overview_layers(
     insights_rendered = _render_excel_overview_insights(data_processor, selected_year, selected_quarter)
     if not insights_rendered:
         st.info("No active `Overview_Insights` rows found for the selected period.")
+    macro_chart_rendered = _render_macro_bridge_charts(data_processor, selected_year, selected_quarter, plotly_config)
+    if not macro_chart_rendered:
+        st.info("Macro bridge charts are unavailable because required source sheets are missing.")
     topic_chart_rendered = _render_transcript_topic_growth_chart(selected_year, selected_quarter, plotly_config)
     if not topic_chart_rendered:
         st.info(
