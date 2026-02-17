@@ -38,3 +38,4 @@ app/attached_assets/*.xlsx filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
 *.xlsx filter=lfs diff=lfs merge=lfs -text
 *.gif filter=lfs diff=lfs merge=lfs -text
+earningscall_transcripts/transcript_topics.csv filter=lfs diff=lfs merge=lfs -text

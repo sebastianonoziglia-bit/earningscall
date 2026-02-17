@@ -1704,10 +1704,153 @@ def _render_excel_overview_insights(
     return True
 
 
+@st.cache_data(show_spinner=False)
+def _load_transcript_topic_metrics() -> pd.DataFrame:
+    repo_root = Path(__file__).resolve().parents[2]
+    metrics_path = repo_root / "earningscall_transcripts" / "topic_metrics.csv"
+    if not metrics_path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_csv(metrics_path)
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    required = [
+        "year",
+        "quarter",
+        "topic",
+        "mention_count",
+        "companies_mentioned",
+        "total_companies",
+        "importance_pct",
+        "growth_pct",
+    ]
+    for col in required:
+        if col not in df.columns:
+            df[col] = np.nan if col not in {"topic"} else ""
+
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    df["quarter"] = pd.to_numeric(df["quarter"], errors="coerce")
+    df = df.dropna(subset=["year", "quarter"]).copy()
+    if df.empty:
+        return pd.DataFrame()
+    df["year"] = df["year"].astype(int)
+    df["quarter"] = df["quarter"].apply(_normalize_quarter_label)
+    df["topic"] = df["topic"].astype(str).str.strip()
+    for col in ["mention_count", "companies_mentioned", "total_companies", "importance_pct", "growth_pct"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df[df["topic"] != ""].copy()
+    return df
+
+
+def _render_transcript_topic_growth_chart(
+    selected_year: int,
+    selected_quarter: str,
+    plotly_config: dict,
+) -> bool:
+    metrics_df = _load_transcript_topic_metrics()
+    if metrics_df.empty:
+        return False
+
+    scoped_df, selected_period = _pick_rows_for_period(metrics_df, selected_year, selected_quarter)
+    if scoped_df.empty:
+        return False
+    scoped_df = scoped_df.sort_values("topic").copy()
+    if scoped_df.empty:
+        return False
+
+    scoped_df["importance_pct"] = scoped_df["importance_pct"].fillna(0.0).clip(lower=0.0, upper=100.0)
+    scoped_df["importance_plot"] = scoped_df["importance_pct"].clip(lower=0.1)
+    scoped_df["growth_pct"] = scoped_df["growth_pct"].fillna(0.0).clip(lower=-100.0, upper=200.0)
+    scoped_df["mention_count"] = scoped_df["mention_count"].fillna(0.0).clip(lower=0.0)
+    scoped_df["companies_mentioned"] = scoped_df["companies_mentioned"].fillna(0.0)
+    scoped_df["total_companies"] = scoped_df["total_companies"].fillna(0.0)
+
+    mid_x = max(float(scoped_df["importance_plot"].median()), 1.0)
+    mid_y = 0.0
+
+    def classify_quadrant(row):
+        high_x = row["importance_plot"] >= mid_x
+        high_y = row["growth_pct"] >= mid_y
+        if high_x and high_y:
+            return "Big and growing"
+        if (not high_x) and high_y:
+            return "Small and growing"
+        if high_x and (not high_y):
+            return "Big and fading"
+        return "Small and fading"
+
+    scoped_df["quadrant"] = scoped_df.apply(classify_quadrant, axis=1)
+    quadrant_colors = {
+        "Big and growing": "#1D4ED8",
+        "Small and growing": "#0EA5E9",
+        "Big and fading": "#F97316",
+        "Small and fading": "#94A3B8",
+    }
+
+    st.markdown("### Topic Signal Map")
+    st.caption(
+        f"Source: `earningscall_transcripts/topic_metrics.csv` · Period: {selected_period} · "
+        f"{int(scoped_df['total_companies'].max()) if not scoped_df['total_companies'].isna().all() else 0} companies"
+    )
+    render_standard_overview_comment("Transcript Topic Growth vs Importance", selected_year)
+
+    fig = px.scatter(
+        scoped_df,
+        x="importance_plot",
+        y="growth_pct",
+        size="mention_count",
+        color="quadrant",
+        color_discrete_map=quadrant_colors,
+        text="topic",
+        custom_data=["topic", "importance_pct", "growth_pct", "mention_count", "companies_mentioned", "total_companies"],
+    )
+    fig.update_traces(
+        marker=dict(line=dict(color="rgba(15,23,42,0.18)", width=1)),
+        textposition="top center",
+        hovertemplate=(
+            "<b>%{customdata[0]}</b>"
+            "<br>Importance: %{customdata[1]:.1f}% of companies"
+            "<br>Growth vs prior quarter: %{customdata[2]:.1f}%"
+            "<br>Mentions: %{customdata[3]:,.0f}"
+            "<br>Companies mentioning: %{customdata[4]:,.0f} / %{customdata[5]:,.0f}"
+            "<extra></extra>"
+        ),
+    )
+    fig.update_layout(
+        height=560,
+        margin=dict(l=20, r=20, t=12, b=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", y=1.1, x=0.0),
+    )
+    fig.update_xaxes(
+        type="log",
+        title="Keyword importance (% of tracked companies mentioning topic)",
+        tickvals=[0.1, 0.5, 1, 2, 5, 10, 20, 50, 100],
+        ticktext=["0.1%", "0.5%", "1%", "2%", "5%", "10%", "20%", "50%", "100%"],
+        gridcolor="rgba(148,163,184,0.22)",
+    )
+    fig.update_yaxes(
+        title="Keyword growth vs prior quarter (%)",
+        range=[-100, 200],
+        gridcolor="rgba(148,163,184,0.22)",
+    )
+    fig.add_hline(y=0, line_dash="dot", line_color="rgba(15,23,42,0.55)")
+    fig.add_vline(x=mid_x, line_dash="dot", line_color="rgba(15,23,42,0.55)")
+
+    st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+    render_standard_overview_post_comment("Transcript Topic Growth vs Importance", selected_year)
+    return True
+
+
 def _render_excel_overview_layers(
     data_processor: FinancialDataProcessor,
     selected_year: int,
     selected_quarter: str,
+    plotly_config: dict,
 ) -> None:
     st.markdown("---")
     macro_rendered = _render_excel_macro_section(data_processor, selected_year, selected_quarter)
@@ -1716,6 +1859,12 @@ def _render_excel_overview_layers(
     insights_rendered = _render_excel_overview_insights(data_processor, selected_year, selected_quarter)
     if not insights_rendered:
         st.info("No active `Overview_Insights` rows found for the selected period.")
+    topic_chart_rendered = _render_transcript_topic_growth_chart(selected_year, selected_quarter, plotly_config)
+    if not topic_chart_rendered:
+        st.info(
+            "No transcript topic metrics found. Run `python3 scripts/extract_transcript_topics.py` "
+            "after adding new quarter transcript files."
+        )
 
 
 def _render_quarterly_intelligence_briefing(
@@ -3332,7 +3481,7 @@ else:
 
 
 end_snap_section()
-_render_excel_overview_layers(data_processor, selected_year, selected_quarter)
+_render_excel_overview_layers(data_processor, selected_year, selected_quarter, plotly_config)
 
 # Calculate summary metrics
 market_cap_data = []
