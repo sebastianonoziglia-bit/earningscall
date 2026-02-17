@@ -15,6 +15,7 @@ import numpy as np
 import textwrap
 import html
 import json
+import re
 import requests
 import streamlit.components.v1 as components
 from pathlib import Path
@@ -1345,6 +1346,238 @@ def _latest_subscriber_history(subscriber_df: pd.DataFrame, services: list[str])
     return latest
 
 
+_OVERVIEW_INSIGHT_COLUMN_ALIASES = {
+    "company": ["company", "entity", "brand"],
+    "year": ["year"],
+    "quarter": ["quarter", "qtr", "quarter_label"],
+    "period": ["period", "period_label"],
+    "insight_code": ["insight_code", "code", "insight_id", "id", "bullet_no", "num"],
+    "sort_order": ["sort_order", "order", "rank"],
+    "category": ["category", "cat", "section"],
+    "title": ["title", "insight_title"],
+    "stat": ["stat", "metric", "kpi"],
+    "stat_label": ["stat_label", "metric_label", "kpi_label", "statlabel"],
+    "overview_comment": ["overview_comment", "comment", "overview", "insight", "body", "text"],
+    "chart_key": ["chart_key", "chart", "chart_id"],
+    "chart_comment": ["chart_comment", "chart_note", "chart_notes"],
+    "is_active": ["is_active", "active", "enabled"],
+}
+
+_OVERVIEW_INSIGHT_CATEGORY_ORDER = [
+    "Advertising",
+    "Efficiency",
+    "Macro",
+    "Attention",
+    "Streaming",
+    "Business Model",
+]
+
+
+def _normalize_overview_colname(name: str) -> str:
+    return re.sub(r"[^a-z0-9_]", "_", str(name or "").strip().lower().replace(" ", "_"))
+
+
+def _normalize_overview_period(year_value, quarter_value, period_value) -> str:
+    period_str = str(period_value or "").strip().upper()
+    if period_str:
+        m = re.search(r"(\d{4}).*Q([1-4])", period_str)
+        if m:
+            return f"{m.group(1)}-Q{m.group(2)}"
+        y = re.search(r"(\d{4})", period_str)
+        if y:
+            return y.group(1)
+        return period_str
+
+    year_num = pd.to_numeric(year_value, errors="coerce")
+    year_int = int(year_num) if pd.notna(year_num) else None
+    quarter_num = _parse_quarter_number(quarter_value)
+    if year_int and quarter_num:
+        return f"{year_int}-Q{quarter_num}"
+    if year_int:
+        return str(year_int)
+    return ""
+
+
+def _period_sort_key(period_label: str) -> tuple[int, str]:
+    p = str(period_label or "").strip().upper()
+    m = re.search(r"(\d{4})-?Q([1-4])", p)
+    if m:
+        return (int(m.group(1)) * 10 + int(m.group(2)), p)
+    y = re.search(r"(\d{4})", p)
+    if y:
+        return (int(y.group(1)) * 10, p)
+    return (-1, p)
+
+
+def _parse_is_active_flag(value) -> bool:
+    s = str(value if value is not None else "").strip().lower()
+    if not s:
+        return True
+    return s not in {"0", "false", "no", "n", "off"}
+
+
+@st.cache_data(show_spinner=False)
+def _load_overview_insights_sheet(excel_path: str) -> pd.DataFrame:
+    try:
+        raw = pd.read_excel(excel_path, sheet_name="Overview insights")
+    except Exception:
+        return pd.DataFrame()
+    if raw is None or raw.empty:
+        return pd.DataFrame()
+
+    raw = raw.copy()
+    raw.columns = [str(c).strip() for c in raw.columns]
+    normalized_lookup = {_normalize_overview_colname(c): c for c in raw.columns}
+    rename_map = {}
+    for canonical, aliases in _OVERVIEW_INSIGHT_COLUMN_ALIASES.items():
+        for alias in aliases:
+            key = _normalize_overview_colname(alias)
+            if key in normalized_lookup:
+                rename_map[normalized_lookup[key]] = canonical
+                break
+    df = raw.rename(columns=rename_map).copy()
+
+    required = ["company", "category", "title", "overview_comment"]
+    for col in required:
+        if col not in df.columns:
+            df[col] = ""
+
+    if "insight_code" not in df.columns:
+        df["insight_code"] = np.arange(1, len(df) + 1)
+    if "sort_order" not in df.columns:
+        df["sort_order"] = pd.to_numeric(df["insight_code"], errors="coerce")
+    if "is_active" not in df.columns:
+        df["is_active"] = True
+    if "year" not in df.columns:
+        df["year"] = np.nan
+    if "quarter" not in df.columns:
+        df["quarter"] = ""
+    if "period" not in df.columns:
+        df["period"] = ""
+    if "stat" not in df.columns:
+        df["stat"] = ""
+    if "stat_label" not in df.columns:
+        df["stat_label"] = ""
+    if "chart_key" not in df.columns:
+        df["chart_key"] = ""
+    if "chart_comment" not in df.columns:
+        df["chart_comment"] = ""
+
+    df["company"] = df["company"].fillna("Global").astype(str).str.strip()
+    df.loc[df["company"] == "", "company"] = "Global"
+    df["category"] = df["category"].fillna("General").astype(str).str.strip()
+    df.loc[df["category"] == "", "category"] = "General"
+    df["title"] = df["title"].fillna("").astype(str).str.strip()
+    df["overview_comment"] = df["overview_comment"].fillna("").astype(str).str.strip()
+
+    df = df[df["is_active"].apply(_parse_is_active_flag)].copy()
+    df = df[(df["title"] != "") & (df["overview_comment"] != "")].copy()
+    if df.empty:
+        return pd.DataFrame()
+
+    df["period"] = df.apply(
+        lambda row: _normalize_overview_period(row.get("year"), row.get("quarter"), row.get("period")),
+        axis=1,
+    )
+    df["insight_code"] = df["insight_code"].astype(str).str.strip()
+    df["sort_order"] = pd.to_numeric(df["sort_order"], errors="coerce")
+    missing_sort = df["sort_order"].isna()
+    if missing_sort.any():
+        extracted = pd.to_numeric(df.loc[missing_sort, "insight_code"].str.extract(r"(\d+)", expand=False), errors="coerce")
+        df.loc[missing_sort, "sort_order"] = extracted
+    df["sort_order"] = df["sort_order"].fillna(9_999).astype(int)
+    return df
+
+
+def _render_excel_overview_insights(data_processor: FinancialDataProcessor, selected_year: int) -> bool:
+    excel_path = getattr(data_processor, "data_path", "")
+    if not excel_path:
+        return False
+
+    overview_df = _load_overview_insights_sheet(excel_path)
+    if overview_df.empty:
+        return False
+
+    company_options = sorted(overview_df["company"].dropna().unique().tolist())
+    if not company_options:
+        return False
+    if "Global" in company_options:
+        company_options = ["Global"] + [c for c in company_options if c != "Global"]
+
+    default_company = "Global" if "Global" in company_options else company_options[0]
+    col_company, col_period = st.columns([1.6, 1.2])
+    with col_company:
+        selected_company = st.selectbox(
+            "Overview comments company",
+            options=company_options,
+            index=company_options.index(default_company),
+            key="overview_insights_company",
+            help="These comments are sourced from the 'Overview insights' sheet.",
+        )
+
+    company_df = overview_df[overview_df["company"] == selected_company].copy()
+    if company_df.empty:
+        company_df = overview_df.copy()
+
+    period_options = sorted(
+        [p for p in company_df["period"].dropna().astype(str).str.strip().tolist() if p],
+        key=_period_sort_key,
+        reverse=True,
+    )
+    period_options = list(dict.fromkeys(period_options))
+    if not period_options and selected_year:
+        period_options = [str(int(selected_year))]
+
+    if period_options:
+        with col_period:
+            selected_period = st.selectbox(
+                "Quarter / period",
+                options=period_options,
+                index=0,
+                key="overview_insights_period",
+            )
+        scoped_df = company_df[company_df["period"] == selected_period].copy()
+        if scoped_df.empty:
+            scoped_df = company_df.copy()
+            selected_period = "Latest available"
+    else:
+        scoped_df = company_df.copy()
+        selected_period = "Latest available"
+
+    scoped_df = scoped_df.sort_values(["sort_order", "insight_code", "title"])
+    st.caption(
+        f"Source: `Overview insights` sheet · Company: {selected_company} · Period: {selected_period} · {len(scoped_df)} bullet points"
+    )
+
+    categories_present = scoped_df["category"].dropna().astype(str).str.strip().unique().tolist()
+    ordered_categories = [
+        *[c for c in _OVERVIEW_INSIGHT_CATEGORY_ORDER if c in categories_present],
+        *[c for c in categories_present if c not in _OVERVIEW_INSIGHT_CATEGORY_ORDER],
+    ]
+    for category in ordered_categories:
+        cat_df = scoped_df[scoped_df["category"] == category].copy()
+        if cat_df.empty:
+            continue
+        st.markdown(f"#### {category}")
+        for _, row in cat_df.iterrows():
+            code = str(row.get("insight_code", "")).strip() or "—"
+            title = str(row.get("title", "")).strip()
+            comment = str(row.get("overview_comment", "")).strip()
+            stat = str(row.get("stat", "")).strip()
+            stat_label = str(row.get("stat_label", "")).strip()
+            stat_suffix = f" _( {stat}{f' · {stat_label}' if stat_label else ''} )_" if stat else ""
+            chart_key = str(row.get("chart_key", "")).strip()
+            chart_comment = str(row.get("chart_comment", "")).strip()
+            chart_suffix = ""
+            if chart_key:
+                chart_suffix += f" [Chart: {chart_key}]"
+            if chart_comment:
+                chart_suffix += f" _(Chart note: {chart_comment})_"
+            st.markdown(f"- **{code} — {title}**{stat_suffix}: {comment}{chart_suffix}")
+
+    return True
+
+
 def _render_quarterly_intelligence_briefing(
     data_processor: FinancialDataProcessor,
     selected_year: int,
@@ -1352,105 +1585,20 @@ def _render_quarterly_intelligence_briefing(
 ) -> None:
     st.markdown("---")
     st.subheader("Global Media & Tech Intelligence Briefing")
-    st.caption("18 Key Correlations + Dashboard Architecture + Data Strategy")
+    st.caption("24 Quarterly Overview Bullet Points + Validation Charts + Dashboard Architecture")
     st.caption("2010-2024 | 12 Companies | 33 Data Sheets")
     st.markdown(
         "This section mirrors your briefing structure and is wired to Excel-backed updates. "
         "It sits directly after the global map so users move from geography to narrative and then to validation charts."
     )
 
-    st.markdown("### Part 1 — Macro Correlations (Insights 01-10, 15-17)")
-    part1_sections = [
-        (
-            "1.1 — Advertising Market Insights",
-            [
-                (
-                    "01",
-                    "The Google + Meta Duopoly Now Controls ~44% of Global Ad Spend",
-                    "Google + Meta grew from ~8.8% of global advertising in 2010 to a COVID-era peak near 53.7%, then normalized around 44% in 2024.",
-                ),
-                (
-                    "05",
-                    "Lebanon Is More Ad-Saturated Than the USA (% of GDP)",
-                    "Ad spend intensity versus GDP can invert intuition: smaller economies can show higher ad-to-GDP ratios than the largest absolute markets.",
-                ),
-                (
-                    "07",
-                    "Traditional TV Advertising Flatlined — It Did Not Collapse Overnight",
-                    "Traditional TV declined over 2010-2024, but the bigger structural story is exponential growth of internet channels around it.",
-                ),
-                (
-                    "10",
-                    "Amazon Advertising Is the Quiet Third Pillar",
-                    "Amazon Ads scaled rapidly post-2020 and now behaves like a third structural force in digital advertising.",
-                ),
-            ],
-        ),
-        (
-            "1.2 — Company Efficiency & Capital Intelligence",
-            [
-                (
-                    "02",
-                    "Microsoft Is the Biggest Human Multiplier Story in Tech",
-                    "Market-cap-per-employee expansion materially outpaced peers after the cloud transition, indicating operating leverage at scale.",
-                ),
-                (
-                    "06",
-                    "Netflix: Small Team, High Revenue Per Employee",
-                    "Netflix sustains very high revenue-per-head relative to legacy media peers with larger operational footprints.",
-                ),
-                (
-                    "08",
-                    "Roku and Microsoft Hold High Cash Relative to Revenue",
-                    "Cash-to-revenue profiles differ by business model and optionality; platform transition and fortress balance sheets appear in the same metric.",
-                ),
-                (
-                    "09",
-                    "Comcast Is Most Leveraged Versus Its Market Cap",
-                    "Debt-to-market-cap divergence highlights rate sensitivity gaps between legacy media and platform-led tech balance sheets.",
-                ),
-            ],
-        ),
-        (
-            "1.3 — Macro & Monetary Context",
-            [
-                (
-                    "03",
-                    "Big Tech Market Cap Outran M2 Growth",
-                    "Aggregate tracked market cap expanded multiple times faster than M2 growth from 2010 to 2024.",
-                ),
-                (
-                    "17",
-                    "COVID Demand Shock Distorted Streaming Capital Allocation",
-                    "A temporary engagement spike drove durable cost commitments across the sector, then normalized faster than spend structures.",
-                ),
-            ],
-        ),
-        (
-            "1.4 — The Attention Economy",
-            [
-                (
-                    "04",
-                    "YouTube Monetizes Lowest per Minute but Wins on Scale",
-                    "Per-minute economics are lower, yet sheer watch-time volume dominates total monetization outcomes.",
-                ),
-                (
-                    "15",
-                    "Netflix Password Crackdown as a High-ROI Revenue Operation",
-                    "Subscriber conversion from existing usage produced high incremental revenue with limited proportional content cost expansion.",
-                ),
-                (
-                    "16",
-                    "Apple Services Is Larger Than Standalone Streaming Leaders",
-                    "Services scale and margins indicate Apple monetization behaves like a platform tax layer on installed base.",
-                ),
-            ],
-        ),
-    ]
-    for section_title, insights in part1_sections:
-        st.markdown(f"#### {section_title}")
-        for code, title, text in insights:
-            st.markdown(f"- **{code} — {title}**: {text}")
+    st.markdown("### Quarterly Overview Insights (24 Bullet Points)")
+    insights_rendered = _render_excel_overview_insights(data_processor, selected_year)
+    if not insights_rendered:
+        st.info(
+            "No `Overview insights` sheet was detected yet. Add that sheet in the workbook to drive these comments "
+            "by company and quarter directly from Excel."
+        )
 
     st.markdown("#### Correlation Validation Charts (Part 1)")
     rendered_part1_charts = 0
@@ -1704,50 +1852,6 @@ def _render_quarterly_intelligence_briefing(
                 "Charts could not be rendered because required numeric series were not detected in the workbook."
             )
 
-    st.markdown("### Part 2 — Company & Segment Deep Dives (Insights 11-14, 18, 13)")
-    part2_sections = [
-        (
-            "2.1 — Streaming Wars: Survivors, Wounded & Wildcards",
-            [
-                (
-                    "11",
-                    "Disney 2024: Three Companies in One Balance Sheet",
-                    "Linear TV decline, improving streaming profitability, and resilient parks now coexist in one valuation story.",
-                ),
-                (
-                    "12",
-                    "Warner Bros. Discovery: High Leverage, DTC Buildout, Legacy Cash Engine",
-                    "Debt service still leans on declining networks while DTC scales toward strategic relevance.",
-                ),
-                (
-                    "14",
-                    "Roku: Platform Scale First, Monetization Catch-Up Second",
-                    "Hardware subsidy strategy built reach; ad monetization depth is the unresolved variable.",
-                ),
-                (
-                    "18",
-                    "Spotify Profitability Followed Business-Model Expansion",
-                    "Margin expansion arrived with adjacent formats and tooling, not just core music renegotiation.",
-                ),
-            ],
-        ),
-        (
-            "2.2 — Tech Giants: The Real Media Companies",
-            [
-                (
-                    "13",
-                    "Microsoft Security: Large Vertical Built Inside Platform Distribution",
-                    "Security revenue scaled rapidly via bundling and cloud distribution inside the broader Microsoft stack.",
-                ),
-            ],
-        ),
-    ]
-    for section_title, insights in part2_sections:
-        with st.expander(section_title, expanded=True):
-            for code, title, text in insights:
-                st.markdown(f"**{code} — {title}**")
-                st.markdown(text)
-
     st.markdown("### Part 3 — Dashboard Architecture")
     st.markdown(
         "Narrative flow recommendation: **Macro KPIs -> Globe/Map -> Competitive Ranking -> Market Cap Validation -> Time Machine -> Synthesis.**"
@@ -1787,8 +1891,8 @@ def _render_quarterly_intelligence_briefing(
             {
                 "ACT": "CLOSE",
                 "Section": "Synthesis",
-                "What User Sees": "Company x medium x region summary + insight cards",
-                "Data Source": "Company_insights_text, Company_Segments_insights_text",
+                "What User Sees": "Company x medium x region summary + quarterly overview bullet points",
+                "Data Source": "Overview insights, Company_insights_text, Company_Segments_insights_text",
             },
         ]
     )
