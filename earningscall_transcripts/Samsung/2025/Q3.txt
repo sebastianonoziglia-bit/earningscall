@@ -1,0 +1,10 @@
+Company: Samsung
+Symbol: SSNLF
+Exchange: OTC
+Year: 2025
+Quarter: Q3
+Source: https://earningscall.biz/e/otc/s/ssnlf/y/2025/q/q3
+Extracted At (UTC): 2026-02-17T10:18:45.901073+00:00
+
+---
+Daniel Oh Head of Investor Relations at Samsung Electronics Welcome, everyone, and thank you for joining us from around the globe. I am Daniel Oh, head of investor relations at Samsung Electronics. It's my pleasure to be with you on our

@@ -1,0 +1,349 @@
+company,symbol,exchange,year,quarter,source_url,file_path,word_count,char_count,status
+Alphabet,GOOG,NASDAQ,2018,4,https://earningscall.biz/e/nasdaq/s/goog/y/2018/q/q4,earningscall_transcripts/Alphabet/2018/Q4.txt,9497,56430,ok
+Alphabet,GOOG,NASDAQ,2019,1,https://earningscall.biz/e/nasdaq/s/goog/y/2019/q/q1,earningscall_transcripts/Alphabet/2019/Q1.txt,8759,51885,ok
+Alphabet,GOOG,NASDAQ,2019,2,https://earningscall.biz/e/nasdaq/s/goog/y/2019/q/q2,earningscall_transcripts/Alphabet/2019/Q2.txt,8873,52599,ok
+Alphabet,GOOG,NASDAQ,2019,3,https://earningscall.biz/e/nasdaq/s/goog/y/2019/q/q3,earningscall_transcripts/Alphabet/2019/Q3.txt,8441,50056,ok
+Alphabet,GOOG,NASDAQ,2019,4,https://earningscall.biz/e/nasdaq/s/goog/y/2019/q/q4,earningscall_transcripts/Alphabet/2019/Q4.txt,8815,52361,ok
+Alphabet,GOOG,NASDAQ,2020,1,https://earningscall.biz/e/nasdaq/s/goog/y/2020/q/q1,earningscall_transcripts/Alphabet/2020/Q1.txt,9838,58415,ok
+Alphabet,GOOG,NASDAQ,2020,2,https://earningscall.biz/e/nasdaq/s/goog/y/2020/q/q2,earningscall_transcripts/Alphabet/2020/Q2.txt,8269,49651,ok
+Alphabet,GOOG,NASDAQ,2020,3,https://earningscall.biz/e/nasdaq/s/goog/y/2020/q/q3,earningscall_transcripts/Alphabet/2020/Q3.txt,6973,41772,ok
+Alphabet,GOOG,NASDAQ,2020,4,https://earningscall.biz/e/nasdaq/s/goog/y/2020/q/q4,earningscall_transcripts/Alphabet/2020/Q4.txt,7964,48651,ok
+Alphabet,GOOG,NASDAQ,2021,1,https://earningscall.biz/e/nasdaq/s/goog/y/2021/q/q1,earningscall_transcripts/Alphabet/2021/Q1.txt,7548,45435,ok
+Alphabet,GOOG,NASDAQ,2021,2,https://earningscall.biz/e/nasdaq/s/goog/y/2021/q/q2,earningscall_transcripts/Alphabet/2021/Q2.txt,8194,49116,ok
+Alphabet,GOOG,NASDAQ,2021,3,https://earningscall.biz/e/nasdaq/s/goog/y/2021/q/q3,earningscall_transcripts/Alphabet/2021/Q3.txt,8637,51464,ok
+Alphabet,GOOG,NASDAQ,2021,4,https://earningscall.biz/e/nasdaq/s/goog/y/2021/q/q4,earningscall_transcripts/Alphabet/2021/Q4.txt,9088,54550,ok
+Alphabet,GOOG,NASDAQ,2022,1,https://earningscall.biz/e/nasdaq/s/goog/y/2022/q/q1,earningscall_transcripts/Alphabet/2022/Q1.txt,8068,48697,ok
+Alphabet,GOOG,NASDAQ,2022,2,https://earningscall.biz/e/nasdaq/s/goog/y/2022/q/q2,earningscall_transcripts/Alphabet/2022/Q2.txt,8067,48705,ok
+Alphabet,GOOG,NASDAQ,2022,3,https://earningscall.biz/e/nasdaq/s/goog/y/2022/q/q3,earningscall_transcripts/Alphabet/2022/Q3.txt,8401,50948,ok
+Alphabet,GOOG,NASDAQ,2022,4,https://earningscall.biz/e/nasdaq/s/goog/y/2022/q/q4,earningscall_transcripts/Alphabet/2022/Q4.txt,7996,48957,ok
+Alphabet,GOOG,NASDAQ,2023,1,https://earningscall.biz/e/nasdaq/s/goog/y/2023/q/q1,earningscall_transcripts/Alphabet/2023/Q1.txt,8714,52784,ok
+Alphabet,GOOG,NASDAQ,2023,2,https://earningscall.biz/e/nasdaq/s/goog/y/2023/q/q2,earningscall_transcripts/Alphabet/2023/Q2.txt,8606,51624,ok
+Alphabet,GOOG,NASDAQ,2023,3,https://earningscall.biz/e/nasdaq/s/goog/y/2023/q/q3,earningscall_transcripts/Alphabet/2023/Q3.txt,7874,47817,ok
+Alphabet,GOOG,NASDAQ,2023,4,https://earningscall.biz/e/nasdaq/s/goog/y/2023/q/q4,earningscall_transcripts/Alphabet/2023/Q4.txt,8537,52161,ok
+Alphabet,GOOG,NASDAQ,2024,1,https://earningscall.biz/e/nasdaq/s/goog/y/2024/q/q1,earningscall_transcripts/Alphabet/2024/Q1.txt,8682,52173,ok
+Alphabet,GOOG,NASDAQ,2024,2,https://earningscall.biz/e/nasdaq/s/goog/y/2024/q/q2,earningscall_transcripts/Alphabet/2024/Q2.txt,8742,52456,ok
+Alphabet,GOOG,NASDAQ,2024,3,https://earningscall.biz/e/nasdaq/s/goog/y/2024/q/q3,earningscall_transcripts/Alphabet/2024/Q3.txt,9704,58055,ok
+Alphabet,GOOG,NASDAQ,2024,4,https://earningscall.biz/e/nasdaq/s/goog/y/2024/q/q4,earningscall_transcripts/Alphabet/2024/Q4.txt,8945,54100,ok
+Alphabet,GOOG,NASDAQ,2025,1,https://earningscall.biz/e/nasdaq/s/goog/y/2025/q/q1,earningscall_transcripts/Alphabet/2025/Q1.txt,8438,51555,ok
+Alphabet,GOOG,NASDAQ,2025,2,https://earningscall.biz/e/nasdaq/s/goog/y/2025/q/q2,earningscall_transcripts/Alphabet/2025/Q2.txt,8785,53072,ok
+Alphabet,GOOG,NASDAQ,2025,3,https://earningscall.biz/e/nasdaq/s/goog/y/2025/q/q3,earningscall_transcripts/Alphabet/2025/Q3.txt,8310,50258,ok
+Alphabet,GOOG,NASDAQ,2025,4,https://earningscall.biz/e/nasdaq/s/goog/y/2025/q/q4,earningscall_transcripts/Alphabet/2025/Q4.txt,10413,62863,ok
+Amazon,AMZN,NASDAQ,2018,4,https://earningscall.biz/e/nasdaq/s/amzn/y/2018/q/q4,earningscall_transcripts/Amazon/2018/Q4.txt,5386,31469,ok
+Amazon,AMZN,NASDAQ,2019,1,https://earningscall.biz/e/nasdaq/s/amzn/y/2019/q/q1,earningscall_transcripts/Amazon/2019/Q1.txt,5871,33983,ok
+Amazon,AMZN,NASDAQ,2019,2,https://earningscall.biz/e/nasdaq/s/amzn/y/2019/q/q2,earningscall_transcripts/Amazon/2019/Q2.txt,5785,33485,ok
+Amazon,AMZN,NASDAQ,2019,3,https://earningscall.biz/e/nasdaq/s/amzn/y/2019/q/q3,earningscall_transcripts/Amazon/2019/Q3.txt,4883,28132,ok
+Amazon,AMZN,NASDAQ,2019,4,https://earningscall.biz/e/nasdaq/s/amzn/y/2019/q/q4,earningscall_transcripts/Amazon/2019/Q4.txt,5397,31141,ok
+Amazon,AMZN,NASDAQ,2020,1,https://earningscall.biz/e/nasdaq/s/amzn/y/2020/q/q1,earningscall_transcripts/Amazon/2020/Q1.txt,6183,36078,ok
+Amazon,AMZN,NASDAQ,2020,2,https://earningscall.biz/e/nasdaq/s/amzn/y/2020/q/q2,earningscall_transcripts/Amazon/2020/Q2.txt,7766,44910,ok
+Amazon,AMZN,NASDAQ,2020,3,https://earningscall.biz/e/nasdaq/s/amzn/y/2020/q/q3,earningscall_transcripts/Amazon/2020/Q3.txt,6344,37244,ok
+Amazon,AMZN,NASDAQ,2020,4,https://earningscall.biz/e/nasdaq/s/amzn/y/2020/q/q4,earningscall_transcripts/Amazon/2020/Q4.txt,8230,47507,ok
+Amazon,AMZN,NASDAQ,2021,1,https://earningscall.biz/e/nasdaq/s/amzn/y/2021/q/q1,earningscall_transcripts/Amazon/2021/Q1.txt,5644,33279,ok
+Amazon,AMZN,NASDAQ,2021,2,https://earningscall.biz/e/nasdaq/s/amzn/y/2021/q/q2,earningscall_transcripts/Amazon/2021/Q2.txt,6166,35941,ok
+Amazon,AMZN,NASDAQ,2021,3,https://earningscall.biz/e/nasdaq/s/amzn/y/2021/q/q3,earningscall_transcripts/Amazon/2021/Q3.txt,6990,40727,ok
+Amazon,AMZN,NASDAQ,2021,4,https://earningscall.biz/e/nasdaq/s/amzn/y/2021/q/q4,earningscall_transcripts/Amazon/2021/Q4.txt,6617,39072,ok
+Amazon,AMZN,NASDAQ,2022,1,https://earningscall.biz/e/nasdaq/s/amzn/y/2022/q/q1,earningscall_transcripts/Amazon/2022/Q1.txt,5826,34150,ok
+Amazon,AMZN,NASDAQ,2022,2,https://earningscall.biz/e/nasdaq/s/amzn/y/2022/q/q2,earningscall_transcripts/Amazon/2022/Q2.txt,6046,36283,ok
+Amazon,AMZN,NASDAQ,2022,3,https://earningscall.biz/e/nasdaq/s/amzn/y/2022/q/q3,earningscall_transcripts/Amazon/2022/Q3.txt,5303,31655,ok
+Amazon,AMZN,NASDAQ,2022,4,https://earningscall.biz/e/nasdaq/s/amzn/y/2022/q/q4,earningscall_transcripts/Amazon/2022/Q4.txt,7509,43241,ok
+Amazon,AMZN,NASDAQ,2023,1,https://earningscall.biz/e/nasdaq/s/amzn/y/2023/q/q1,earningscall_transcripts/Amazon/2023/Q1.txt,7553,44661,ok
+Amazon,AMZN,NASDAQ,2023,2,https://earningscall.biz/e/nasdaq/s/amzn/y/2023/q/q2,earningscall_transcripts/Amazon/2023/Q2.txt,7452,44090,ok
+Amazon,AMZN,NASDAQ,2023,3,https://earningscall.biz/e/nasdaq/s/amzn/y/2023/q/q3,earningscall_transcripts/Amazon/2023/Q3.txt,8725,52247,ok
+Amazon,AMZN,NASDAQ,2023,4,https://earningscall.biz/e/nasdaq/s/amzn/y/2023/q/q4,earningscall_transcripts/Amazon/2023/Q4.txt,9053,53895,ok
+Amazon,AMZN,NASDAQ,2024,1,https://earningscall.biz/e/nasdaq/s/amzn/y/2024/q/q1,earningscall_transcripts/Amazon/2024/Q1.txt,8671,51599,ok
+Amazon,AMZN,NASDAQ,2024,2,https://earningscall.biz/e/nasdaq/s/amzn/y/2024/q/q2,earningscall_transcripts/Amazon/2024/Q2.txt,8131,47786,ok
+Amazon,AMZN,NASDAQ,2024,3,https://earningscall.biz/e/nasdaq/s/amzn/y/2024/q/q3,earningscall_transcripts/Amazon/2024/Q3.txt,7938,47390,ok
+Amazon,AMZN,NASDAQ,2024,4,https://earningscall.biz/e/nasdaq/s/amzn/y/2024/q/q4,earningscall_transcripts/Amazon/2024/Q4.txt,8202,48928,ok
+Amazon,AMZN,NASDAQ,2025,1,https://earningscall.biz/e/nasdaq/s/amzn/y/2025/q/q1,earningscall_transcripts/Amazon/2025/Q1.txt,8518,50308,ok
+Amazon,AMZN,NASDAQ,2025,2,https://earningscall.biz/e/nasdaq/s/amzn/y/2025/q/q2,earningscall_transcripts/Amazon/2025/Q2.txt,8926,53040,ok
+Amazon,AMZN,NASDAQ,2025,3,https://earningscall.biz/e/nasdaq/s/amzn/y/2025/q/q3,earningscall_transcripts/Amazon/2025/Q3.txt,8091,47972,ok
+Amazon,AMZN,NASDAQ,2025,4,https://earningscall.biz/e/nasdaq/s/amzn/y/2025/q/q4,earningscall_transcripts/Amazon/2025/Q4.txt,9199,54109,ok
+Apple,AAPL,NASDAQ,2018,3,https://earningscall.biz/e/nasdaq/s/aapl/y/2018/q/q3,earningscall_transcripts/Apple/2018/Q3.txt,8036,46827,ok
+Apple,AAPL,NASDAQ,2018,4,https://earningscall.biz/e/nasdaq/s/aapl/y/2018/q/q4,earningscall_transcripts/Apple/2018/Q4.txt,8182,47611,ok
+Apple,AAPL,NASDAQ,2019,1,https://earningscall.biz/e/nasdaq/s/aapl/y/2019/q/q1,earningscall_transcripts/Apple/2019/Q1.txt,8071,47447,ok
+Apple,AAPL,NASDAQ,2019,2,https://earningscall.biz/e/nasdaq/s/aapl/y/2019/q/q2,earningscall_transcripts/Apple/2019/Q2.txt,7772,45619,ok
+Apple,AAPL,NASDAQ,2019,3,https://earningscall.biz/e/nasdaq/s/aapl/y/2019/q/q3,earningscall_transcripts/Apple/2019/Q3.txt,8241,48710,ok
+Apple,AAPL,NASDAQ,2019,4,https://earningscall.biz/e/nasdaq/s/aapl/y/2019/q/q4,earningscall_transcripts/Apple/2019/Q4.txt,8396,49097,ok
+Apple,AAPL,NASDAQ,2020,1,https://earningscall.biz/e/nasdaq/s/aapl/y/2020/q/q1,earningscall_transcripts/Apple/2020/Q1.txt,8157,48014,ok
+Apple,AAPL,NASDAQ,2020,2,https://earningscall.biz/e/nasdaq/s/aapl/y/2020/q/q2,earningscall_transcripts/Apple/2020/Q2.txt,8069,47680,ok
+Apple,AAPL,NASDAQ,2020,3,https://earningscall.biz/e/nasdaq/s/aapl/y/2020/q/q3,earningscall_transcripts/Apple/2020/Q3.txt,8518,49862,ok
+Apple,AAPL,NASDAQ,2020,4,https://earningscall.biz/e/nasdaq/s/aapl/y/2020/q/q4,earningscall_transcripts/Apple/2020/Q4.txt,9621,55750,ok
+Apple,AAPL,NASDAQ,2021,1,https://earningscall.biz/e/nasdaq/s/aapl/y/2021/q/q1,earningscall_transcripts/Apple/2021/Q1.txt,10034,58033,ok
+Apple,AAPL,NASDAQ,2021,2,https://earningscall.biz/e/nasdaq/s/aapl/y/2021/q/q2,earningscall_transcripts/Apple/2021/Q2.txt,8787,50938,ok
+Apple,AAPL,NASDAQ,2021,3,https://earningscall.biz/e/nasdaq/s/aapl/y/2021/q/q3,earningscall_transcripts/Apple/2021/Q3.txt,8787,51229,ok
+Apple,AAPL,NASDAQ,2021,4,https://earningscall.biz/e/nasdaq/s/aapl/y/2021/q/q4,earningscall_transcripts/Apple/2021/Q4.txt,8967,52438,ok
+Apple,AAPL,NASDAQ,2022,1,https://earningscall.biz/e/nasdaq/s/aapl/y/2022/q/q1,earningscall_transcripts/Apple/2022/Q1.txt,8152,47214,ok
+Apple,AAPL,NASDAQ,2022,2,https://earningscall.biz/e/nasdaq/s/aapl/y/2022/q/q2,earningscall_transcripts/Apple/2022/Q2.txt,8358,49098,ok
+Apple,AAPL,NASDAQ,2022,3,https://earningscall.biz/e/nasdaq/s/aapl/y/2022/q/q3,earningscall_transcripts/Apple/2022/Q3.txt,8512,50484,ok
+Apple,AAPL,NASDAQ,2022,4,https://earningscall.biz/e/nasdaq/s/aapl/y/2022/q/q4,earningscall_transcripts/Apple/2022/Q4.txt,8181,48297,ok
+Apple,AAPL,NASDAQ,2023,1,https://earningscall.biz/e/nasdaq/s/aapl/y/2023/q/q1,earningscall_transcripts/Apple/2023/Q1.txt,8210,48254,ok
+Apple,AAPL,NASDAQ,2023,2,https://earningscall.biz/e/nasdaq/s/aapl/y/2023/q/q2,earningscall_transcripts/Apple/2023/Q2.txt,8476,49459,ok
+Apple,AAPL,NASDAQ,2023,3,https://earningscall.biz/e/nasdaq/s/aapl/y/2023/q/q3,earningscall_transcripts/Apple/2023/Q3.txt,8523,49519,ok
+Apple,AAPL,NASDAQ,2023,4,https://earningscall.biz/e/nasdaq/s/aapl/y/2023/q/q4,earningscall_transcripts/Apple/2023/Q4.txt,8641,50426,ok
+Apple,AAPL,NASDAQ,2024,1,https://earningscall.biz/e/nasdaq/s/aapl/y/2024/q/q1,earningscall_transcripts/Apple/2024/Q1.txt,8301,49012,ok
+Apple,AAPL,NASDAQ,2024,2,https://earningscall.biz/e/nasdaq/s/aapl/y/2024/q/q2,earningscall_transcripts/Apple/2024/Q2.txt,8315,48196,ok
+Apple,AAPL,NASDAQ,2024,3,https://earningscall.biz/e/nasdaq/s/aapl/y/2024/q/q3,earningscall_transcripts/Apple/2024/Q3.txt,8174,47813,ok
+Apple,AAPL,NASDAQ,2024,4,https://earningscall.biz/e/nasdaq/s/aapl/y/2024/q/q4,earningscall_transcripts/Apple/2024/Q4.txt,8131,47154,ok
+Apple,AAPL,NASDAQ,2025,1,https://earningscall.biz/e/nasdaq/s/aapl/y/2025/q/q1,earningscall_transcripts/Apple/2025/Q1.txt,8047,46844,ok
+Apple,AAPL,NASDAQ,2025,2,https://earningscall.biz/e/nasdaq/s/aapl/y/2025/q/q2,earningscall_transcripts/Apple/2025/Q2.txt,8218,48055,ok
+Apple,AAPL,NASDAQ,2025,3,https://earningscall.biz/e/nasdaq/s/aapl/y/2025/q/q3,earningscall_transcripts/Apple/2025/Q3.txt,8465,49452,ok
+Apple,AAPL,NASDAQ,2025,4,https://earningscall.biz/e/nasdaq/s/aapl/y/2025/q/q4,earningscall_transcripts/Apple/2025/Q4.txt,8305,49314,ok
+Apple,AAPL,NASDAQ,2026,1,https://earningscall.biz/e/nasdaq/s/aapl/y/2026/q/q1,earningscall_transcripts/Apple/2026/Q1.txt,8773,51687,ok
+Comcast,CMCSA,NASDAQ,2018,4,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2018/q/q4,earningscall_transcripts/Comcast/2018/Q4.txt,10429,62495,ok
+Comcast,CMCSA,NASDAQ,2019,1,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2019/q/q1,earningscall_transcripts/Comcast/2019/Q1.txt,9437,56434,ok
+Comcast,CMCSA,NASDAQ,2019,2,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2019/q/q2,earningscall_transcripts/Comcast/2019/Q2.txt,9052,54194,ok
+Comcast,CMCSA,NASDAQ,2019,3,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2019/q/q3,earningscall_transcripts/Comcast/2019/Q3.txt,9745,58686,ok
+Comcast,CMCSA,NASDAQ,2019,4,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2019/q/q4,earningscall_transcripts/Comcast/2019/Q4.txt,9574,56595,ok
+Comcast,CMCSA,NASDAQ,2020,1,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2020/q/q1,earningscall_transcripts/Comcast/2020/Q1.txt,10508,61736,ok
+Comcast,CMCSA,NASDAQ,2020,2,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2020/q/q2,earningscall_transcripts/Comcast/2020/Q2.txt,11109,66220,ok
+Comcast,CMCSA,NASDAQ,2020,3,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2020/q/q3,earningscall_transcripts/Comcast/2020/Q3.txt,11155,65941,ok
+Comcast,CMCSA,NASDAQ,2020,4,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2020/q/q4,earningscall_transcripts/Comcast/2020/Q4.txt,10488,61993,ok
+Comcast,CMCSA,NASDAQ,2021,1,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2021/q/q1,earningscall_transcripts/Comcast/2021/Q1.txt,9178,54643,ok
+Comcast,CMCSA,NASDAQ,2021,2,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2021/q/q2,earningscall_transcripts/Comcast/2021/Q2.txt,9759,57350,ok
+Comcast,CMCSA,NASDAQ,2021,3,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2021/q/q3,earningscall_transcripts/Comcast/2021/Q3.txt,9103,53902,ok
+Comcast,CMCSA,NASDAQ,2021,4,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2021/q/q4,earningscall_transcripts/Comcast/2021/Q4.txt,10160,59822,ok
+Comcast,CMCSA,NASDAQ,2022,1,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2022/q/q1,earningscall_transcripts/Comcast/2022/Q1.txt,9333,55514,ok
+Comcast,CMCSA,NASDAQ,2022,2,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2022/q/q2,earningscall_transcripts/Comcast/2022/Q2.txt,8933,53288,ok
+Comcast,CMCSA,NASDAQ,2022,3,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2022/q/q3,earningscall_transcripts/Comcast/2022/Q3.txt,9534,56394,ok
+Comcast,CMCSA,NASDAQ,2022,4,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2022/q/q4,earningscall_transcripts/Comcast/2022/Q4.txt,9742,58046,ok
+Comcast,CMCSA,NASDAQ,2023,1,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2023/q/q1,earningscall_transcripts/Comcast/2023/Q1.txt,10041,59667,ok
+Comcast,CMCSA,NASDAQ,2023,2,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2023/q/q2,earningscall_transcripts/Comcast/2023/Q2.txt,9378,55839,ok
+Comcast,CMCSA,NASDAQ,2023,3,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2023/q/q3,earningscall_transcripts/Comcast/2023/Q3.txt,9082,53510,ok
+Comcast,CMCSA,NASDAQ,2023,4,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2023/q/q4,earningscall_transcripts/Comcast/2023/Q4.txt,9815,58247,ok
+Comcast,CMCSA,NASDAQ,2024,1,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2024/q/q1,earningscall_transcripts/Comcast/2024/Q1.txt,9911,58815,ok
+Comcast,CMCSA,NASDAQ,2024,2,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2024/q/q2,earningscall_transcripts/Comcast/2024/Q2.txt,9756,57308,ok
+Comcast,CMCSA,NASDAQ,2024,3,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2024/q/q3,earningscall_transcripts/Comcast/2024/Q3.txt,9749,56963,ok
+Comcast,CMCSA,NASDAQ,2024,4,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2024/q/q4,earningscall_transcripts/Comcast/2024/Q4.txt,9091,53137,ok
+Comcast,CMCSA,NASDAQ,2025,1,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2025/q/q1,earningscall_transcripts/Comcast/2025/Q1.txt,8588,51592,ok
+Comcast,CMCSA,NASDAQ,2025,2,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2025/q/q2,earningscall_transcripts/Comcast/2025/Q2.txt,9330,55526,ok
+Comcast,CMCSA,NASDAQ,2025,3,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2025/q/q3,earningscall_transcripts/Comcast/2025/Q3.txt,8150,48898,ok
+Comcast,CMCSA,NASDAQ,2025,4,https://earningscall.biz/e/nasdaq/s/cmcsa/y/2025/q/q4,earningscall_transcripts/Comcast/2025/Q4.txt,8827,53469,ok
+Disney,DIS,NYSE,2019,1,https://earningscall.biz/e/nyse/s/dis/y/2019/q/q1,earningscall_transcripts/Disney/2019/Q1.txt,7830,46982,ok
+Disney,DIS,NYSE,2019,2,https://earningscall.biz/e/nyse/s/dis/y/2019/q/q2,earningscall_transcripts/Disney/2019/Q2.txt,8112,47802,ok
+Disney,DIS,NYSE,2019,3,https://earningscall.biz/e/nyse/s/dis/y/2019/q/q3,earningscall_transcripts/Disney/2019/Q3.txt,8940,53143,ok
+Disney,DIS,NYSE,2019,4,https://earningscall.biz/e/nyse/s/dis/y/2019/q/q4,earningscall_transcripts/Disney/2019/Q4.txt,8747,51626,ok
+Disney,DIS,NYSE,2020,1,https://earningscall.biz/e/nyse/s/dis/y/2020/q/q1,earningscall_transcripts/Disney/2020/Q1.txt,9342,54948,ok
+Disney,DIS,NYSE,2020,2,https://earningscall.biz/e/nyse/s/dis/y/2020/q/q2,earningscall_transcripts/Disney/2020/Q2.txt,10317,61422,ok
+Disney,DIS,NYSE,2020,3,https://earningscall.biz/e/nyse/s/dis/y/2020/q/q3,earningscall_transcripts/Disney/2020/Q3.txt,9490,56223,ok
+Disney,DIS,NYSE,2020,4,https://earningscall.biz/e/nyse/s/dis/y/2020/q/q4,earningscall_transcripts/Disney/2020/Q4.txt,8779,52437,ok
+Disney,DIS,NYSE,2021,1,https://earningscall.biz/e/nyse/s/dis/y/2021/q/q1,earningscall_transcripts/Disney/2021/Q1.txt,9187,54803,ok
+Disney,DIS,NYSE,2021,2,https://earningscall.biz/e/nyse/s/dis/y/2021/q/q2,earningscall_transcripts/Disney/2021/Q2.txt,9196,54433,ok
+Disney,DIS,NYSE,2021,3,https://earningscall.biz/e/nyse/s/dis/y/2021/q/q3,earningscall_transcripts/Disney/2021/Q3.txt,9162,54431,ok
+Disney,DIS,NYSE,2021,4,https://earningscall.biz/e/nyse/s/dis/y/2021/q/q4,earningscall_transcripts/Disney/2021/Q4.txt,8682,51925,ok
+Disney,DIS,NYSE,2022,1,https://earningscall.biz/e/nyse/s/dis/y/2022/q/q1,earningscall_transcripts/Disney/2022/Q1.txt,8265,49322,ok
+Disney,DIS,NYSE,2022,2,https://earningscall.biz/e/nyse/s/dis/y/2022/q/q2,earningscall_transcripts/Disney/2022/Q2.txt,8991,53067,ok
+Disney,DIS,NYSE,2022,3,https://earningscall.biz/e/nyse/s/dis/y/2022/q/q3,earningscall_transcripts/Disney/2022/Q3.txt,8604,51213,ok
+Disney,DIS,NYSE,2022,4,https://earningscall.biz/e/nyse/s/dis/y/2022/q/q4,earningscall_transcripts/Disney/2022/Q4.txt,8280,49670,ok
+Disney,DIS,NYSE,2023,1,https://earningscall.biz/e/nyse/s/dis/y/2023/q/q1,earningscall_transcripts/Disney/2023/Q1.txt,8519,51575,ok
+Disney,DIS,NYSE,2023,2,https://earningscall.biz/e/nyse/s/dis/y/2023/q/q2,earningscall_transcripts/Disney/2023/Q2.txt,8851,53314,ok
+Disney,DIS,NYSE,2023,3,https://earningscall.biz/e/nyse/s/dis/y/2023/q/q3,earningscall_transcripts/Disney/2023/Q3.txt,7694,47260,ok
+Disney,DIS,NYSE,2023,4,https://earningscall.biz/e/nyse/s/dis/y/2023/q/q4,earningscall_transcripts/Disney/2023/Q4.txt,8166,49304,ok
+Disney,DIS,NYSE,2024,1,https://earningscall.biz/e/nyse/s/dis/y/2024/q/q1,earningscall_transcripts/Disney/2024/Q1.txt,9163,54490,ok
+Disney,DIS,NYSE,2024,2,https://earningscall.biz/e/nyse/s/dis/y/2024/q/q2,earningscall_transcripts/Disney/2024/Q2.txt,7140,42604,ok
+Disney,DIS,NYSE,2024,3,https://earningscall.biz/e/nyse/s/dis/y/2024/q/q3,earningscall_transcripts/Disney/2024/Q3.txt,4737,27941,ok
+Disney,DIS,NYSE,2024,4,https://earningscall.biz/e/nyse/s/dis/y/2024/q/q4,earningscall_transcripts/Disney/2024/Q4.txt,6651,39555,ok
+Disney,DIS,NYSE,2025,1,https://earningscall.biz/e/nyse/s/dis/y/2025/q/q1,earningscall_transcripts/Disney/2025/Q1.txt,5419,31753,ok
+Disney,DIS,NYSE,2025,2,https://earningscall.biz/e/nyse/s/dis/y/2025/q/q2,earningscall_transcripts/Disney/2025/Q2.txt,6314,37242,ok
+Disney,DIS,NYSE,2025,3,https://earningscall.biz/e/nyse/s/dis/y/2025/q/q3,earningscall_transcripts/Disney/2025/Q3.txt,6752,40374,ok
+Disney,DIS,NYSE,2025,4,https://earningscall.biz/e/nyse/s/dis/y/2025/q/q4,earningscall_transcripts/Disney/2025/Q4.txt,6686,39428,ok
+Disney,DIS,NYSE,2026,1,https://earningscall.biz/e/nyse/s/dis/y/2026/q/q1,earningscall_transcripts/Disney/2026/Q1.txt,5750,33801,ok
+Meta Platforms,META,NASDAQ,2018,4,https://earningscall.biz/e/nasdaq/s/meta/y/2018/q/q4,earningscall_transcripts/Meta_Platforms/2018/Q4.txt,10970,63060,ok
+Meta Platforms,META,NASDAQ,2019,1,https://earningscall.biz/e/nasdaq/s/meta/y/2019/q/q1,earningscall_transcripts/Meta_Platforms/2019/Q1.txt,10604,61297,ok
+Meta Platforms,META,NASDAQ,2019,2,https://earningscall.biz/e/nasdaq/s/meta/y/2019/q/q2,earningscall_transcripts/Meta_Platforms/2019/Q2.txt,10401,60997,ok
+Meta Platforms,META,NASDAQ,2019,3,https://earningscall.biz/e/nasdaq/s/meta/y/2019/q/q3,earningscall_transcripts/Meta_Platforms/2019/Q3.txt,10756,61412,ok
+Meta Platforms,META,NASDAQ,2019,4,https://earningscall.biz/e/nasdaq/s/meta/y/2019/q/q4,earningscall_transcripts/Meta_Platforms/2019/Q4.txt,10114,58306,ok
+Meta Platforms,META,NASDAQ,2020,1,https://earningscall.biz/e/nasdaq/s/meta/y/2020/q/q1,earningscall_transcripts/Meta_Platforms/2020/Q1.txt,9980,58265,ok
+Meta Platforms,META,NASDAQ,2020,2,https://earningscall.biz/e/nasdaq/s/meta/y/2020/q/q2,earningscall_transcripts/Meta_Platforms/2020/Q2.txt,10787,62894,ok
+Meta Platforms,META,NASDAQ,2020,3,https://earningscall.biz/e/nasdaq/s/meta/y/2020/q/q3,earningscall_transcripts/Meta_Platforms/2020/Q3.txt,10732,62156,ok
+Meta Platforms,META,NASDAQ,2020,4,https://earningscall.biz/e/nasdaq/s/meta/y/2020/q/q4,earningscall_transcripts/Meta_Platforms/2020/Q4.txt,10418,60442,ok
+Meta Platforms,META,NASDAQ,2021,1,https://earningscall.biz/e/nasdaq/s/meta/y/2021/q/q1,earningscall_transcripts/Meta_Platforms/2021/Q1.txt,10218,58779,ok
+Meta Platforms,META,NASDAQ,2021,2,https://earningscall.biz/e/nasdaq/s/meta/y/2021/q/q2,earningscall_transcripts/Meta_Platforms/2021/Q2.txt,9923,57081,ok
+Meta Platforms,META,NASDAQ,2021,3,https://earningscall.biz/e/nasdaq/s/meta/y/2021/q/q3,earningscall_transcripts/Meta_Platforms/2021/Q3.txt,10106,58793,ok
+Meta Platforms,META,NASDAQ,2021,4,https://earningscall.biz/e/nasdaq/s/meta/y/2021/q/q4,earningscall_transcripts/Meta_Platforms/2021/Q4.txt,10534,60992,ok
+Meta Platforms,META,NASDAQ,2022,1,https://earningscall.biz/e/nasdaq/s/meta/y/2022/q/q1,earningscall_transcripts/Meta_Platforms/2022/Q1.txt,10230,59566,ok
+Meta Platforms,META,NASDAQ,2022,2,https://earningscall.biz/e/nasdaq/s/meta/y/2022/q/q2,earningscall_transcripts/Meta_Platforms/2022/Q2.txt,10543,61259,ok
+Meta Platforms,META,NASDAQ,2022,3,https://earningscall.biz/e/nasdaq/s/meta/y/2022/q/q3,earningscall_transcripts/Meta_Platforms/2022/Q3.txt,9749,56493,ok
+Meta Platforms,META,NASDAQ,2022,4,https://earningscall.biz/e/nasdaq/s/meta/y/2022/q/q4,earningscall_transcripts/Meta_Platforms/2022/Q4.txt,9891,57343,ok
+Meta Platforms,META,NASDAQ,2023,1,https://earningscall.biz/e/nasdaq/s/meta/y/2023/q/q1,earningscall_transcripts/Meta_Platforms/2023/Q1.txt,9959,58302,ok
+Meta Platforms,META,NASDAQ,2023,2,https://earningscall.biz/e/nasdaq/s/meta/y/2023/q/q2,earningscall_transcripts/Meta_Platforms/2023/Q2.txt,10763,61611,ok
+Meta Platforms,META,NASDAQ,2023,3,https://earningscall.biz/e/nasdaq/s/meta/y/2023/q/q3,earningscall_transcripts/Meta_Platforms/2023/Q3.txt,9988,58440,ok
+Meta Platforms,META,NASDAQ,2023,4,https://earningscall.biz/e/nasdaq/s/meta/y/2023/q/q4,earningscall_transcripts/Meta_Platforms/2023/Q4.txt,9784,57428,ok
+Meta Platforms,META,NASDAQ,2024,1,https://earningscall.biz/e/nasdaq/s/meta/y/2024/q/q1,earningscall_transcripts/Meta_Platforms/2024/Q1.txt,9511,55692,ok
+Meta Platforms,META,NASDAQ,2024,2,https://earningscall.biz/e/nasdaq/s/meta/y/2024/q/q2,earningscall_transcripts/Meta_Platforms/2024/Q2.txt,9978,58072,ok
+Meta Platforms,META,NASDAQ,2024,3,https://earningscall.biz/e/nasdaq/s/meta/y/2024/q/q3,earningscall_transcripts/Meta_Platforms/2024/Q3.txt,9220,54011,ok
+Meta Platforms,META,NASDAQ,2024,4,https://earningscall.biz/e/nasdaq/s/meta/y/2024/q/q4,earningscall_transcripts/Meta_Platforms/2024/Q4.txt,9713,55779,ok
+Meta Platforms,META,NASDAQ,2025,1,https://earningscall.biz/e/nasdaq/s/meta/y/2025/q/q1,earningscall_transcripts/Meta_Platforms/2025/Q1.txt,9447,55303,ok
+Meta Platforms,META,NASDAQ,2025,2,https://earningscall.biz/e/nasdaq/s/meta/y/2025/q/q2,earningscall_transcripts/Meta_Platforms/2025/Q2.txt,9704,57219,ok
+Meta Platforms,META,NASDAQ,2025,3,https://earningscall.biz/e/nasdaq/s/meta/y/2025/q/q3,earningscall_transcripts/Meta_Platforms/2025/Q3.txt,9742,56797,ok
+Meta Platforms,META,NASDAQ,2025,4,https://earningscall.biz/e/nasdaq/s/meta/y/2025/q/q4,earningscall_transcripts/Meta_Platforms/2025/Q4.txt,10122,58967,ok
+Microsoft,MSFT,NASDAQ,2019,2,https://earningscall.biz/e/nasdaq/s/msft/y/2019/q/q2,earningscall_transcripts/Microsoft/2019/Q2.txt,9138,56280,ok
+Microsoft,MSFT,NASDAQ,2019,3,https://earningscall.biz/e/nasdaq/s/msft/y/2019/q/q3,earningscall_transcripts/Microsoft/2019/Q3.txt,9062,55670,ok
+Microsoft,MSFT,NASDAQ,2019,4,https://earningscall.biz/e/nasdaq/s/msft/y/2019/q/q4,earningscall_transcripts/Microsoft/2019/Q4.txt,8783,53819,ok
+Microsoft,MSFT,NASDAQ,2020,1,https://earningscall.biz/e/nasdaq/s/msft/y/2020/q/q1,earningscall_transcripts/Microsoft/2020/Q1.txt,8143,50231,ok
+Microsoft,MSFT,NASDAQ,2020,2,https://earningscall.biz/e/nasdaq/s/msft/y/2020/q/q2,earningscall_transcripts/Microsoft/2020/Q2.txt,8381,50980,ok
+Microsoft,MSFT,NASDAQ,2020,3,https://earningscall.biz/e/nasdaq/s/msft/y/2020/q/q3,earningscall_transcripts/Microsoft/2020/Q3.txt,9712,59166,ok
+Microsoft,MSFT,NASDAQ,2020,4,https://earningscall.biz/e/nasdaq/s/msft/y/2020/q/q4,earningscall_transcripts/Microsoft/2020/Q4.txt,8918,54701,ok
+Microsoft,MSFT,NASDAQ,2021,1,https://earningscall.biz/e/nasdaq/s/msft/y/2021/q/q1,earningscall_transcripts/Microsoft/2021/Q1.txt,9399,57999,ok
+Microsoft,MSFT,NASDAQ,2021,2,https://earningscall.biz/e/nasdaq/s/msft/y/2021/q/q2,earningscall_transcripts/Microsoft/2021/Q2.txt,8673,53914,ok
+Microsoft,MSFT,NASDAQ,2021,3,https://earningscall.biz/e/nasdaq/s/msft/y/2021/q/q3,earningscall_transcripts/Microsoft/2021/Q3.txt,8966,55934,ok
+Microsoft,MSFT,NASDAQ,2021,4,https://earningscall.biz/e/nasdaq/s/msft/y/2021/q/q4,earningscall_transcripts/Microsoft/2021/Q4.txt,8720,54242,ok
+Microsoft,MSFT,NASDAQ,2022,1,https://earningscall.biz/e/nasdaq/s/msft/y/2022/q/q1,earningscall_transcripts/Microsoft/2022/Q1.txt,9061,56171,ok
+Microsoft,MSFT,NASDAQ,2022,2,https://earningscall.biz/e/nasdaq/s/msft/y/2022/q/q2,earningscall_transcripts/Microsoft/2022/Q2.txt,9152,56941,ok
+Microsoft,MSFT,NASDAQ,2022,3,https://earningscall.biz/e/nasdaq/s/msft/y/2022/q/q3,earningscall_transcripts/Microsoft/2022/Q3.txt,9607,59044,ok
+Microsoft,MSFT,NASDAQ,2022,4,https://earningscall.biz/e/nasdaq/s/msft/y/2022/q/q4,earningscall_transcripts/Microsoft/2022/Q4.txt,9293,57006,ok
+Microsoft,MSFT,NASDAQ,2023,1,https://earningscall.biz/e/nasdaq/s/msft/y/2023/q/q1,earningscall_transcripts/Microsoft/2023/Q1.txt,9489,57586,ok
+Microsoft,MSFT,NASDAQ,2023,2,https://earningscall.biz/e/nasdaq/s/msft/y/2023/q/q2,earningscall_transcripts/Microsoft/2023/Q2.txt,9174,55735,ok
+Microsoft,MSFT,NASDAQ,2023,3,https://earningscall.biz/e/nasdaq/s/msft/y/2023/q/q3,earningscall_transcripts/Microsoft/2023/Q3.txt,9105,55908,ok
+Microsoft,MSFT,NASDAQ,2023,4,https://earningscall.biz/e/nasdaq/s/msft/y/2023/q/q4,earningscall_transcripts/Microsoft/2023/Q4.txt,9973,60414,ok
+Microsoft,MSFT,NASDAQ,2024,1,https://earningscall.biz/e/nasdaq/s/msft/y/2024/q/q1,earningscall_transcripts/Microsoft/2024/Q1.txt,9036,55840,ok
+Microsoft,MSFT,NASDAQ,2024,2,https://earningscall.biz/e/nasdaq/s/msft/y/2024/q/q2,earningscall_transcripts/Microsoft/2024/Q2.txt,9461,58020,ok
+Microsoft,MSFT,NASDAQ,2024,3,https://earningscall.biz/e/nasdaq/s/msft/y/2024/q/q3,earningscall_transcripts/Microsoft/2024/Q3.txt,9291,57105,ok
+Microsoft,MSFT,NASDAQ,2024,4,https://earningscall.biz/e/nasdaq/s/msft/y/2024/q/q4,earningscall_transcripts/Microsoft/2024/Q4.txt,8987,55035,ok
+Microsoft,MSFT,NASDAQ,2025,1,https://earningscall.biz/e/nasdaq/s/msft/y/2025/q/q1,earningscall_transcripts/Microsoft/2025/Q1.txt,9810,58945,ok
+Microsoft,MSFT,NASDAQ,2025,2,https://earningscall.biz/e/nasdaq/s/msft/y/2025/q/q2,earningscall_transcripts/Microsoft/2025/Q2.txt,9080,54903,ok
+Microsoft,MSFT,NASDAQ,2025,3,https://earningscall.biz/e/nasdaq/s/msft/y/2025/q/q3,earningscall_transcripts/Microsoft/2025/Q3.txt,8498,51476,ok
+Microsoft,MSFT,NASDAQ,2025,4,https://earningscall.biz/e/nasdaq/s/msft/y/2025/q/q4,earningscall_transcripts/Microsoft/2025/Q4.txt,8143,49504,ok
+Microsoft,MSFT,NASDAQ,2026,1,https://earningscall.biz/e/nasdaq/s/msft/y/2026/q/q1,earningscall_transcripts/Microsoft/2026/Q1.txt,9207,55332,ok
+Microsoft,MSFT,NASDAQ,2026,2,https://earningscall.biz/e/nasdaq/s/msft/y/2026/q/q2,earningscall_transcripts/Microsoft/2026/Q2.txt,8840,53726,ok
+Netflix,NFLX,NASDAQ,2018,4,https://earningscall.biz/e/nasdaq/s/nflx/y/2018/q/q4,earningscall_transcripts/Netflix/2018/Q4.txt,6593,37326,ok
+Netflix,NFLX,NASDAQ,2019,1,https://earningscall.biz/e/nasdaq/s/nflx/y/2019/q/q1,earningscall_transcripts/Netflix/2019/Q1.txt,7265,40633,ok
+Netflix,NFLX,NASDAQ,2019,2,https://earningscall.biz/e/nasdaq/s/nflx/y/2019/q/q2,earningscall_transcripts/Netflix/2019/Q2.txt,7979,45060,ok
+Netflix,NFLX,NASDAQ,2019,3,https://earningscall.biz/e/nasdaq/s/nflx/y/2019/q/q3,earningscall_transcripts/Netflix/2019/Q3.txt,7451,41719,ok
+Netflix,NFLX,NASDAQ,2019,4,https://earningscall.biz/e/nasdaq/s/nflx/y/2019/q/q4,earningscall_transcripts/Netflix/2019/Q4.txt,8241,46354,ok
+Netflix,NFLX,NASDAQ,2020,1,https://earningscall.biz/e/nasdaq/s/nflx/y/2020/q/q1,earningscall_transcripts/Netflix/2020/Q1.txt,6879,38595,ok
+Netflix,NFLX,NASDAQ,2020,2,https://earningscall.biz/e/nasdaq/s/nflx/y/2020/q/q2,earningscall_transcripts/Netflix/2020/Q2.txt,7678,42657,ok
+Netflix,NFLX,NASDAQ,2020,3,https://earningscall.biz/e/nasdaq/s/nflx/y/2020/q/q3,earningscall_transcripts/Netflix/2020/Q3.txt,7494,41777,ok
+Netflix,NFLX,NASDAQ,2020,4,https://earningscall.biz/e/nasdaq/s/nflx/y/2020/q/q4,earningscall_transcripts/Netflix/2020/Q4.txt,7528,42207,ok
+Netflix,NFLX,NASDAQ,2021,1,https://earningscall.biz/e/nasdaq/s/nflx/y/2021/q/q1,earningscall_transcripts/Netflix/2021/Q1.txt,7394,40820,ok
+Netflix,NFLX,NASDAQ,2021,2,https://earningscall.biz/e/nasdaq/s/nflx/y/2021/q/q2,earningscall_transcripts/Netflix/2021/Q2.txt,7330,41009,ok
+Netflix,NFLX,NASDAQ,2021,3,https://earningscall.biz/e/nasdaq/s/nflx/y/2021/q/q3,earningscall_transcripts/Netflix/2021/Q3.txt,7590,41934,ok
+Netflix,NFLX,NASDAQ,2021,4,https://earningscall.biz/e/nasdaq/s/nflx/y/2021/q/q4,earningscall_transcripts/Netflix/2021/Q4.txt,8431,46671,ok
+Netflix,NFLX,NASDAQ,2022,1,https://earningscall.biz/e/nasdaq/s/nflx/y/2022/q/q1,earningscall_transcripts/Netflix/2022/Q1.txt,7896,44241,ok
+Netflix,NFLX,NASDAQ,2022,2,https://earningscall.biz/e/nasdaq/s/nflx/y/2022/q/q2,earningscall_transcripts/Netflix/2022/Q2.txt,8355,46736,ok
+Netflix,NFLX,NASDAQ,2022,3,https://earningscall.biz/e/nasdaq/s/nflx/y/2022/q/q3,earningscall_transcripts/Netflix/2022/Q3.txt,7991,44644,ok
+Netflix,NFLX,NASDAQ,2022,4,https://earningscall.biz/e/nasdaq/s/nflx/y/2022/q/q4,earningscall_transcripts/Netflix/2022/Q4.txt,8995,50198,ok
+Netflix,NFLX,NASDAQ,2023,1,https://earningscall.biz/e/nasdaq/s/nflx/y/2023/q/q1,earningscall_transcripts/Netflix/2023/Q1.txt,8252,46195,ok
+Netflix,NFLX,NASDAQ,2023,2,https://earningscall.biz/e/nasdaq/s/nflx/y/2023/q/q2,earningscall_transcripts/Netflix/2023/Q2.txt,6311,35607,ok
+Netflix,NFLX,NASDAQ,2023,3,https://earningscall.biz/e/nasdaq/s/nflx/y/2023/q/q3,earningscall_transcripts/Netflix/2023/Q3.txt,8132,45652,ok
+Netflix,NFLX,NASDAQ,2023,4,https://earningscall.biz/e/nasdaq/s/nflx/y/2023/q/q4,earningscall_transcripts/Netflix/2023/Q4.txt,7610,43224,ok
+Netflix,NFLX,NASDAQ,2024,1,https://earningscall.biz/e/nasdaq/s/nflx/y/2024/q/q1,earningscall_transcripts/Netflix/2024/Q1.txt,8337,46776,ok
+Netflix,NFLX,NASDAQ,2024,2,https://earningscall.biz/e/nasdaq/s/nflx/y/2024/q/q2,earningscall_transcripts/Netflix/2024/Q2.txt,7880,44651,ok
+Netflix,NFLX,NASDAQ,2024,3,https://earningscall.biz/e/nasdaq/s/nflx/y/2024/q/q3,earningscall_transcripts/Netflix/2024/Q3.txt,7096,40071,ok
+Netflix,NFLX,NASDAQ,2024,4,https://earningscall.biz/e/nasdaq/s/nflx/y/2024/q/q4,earningscall_transcripts/Netflix/2024/Q4.txt,5951,33968,ok
+Netflix,NFLX,NASDAQ,2025,1,https://earningscall.biz/e/nasdaq/s/nflx/y/2025/q/q1,earningscall_transcripts/Netflix/2025/Q1.txt,6679,38511,ok
+Netflix,NFLX,NASDAQ,2025,2,https://earningscall.biz/e/nasdaq/s/nflx/y/2025/q/q2,earningscall_transcripts/Netflix/2025/Q2.txt,7080,40886,ok
+Netflix,NFLX,NASDAQ,2025,3,https://earningscall.biz/e/nasdaq/s/nflx/y/2025/q/q3,earningscall_transcripts/Netflix/2025/Q3.txt,6878,39921,ok
+Netflix,NFLX,NASDAQ,2025,4,https://earningscall.biz/e/nasdaq/s/nflx/y/2025/q/q4,earningscall_transcripts/Netflix/2025/Q4.txt,6954,40388,ok
+Paramount Global,PARA,NASDAQ,2018,4,https://earningscall.biz/e/nasdaq/s/para/y/2018/q/q4,earningscall_transcripts/Paramount_Global/2018/Q4.txt,10714,62367,ok
+Paramount Global,PARA,NASDAQ,2019,1,https://earningscall.biz/e/nasdaq/s/para/y/2019/q/q1,earningscall_transcripts/Paramount_Global/2019/Q1.txt,11170,64988,ok
+Paramount Global,PARA,NASDAQ,2019,2,https://earningscall.biz/e/nasdaq/s/para/y/2019/q/q2,earningscall_transcripts/Paramount_Global/2019/Q2.txt,9254,54006,ok
+Paramount Global,PARA,NASDAQ,2019,3,https://earningscall.biz/e/nasdaq/s/para/y/2019/q/q3,earningscall_transcripts/Paramount_Global/2019/Q3.txt,7101,41594,ok
+Paramount Global,PARA,NASDAQ,2019,4,https://earningscall.biz/e/nasdaq/s/para/y/2019/q/q4,earningscall_transcripts/Paramount_Global/2019/Q4.txt,10072,60517,ok
+Paramount Global,PARA,NASDAQ,2020,1,https://earningscall.biz/e/nasdaq/s/para/y/2020/q/q1,earningscall_transcripts/Paramount_Global/2020/Q1.txt,10479,62707,ok
+Paramount Global,PARA,NASDAQ,2020,2,https://earningscall.biz/e/nasdaq/s/para/y/2020/q/q2,earningscall_transcripts/Paramount_Global/2020/Q2.txt,9288,56420,ok
+Paramount Global,PARA,NASDAQ,2020,3,https://earningscall.biz/e/nasdaq/s/para/y/2020/q/q3,earningscall_transcripts/Paramount_Global/2020/Q3.txt,9743,58454,ok
+Paramount Global,PARA,NASDAQ,2020,4,https://earningscall.biz/e/nasdaq/s/para/y/2020/q/q4,earningscall_transcripts/Paramount_Global/2020/Q4.txt,26267,155108,ok
+Paramount Global,PARA,NASDAQ,2021,1,https://earningscall.biz/e/nasdaq/s/para/y/2021/q/q1,earningscall_transcripts/Paramount_Global/2021/Q1.txt,9897,59699,ok
+Paramount Global,PARA,NASDAQ,2021,2,https://earningscall.biz/e/nasdaq/s/para/y/2021/q/q2,earningscall_transcripts/Paramount_Global/2021/Q2.txt,9422,57143,ok
+Paramount Global,PARA,NASDAQ,2021,3,https://earningscall.biz/e/nasdaq/s/para/y/2021/q/q3,earningscall_transcripts/Paramount_Global/2021/Q3.txt,9471,57205,ok
+Paramount Global,PARA,NASDAQ,2021,4,https://earningscall.biz/e/nasdaq/s/para/y/2021/q/q4,earningscall_transcripts/Paramount_Global/2021/Q4.txt,18855,112912,ok
+Paramount Global,PARA,NASDAQ,2022,1,https://earningscall.biz/e/nasdaq/s/para/y/2022/q/q1,earningscall_transcripts/Paramount_Global/2022/Q1.txt,9189,54994,ok
+Paramount Global,PARA,NASDAQ,2022,2,https://earningscall.biz/e/nasdaq/s/para/y/2022/q/q2,earningscall_transcripts/Paramount_Global/2022/Q2.txt,17872,106564,ok
+Paramount Global,PARA,NASDAQ,2022,3,https://earningscall.biz/e/nasdaq/s/para/y/2022/q/q3,earningscall_transcripts/Paramount_Global/2022/Q3.txt,9759,58296,ok
+Paramount Global,PARA,NASDAQ,2022,4,https://earningscall.biz/e/nasdaq/s/para/y/2022/q/q4,earningscall_transcripts/Paramount_Global/2022/Q4.txt,18727,112032,ok
+Paramount Global,PARA,NASDAQ,2023,1,https://earningscall.biz/e/nasdaq/s/para/y/2023/q/q1,earningscall_transcripts/Paramount_Global/2023/Q1.txt,9070,54355,ok
+Paramount Global,PARA,NASDAQ,2023,2,https://earningscall.biz/e/nasdaq/s/para/y/2023/q/q2,earningscall_transcripts/Paramount_Global/2023/Q2.txt,8846,52715,ok
+Paramount Global,PARA,NASDAQ,2023,4,https://earningscall.biz/e/nasdaq/s/para/y/2023/q/q4,earningscall_transcripts/Paramount_Global/2023/Q4.txt,17668,105503,ok
+Paramount Global,PARA,NASDAQ,2024,1,https://earningscall.biz/e/nasdaq/s/para/y/2024/q/q1,earningscall_transcripts/Paramount_Global/2024/Q1.txt,1374,8645,ok
+Paramount Global,PARA,NASDAQ,2024,2,https://earningscall.biz/e/nasdaq/s/para/y/2024/q/q2,earningscall_transcripts/Paramount_Global/2024/Q2.txt,6588,39412,ok
+Paramount Global,PARA,NASDAQ,2024,3,https://earningscall.biz/e/nasdaq/s/para/y/2024/q/q3,earningscall_transcripts/Paramount_Global/2024/Q3.txt,6653,39901,ok
+Paramount Global,PARA,NASDAQ,2024,4,https://earningscall.biz/e/nasdaq/s/para/y/2024/q/q4,earningscall_transcripts/Paramount_Global/2024/Q4.txt,6026,36379,ok
+Paramount Global,PARA,NASDAQ,2025,1,https://earningscall.biz/e/nasdaq/s/para/y/2025/q/q1,earningscall_transcripts/Paramount_Global/2025/Q1.txt,5256,32004,ok
+Paramount Global,PARA,NASDAQ,2025,2,https://earningscall.biz/e/nasdaq/s/para/y/2025/q/q2,earningscall_transcripts/Paramount_Global/2025/Q2.txt,2876,17851,ok
+Roku,ROKU,NASDAQ,2021,1,https://earningscall.biz/e/nasdaq/s/roku/y/2021/q/q1,earningscall_transcripts/Roku/2021/Q1.txt,9022,53265,ok
+Roku,ROKU,NASDAQ,2021,2,https://earningscall.biz/e/nasdaq/s/roku/y/2021/q/q2,earningscall_transcripts/Roku/2021/Q2.txt,10048,58477,ok
+Roku,ROKU,NASDAQ,2021,3,https://earningscall.biz/e/nasdaq/s/roku/y/2021/q/q3,earningscall_transcripts/Roku/2021/Q3.txt,9886,57389,ok
+Roku,ROKU,NASDAQ,2021,4,https://earningscall.biz/e/nasdaq/s/roku/y/2021/q/q4,earningscall_transcripts/Roku/2021/Q4.txt,10629,61047,ok
+Roku,ROKU,NASDAQ,2022,1,https://earningscall.biz/e/nasdaq/s/roku/y/2022/q/q1,earningscall_transcripts/Roku/2022/Q1.txt,8586,50650,ok
+Roku,ROKU,NASDAQ,2022,2,https://earningscall.biz/e/nasdaq/s/roku/y/2022/q/q2,earningscall_transcripts/Roku/2022/Q2.txt,8214,47929,ok
+Roku,ROKU,NASDAQ,2022,3,https://earningscall.biz/e/nasdaq/s/roku/y/2022/q/q3,earningscall_transcripts/Roku/2022/Q3.txt,9454,55302,ok
+Roku,ROKU,NASDAQ,2022,4,https://earningscall.biz/e/nasdaq/s/roku/y/2022/q/q4,earningscall_transcripts/Roku/2022/Q4.txt,9626,56472,ok
+Roku,ROKU,NASDAQ,2023,1,https://earningscall.biz/e/nasdaq/s/roku/y/2023/q/q1,earningscall_transcripts/Roku/2023/Q1.txt,9330,54990,ok
+Roku,ROKU,NASDAQ,2023,2,https://earningscall.biz/e/nasdaq/s/roku/y/2023/q/q2,earningscall_transcripts/Roku/2023/Q2.txt,9547,55377,ok
+Roku,ROKU,NASDAQ,2023,3,https://earningscall.biz/e/nasdaq/s/roku/y/2023/q/q3,earningscall_transcripts/Roku/2023/Q3.txt,9500,55020,ok
+Roku,ROKU,NASDAQ,2023,4,https://earningscall.biz/e/nasdaq/s/roku/y/2023/q/q4,earningscall_transcripts/Roku/2023/Q4.txt,18311,105903,ok
+Roku,ROKU,NASDAQ,2024,1,https://earningscall.biz/e/nasdaq/s/roku/y/2024/q/q1,earningscall_transcripts/Roku/2024/Q1.txt,9409,54353,ok
+Roku,ROKU,NASDAQ,2024,2,https://earningscall.biz/e/nasdaq/s/roku/y/2024/q/q2,earningscall_transcripts/Roku/2024/Q2.txt,8573,49494,ok
+Roku,ROKU,NASDAQ,2024,3,https://earningscall.biz/e/nasdaq/s/roku/y/2024/q/q3,earningscall_transcripts/Roku/2024/Q3.txt,9249,53773,ok
+Roku,ROKU,NASDAQ,2024,4,https://earningscall.biz/e/nasdaq/s/roku/y/2024/q/q4,earningscall_transcripts/Roku/2024/Q4.txt,8690,49607,ok
+Roku,ROKU,NASDAQ,2025,1,https://earningscall.biz/e/nasdaq/s/roku/y/2025/q/q1,earningscall_transcripts/Roku/2025/Q1.txt,6265,35817,ok
+Roku,ROKU,NASDAQ,2025,2,https://earningscall.biz/e/nasdaq/s/roku/y/2025/q/q2,earningscall_transcripts/Roku/2025/Q2.txt,7432,42326,ok
+Roku,ROKU,NASDAQ,2025,3,https://earningscall.biz/e/nasdaq/s/roku/y/2025/q/q3,earningscall_transcripts/Roku/2025/Q3.txt,8936,51155,ok
+Samsung,SSNLF,OTC,2020,1,https://earningscall.biz/e/otc/s/ssnlf/y/2020/q/q1,earningscall_transcripts/Samsung/2020/Q1.txt,13647,83654,ok
+Samsung,SSNLF,OTC,2020,2,https://earningscall.biz/e/otc/s/ssnlf/y/2020/q/q2,earningscall_transcripts/Samsung/2020/Q2.txt,12106,75288,ok
+Samsung,SSNLF,OTC,2020,3,https://earningscall.biz/e/otc/s/ssnlf/y/2020/q/q3,earningscall_transcripts/Samsung/2020/Q3.txt,13271,81468,ok
+Samsung,SSNLF,OTC,2020,4,https://earningscall.biz/e/otc/s/ssnlf/y/2020/q/q4,earningscall_transcripts/Samsung/2020/Q4.txt,13282,81688,ok
+Samsung,SSNLF,OTC,2021,1,https://earningscall.biz/e/otc/s/ssnlf/y/2021/q/q1,earningscall_transcripts/Samsung/2021/Q1.txt,12739,78119,ok
+Samsung,SSNLF,OTC,2021,2,https://earningscall.biz/e/otc/s/ssnlf/y/2021/q/q2,earningscall_transcripts/Samsung/2021/Q2.txt,13967,85448,ok
+Samsung,SSNLF,OTC,2021,3,https://earningscall.biz/e/otc/s/ssnlf/y/2021/q/q3,earningscall_transcripts/Samsung/2021/Q3.txt,14351,88474,ok
+Samsung,SSNLF,OTC,2021,4,https://earningscall.biz/e/otc/s/ssnlf/y/2021/q/q4,earningscall_transcripts/Samsung/2021/Q4.txt,12975,81208,ok
+Samsung,SSNLF,OTC,2022,1,https://earningscall.biz/e/otc/s/ssnlf/y/2022/q/q1,earningscall_transcripts/Samsung/2022/Q1.txt,13746,84550,ok
+Samsung,SSNLF,OTC,2022,2,https://earningscall.biz/e/otc/s/ssnlf/y/2022/q/q2,earningscall_transcripts/Samsung/2022/Q2.txt,8487,51954,ok
+Samsung,SSNLF,OTC,2022,3,https://earningscall.biz/e/otc/s/ssnlf/y/2022/q/q3,earningscall_transcripts/Samsung/2022/Q3.txt,9895,61685,ok
+Samsung,SSNLF,OTC,2022,4,https://earningscall.biz/e/otc/s/ssnlf/y/2022/q/q4,earningscall_transcripts/Samsung/2022/Q4.txt,8801,55969,ok
+Samsung,SSNLF,OTC,2023,1,https://earningscall.biz/e/otc/s/ssnlf/y/2023/q/q1,earningscall_transcripts/Samsung/2023/Q1.txt,12646,79483,ok
+Samsung,SSNLF,OTC,2023,2,https://earningscall.biz/e/otc/s/ssnlf/y/2023/q/q2,earningscall_transcripts/Samsung/2023/Q2.txt,9622,61507,ok
+Samsung,SSNLF,OTC,2023,3,https://earningscall.biz/e/otc/s/ssnlf/y/2023/q/q3,earningscall_transcripts/Samsung/2023/Q3.txt,8869,56035,ok
+Samsung,SSNLF,OTC,2023,4,https://earningscall.biz/e/otc/s/ssnlf/y/2023/q/q4,earningscall_transcripts/Samsung/2023/Q4.txt,7445,46974,ok
+Samsung,SSNLF,OTC,2024,1,https://earningscall.biz/e/otc/s/ssnlf/y/2024/q/q1,earningscall_transcripts/Samsung/2024/Q1.txt,7222,45090,ok
+Samsung,SSNLF,OTC,2024,2,https://earningscall.biz/e/otc/s/ssnlf/y/2024/q/q2,earningscall_transcripts/Samsung/2024/Q2.txt,7563,47187,ok
+Samsung,SSNLF,OTC,2024,3,https://earningscall.biz/e/otc/s/ssnlf/y/2024/q/q3,earningscall_transcripts/Samsung/2024/Q3.txt,8725,55468,ok
+Samsung,SSNLF,OTC,2024,4,https://earningscall.biz/e/otc/s/ssnlf/y/2024/q/q4,earningscall_transcripts/Samsung/2024/Q4.txt,8608,53964,ok
+Samsung,SSNLF,OTC,2025,1,https://earningscall.biz/e/otc/s/ssnlf/y/2025/q/q1,earningscall_transcripts/Samsung/2025/Q1.txt,7551,48210,ok
+Samsung,SSNLF,OTC,2025,2,https://earningscall.biz/e/otc/s/ssnlf/y/2025/q/q2,earningscall_transcripts/Samsung/2025/Q2.txt,8776,56144,ok
+Samsung,SSNLF,OTC,2025,3,https://earningscall.biz/e/otc/s/ssnlf/y/2025/q/q3,earningscall_transcripts/Samsung/2025/Q3.txt,58,422,ok
+Samsung,SSNLF,OTC,2025,4,https://earningscall.biz/e/otc/s/ssnlf/y/2025/q/q4,earningscall_transcripts/Samsung/2025/Q4.txt,8682,55890,ok
+Spotify,SPOT,NYSE,2020,1,https://earningscall.biz/e/nyse/s/spot/y/2020/q/q1,earningscall_transcripts/Spotify/2020/Q1.txt,7839,45343,ok
+Spotify,SPOT,NYSE,2020,2,https://earningscall.biz/e/nyse/s/spot/y/2020/q/q2,earningscall_transcripts/Spotify/2020/Q2.txt,8250,47550,ok
+Spotify,SPOT,NYSE,2020,3,https://earningscall.biz/e/nyse/s/spot/y/2020/q/q3,earningscall_transcripts/Spotify/2020/Q3.txt,1088,6578,ok
+Spotify,SPOT,NYSE,2020,4,https://earningscall.biz/e/nyse/s/spot/y/2020/q/q4,earningscall_transcripts/Spotify/2020/Q4.txt,7876,44985,ok
+Spotify,SPOT,NYSE,2021,1,https://earningscall.biz/e/nyse/s/spot/y/2021/q/q1,earningscall_transcripts/Spotify/2021/Q1.txt,7418,42156,ok
+Spotify,SPOT,NYSE,2021,2,https://earningscall.biz/e/nyse/s/spot/y/2021/q/q2,earningscall_transcripts/Spotify/2021/Q2.txt,8375,47765,ok
+Spotify,SPOT,NYSE,2021,3,https://earningscall.biz/e/nyse/s/spot/y/2021/q/q3,earningscall_transcripts/Spotify/2021/Q3.txt,1386,8313,ok
+Spotify,SPOT,NYSE,2021,4,https://earningscall.biz/e/nyse/s/spot/y/2021/q/q4,earningscall_transcripts/Spotify/2021/Q4.txt,8781,49720,ok
+Spotify,SPOT,NYSE,2022,1,https://earningscall.biz/e/nyse/s/spot/y/2022/q/q1,earningscall_transcripts/Spotify/2022/Q1.txt,8391,47897,ok
+Spotify,SPOT,NYSE,2022,2,https://earningscall.biz/e/nyse/s/spot/y/2022/q/q2,earningscall_transcripts/Spotify/2022/Q2.txt,7668,43744,ok
+Spotify,SPOT,NYSE,2022,3,https://earningscall.biz/e/nyse/s/spot/y/2022/q/q3,earningscall_transcripts/Spotify/2022/Q3.txt,8759,49644,ok
+Spotify,SPOT,NYSE,2022,4,https://earningscall.biz/e/nyse/s/spot/y/2022/q/q4,earningscall_transcripts/Spotify/2022/Q4.txt,7572,43452,ok
+Spotify,SPOT,NYSE,2023,1,https://earningscall.biz/e/nyse/s/spot/y/2023/q/q1,earningscall_transcripts/Spotify/2023/Q1.txt,7729,44353,ok
+Spotify,SPOT,NYSE,2023,2,https://earningscall.biz/e/nyse/s/spot/y/2023/q/q2,earningscall_transcripts/Spotify/2023/Q2.txt,5094,29247,ok
+Spotify,SPOT,NYSE,2023,3,https://earningscall.biz/e/nyse/s/spot/y/2023/q/q3,earningscall_transcripts/Spotify/2023/Q3.txt,4860,27981,ok
+Spotify,SPOT,NYSE,2023,4,https://earningscall.biz/e/nyse/s/spot/y/2023/q/q4,earningscall_transcripts/Spotify/2023/Q4.txt,8526,48682,ok
+Spotify,SPOT,NYSE,2024,1,https://earningscall.biz/e/nyse/s/spot/y/2024/q/q1,earningscall_transcripts/Spotify/2024/Q1.txt,7448,42593,ok
+Spotify,SPOT,NYSE,2024,2,https://earningscall.biz/e/nyse/s/spot/y/2024/q/q2,earningscall_transcripts/Spotify/2024/Q2.txt,6681,38321,ok
+Spotify,SPOT,NYSE,2024,3,https://earningscall.biz/e/nyse/s/spot/y/2024/q/q3,earningscall_transcripts/Spotify/2024/Q3.txt,7481,43263,ok
+Spotify,SPOT,NYSE,2024,4,https://earningscall.biz/e/nyse/s/spot/y/2024/q/q4,earningscall_transcripts/Spotify/2024/Q4.txt,8956,51726,ok
+Spotify,SPOT,NYSE,2025,1,https://earningscall.biz/e/nyse/s/spot/y/2025/q/q1,earningscall_transcripts/Spotify/2025/Q1.txt,9593,55232,ok
+Spotify,SPOT,NYSE,2025,2,https://earningscall.biz/e/nyse/s/spot/y/2025/q/q2,earningscall_transcripts/Spotify/2025/Q2.txt,9347,53939,ok
+Spotify,SPOT,NYSE,2025,3,https://earningscall.biz/e/nyse/s/spot/y/2025/q/q3,earningscall_transcripts/Spotify/2025/Q3.txt,9187,53475,ok
+Spotify,SPOT,NYSE,2025,4,https://earningscall.biz/e/nyse/s/spot/y/2025/q/q4,earningscall_transcripts/Spotify/2025/Q4.txt,10213,58143,ok
+Tencent,TCEHY,OTC,2024,1,https://earningscall.biz/e/otc/s/tcehy/y/2024/q/q1,earningscall_transcripts/Tencent/2024/Q1.txt,9727,58563,ok
+Tencent,TCEHY,OTC,2024,2,https://earningscall.biz/e/otc/s/tcehy/y/2024/q/q2,earningscall_transcripts/Tencent/2024/Q2.txt,10521,63588,ok
+Tencent,TCEHY,OTC,2024,3,https://earningscall.biz/e/otc/s/tcehy/y/2024/q/q3,earningscall_transcripts/Tencent/2024/Q3.txt,10202,62473,ok
+Tencent,TCEHY,OTC,2024,4,https://earningscall.biz/e/otc/s/tcehy/y/2024/q/q4,earningscall_transcripts/Tencent/2024/Q4.txt,10114,61224,ok
+Tencent,TCEHY,OTC,2025,1,https://earningscall.biz/e/otc/s/tcehy/y/2025/q/q1,earningscall_transcripts/Tencent/2025/Q1.txt,10990,64939,ok
+Tencent,TCEHY,OTC,2025,2,https://earningscall.biz/e/otc/s/tcehy/y/2025/q/q2,earningscall_transcripts/Tencent/2025/Q2.txt,8920,53752,ok
+Tencent,TCEHY,OTC,2025,3,https://earningscall.biz/e/otc/s/tcehy/y/2025/q/q3,earningscall_transcripts/Tencent/2025/Q3.txt,8212,49774,ok
+Warner Bros Discovery,,,2022,2,,earningscall_transcripts/Warner_Bros_Discovery/2022/Q2.txt,14977,87688,ok
+Warner Bros Discovery,,,2022,3,,earningscall_transcripts/Warner_Bros_Discovery/2022/Q3.txt,12330,70752,ok
+Warner Bros Discovery,,,2022,4,,earningscall_transcripts/Warner_Bros_Discovery/2022/Q4.txt,10538,61472,ok
+Warner Bros Discovery,,,2023,1,,earningscall_transcripts/Warner_Bros_Discovery/2023/Q1.txt,10468,59783,ok
+Warner Bros Discovery,,,2023,2,,earningscall_transcripts/Warner_Bros_Discovery/2023/Q2.txt,10166,58403,ok
+Warner Bros Discovery,,,2023,3,,earningscall_transcripts/Warner_Bros_Discovery/2023/Q3.txt,10618,60928,ok
+Warner Bros Discovery,,,2023,4,,earningscall_transcripts/Warner_Bros_Discovery/2023/Q4.txt,10697,61530,ok
+Warner Bros Discovery,,,2024,1,,earningscall_transcripts/Warner_Bros_Discovery/2024/Q1.txt,10528,61892,ok
+Warner Bros Discovery,,,2024,2,,earningscall_transcripts/Warner_Bros_Discovery/2024/Q2.txt,10325,60123,ok
+Warner Bros Discovery,,,2024,3,,earningscall_transcripts/Warner_Bros_Discovery/2024/Q3.txt,9084,54039,ok
+Warner Bros Discovery,,,2024,4,,earningscall_transcripts/Warner_Bros_Discovery/2024/Q4.txt,7625,43810,ok
+Warner Bros Discovery,,,2025,1,,earningscall_transcripts/Warner_Bros_Discovery/2025/Q1.txt,7324,42194,ok
+Warner Bros Discovery,,,2025,2,,earningscall_transcripts/Warner_Bros_Discovery/2025/Q2.txt,7326,41770,ok
+Warner Bros Discovery,,,2025,3,,earningscall_transcripts/Warner_Bros_Discovery/2025/Q3.txt,7192,41709,ok

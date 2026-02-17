@@ -1,0 +1,18 @@
+company,year,missing_quarters
+Alphabet,2018,"Q1,Q2,Q3"
+Amazon,2018,"Q1,Q2,Q3"
+Apple,2018,"Q1,Q2"
+Apple,2026,"Q2,Q3,Q4"
+Comcast,2018,"Q1,Q2,Q3"
+Disney,2026,"Q2,Q3,Q4"
+Meta Platforms,2018,"Q1,Q2,Q3"
+Microsoft,2019,Q1
+Microsoft,2026,"Q3,Q4"
+Netflix,2018,"Q1,Q2,Q3"
+Paramount Global,2018,"Q1,Q2,Q3"
+Paramount Global,2023,Q3
+Paramount Global,2025,"Q3,Q4"
+Roku,2025,Q4
+Tencent,2025,Q4
+Warner Bros Discovery,2022,Q1
+Warner Bros Discovery,2025,Q4
