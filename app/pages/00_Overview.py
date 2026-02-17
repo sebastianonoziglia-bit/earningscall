@@ -3899,7 +3899,6 @@ def _render_excel_overview_insights(
             stat = _clean_overview_text(row.get("stat"))
             stat_label = _clean_overview_text(row.get("stat_label"))
             comment = _clean_insight_comment_text(row.get("overview_comment") or row.get("comment"))
-            chart_key = _clean_overview_text(row.get("chart_key"))
 
             stat_badge = ""
             if stat:
@@ -3910,17 +3909,10 @@ def _render_excel_overview_insights(
                     f"{html.escape(stat)}{label_text}</span>"
                 )
 
-            chart_badge = ""
-            if chart_key:
-                chart_badge = (
-                    "<span style='font-size:0.75rem;color:#94A3B8;margin-left:6px'>"
-                    f"↓ {html.escape(chart_key)}</span>"
-                )
-
             bullets_html += (
                 "<div style='margin-bottom:18px;'>"
                 "<div style='font-size:0.85rem;font-weight:700;color:#F8FAFC;margin-bottom:5px;line-height:1.4;'>"
-                f"{html.escape(code)} — {html.escape(title)}{stat_badge}{chart_badge}</div>"
+                f"{html.escape(code)} — {html.escape(title)}{stat_badge}</div>"
                 "<div style='font-size:0.875rem;color:#CBD5E1;line-height:1.65;'>"
                 f"{html.escape(comment)}</div>"
                 "</div>"
@@ -4149,19 +4141,23 @@ def _overview_legend_style() -> dict:
     dark_mode = get_theme_mode() == "dark"
     return dict(
         orientation="h",
-        yanchor="top",
-        y=-0.22,
+        yanchor="bottom",
+        y=1.03,
         x=0.0,
         xanchor="left",
-        bgcolor="rgba(15,23,42,0.40)" if dark_mode else "rgba(248,250,252,0.92)",
+        bgcolor="rgba(15,23,42,0.86)" if dark_mode else "rgba(248,250,252,0.96)",
         bordercolor="rgba(148,163,184,0.35)",
         borderwidth=1,
-        font=dict(size=12),
+        font=dict(size=11),
     )
 
 
 def _overview_chart_margin(left: int = 30, right: int = 20, bottom: int = 88, top: int = 94) -> dict:
-    return dict(l=left, r=right, t=top, b=bottom)
+    # Charts using legends reserve extra top margin so legend rows never overlap the data area.
+    top_value = int(top)
+    if top_value >= 80:
+        top_value = max(top_value, 128)
+    return dict(l=left, r=right, t=top_value, b=max(int(bottom), 88))
 
 
 def _df_has_cols(df: pd.DataFrame | None, cols: list[str]) -> bool:
@@ -4912,12 +4908,12 @@ def _render_quarterly_intelligence_briefing(
                 )
                 fig_duopoly.update_layout(
                     height=340,
-                    margin=dict(l=40, r=20, t=20, b=40),
+                    margin=_overview_chart_margin(left=40, right=20, top=92, bottom=96),
                     yaxis_title="% of global advertising spend",
                     xaxis_title="Year",
                     plot_bgcolor="rgba(0,0,0,0)",
                     paper_bgcolor="rgba(0,0,0,0)",
-                    legend=dict(orientation="h", y=1.12, x=0.0),
+                    legend=_overview_legend_style(),
                 )
                 fig_duopoly.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
                 st.plotly_chart(fig_duopoly, use_container_width=True, config=plotly_config)
@@ -4947,10 +4943,10 @@ def _render_quarterly_intelligence_briefing(
         )
         fig_tv.update_layout(
             height=360,
-            margin=dict(l=40, r=20, t=20, b=40),
+            margin=_overview_chart_margin(left=40, right=20, top=92, bottom=96),
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
-            legend=dict(orientation="h", y=1.12, x=0.0),
+            legend=_overview_legend_style(),
             yaxis_title="Ad spend (USD billions)",
         )
         fig_tv.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
@@ -5094,12 +5090,12 @@ def _render_quarterly_intelligence_briefing(
                     )
                     fig_fallback.update_layout(
                         height=360,
-                        margin=dict(l=40, r=20, t=20, b=40),
+                        margin=_overview_chart_margin(left=40, right=20, top=92, bottom=96),
                         xaxis_title="Year",
                         yaxis_title="USD trillions",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        legend=dict(orientation="h", y=1.12, x=0.0),
+                        legend=_overview_legend_style(),
                     )
                     fig_fallback.update_yaxes(gridcolor="rgba(148,163,184,0.25)")
                     st.plotly_chart(fig_fallback, use_container_width=True, config=plotly_config)
@@ -7019,7 +7015,6 @@ if ad_stack_rows:
     ad_pct_labels = [f"{r['AdPct']:.1f}%" for r in ad_stack_rows]
     mode = get_theme_mode()
     label_color = "#F8FAFC" if mode == "dark" else "#0F172A"
-    legend_color = "#E2E8F0" if mode == "dark" else "#1F2937"
 
     ad_bar_fig.add_trace(
         go.Scatter(
@@ -7041,18 +7036,12 @@ if ad_stack_rows:
     ad_bar_fig.update_layout(
         barmode="stack",
         height=460,
-        margin=dict(l=10, r=10, t=10, b=10),
+        margin=_overview_chart_margin(left=10, right=10, top=92, bottom=96),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis_title="",
         yaxis_title="Revenue (USD, Billions)",
-        legend=dict(
-            orientation="h",
-            y=-0.14,
-            x=0,
-            xanchor="left",
-            font=dict(size=12, color=legend_color),
-        ),
+        legend=_overview_legend_style(),
         bargap=0.35,
         hoverlabel=dict(
             bgcolor="rgba(15, 23, 42, 0.92)",

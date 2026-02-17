@@ -2850,7 +2850,7 @@ with quarter_col:
     )
 
 annual_metrics = data_processor.get_metrics(company, year) or {}
-quarterly_metrics, kpi_source_label = _get_quarterly_metrics_snapshot(
+quarterly_metrics, _ = _get_quarterly_metrics_snapshot(
     company_name=company,
     selected_year=year,
     selected_quarter=selected_quarter,
@@ -3791,14 +3791,6 @@ else:
     render_plotly(fig, xaxis_is_year=xaxis_is_year)
 
 st.subheader("Insights")
-render_company_kpi_auto_block(metrics, kpi_source_label)
-render_segment_breakdown_auto_block(
-    canonical_company=canonical_company,
-    selected_year=int(year),
-    selected_quarter=selected_quarter,
-    yearly_segments_df=data_processor.df_segments,
-    quarterly_segments_df=segments_quarterly_all,
-)
 render_transcript_highlights(company, int(year), selected_quarter)
 
 company_insights_df = load_company_insights_text(data_processor.data_path)
