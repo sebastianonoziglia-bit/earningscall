@@ -12,6 +12,7 @@ import logging
 import streamlit as st
 from functools import lru_cache
 from typing import Optional
+from utils.workbook_source import resolve_financial_data_xlsx
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -19,20 +20,13 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=2)
 def _resolve_excel_path() -> Optional[str]:
-    env_path = os.getenv("FINANCIAL_DATA_XLSX")
-    if env_path and os.path.exists(env_path):
-        return env_path
-
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     candidates = [
         os.path.join(base_dir, "attached_assets", "Earnings + stocks  copy.xlsx"),
         os.path.join(base_dir, "..", "Earnings + stocks  copy.xlsx"),
         os.path.join(base_dir, "Earnings + stocks  copy.xlsx"),
     ]
-    for path in candidates:
-        if os.path.exists(path):
-            return os.path.abspath(path)
-    return None
+    return resolve_financial_data_xlsx(candidates)
 
 
 @st.cache_data(ttl=3600 * 24)

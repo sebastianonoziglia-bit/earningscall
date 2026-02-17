@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 
 import pandas as pd
+from utils.workbook_source import resolve_financial_data_xlsx
 
 
 def _resolve_data_path():
@@ -11,10 +12,7 @@ def _resolve_data_path():
         os.path.join(base_dir, "attached_assets", "Earnings + stocks  copy.xlsx"),
         os.path.join(base_dir, "..", "Earnings + stocks  copy.xlsx"),
     ]
-    for path in candidates:
-        if os.path.exists(path):
-            return os.path.abspath(path)
-    return None
+    return resolve_financial_data_xlsx(candidates)
 
 
 def _parse_numeric(value):

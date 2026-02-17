@@ -3,6 +3,7 @@ import re
 from functools import lru_cache
 
 import pandas as pd
+from utils.workbook_source import resolve_financial_data_xlsx
 
 
 @lru_cache(maxsize=4)
@@ -123,20 +124,13 @@ class SubscriberDataProcessor:
         }
 
     def _resolve_excel_path(self):
-        env_path = os.getenv("FINANCIAL_DATA_XLSX")
-        if env_path and os.path.exists(env_path):
-            return env_path
-
         base_dir = os.path.dirname(os.path.abspath(__file__))
         candidates = [
             os.path.join(base_dir, "attached_assets", "Earnings + stocks  copy.xlsx"),
             os.path.join(base_dir, "..", "Earnings + stocks  copy.xlsx"),
             os.path.join(base_dir, "Earnings + stocks  copy.xlsx"),
         ]
-        for path in candidates:
-            if os.path.exists(path):
-                return os.path.abspath(path)
-        return None
+        return resolve_financial_data_xlsx(candidates)
 
     def _get_source_stamp(self, path):
         if not path:

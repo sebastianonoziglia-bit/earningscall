@@ -3,6 +3,7 @@ import os
 import logging
 import streamlit as st
 from functools import lru_cache
+from utils.workbook_source import resolve_financial_data_xlsx
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -38,25 +39,24 @@ def read_excel_data():
     if cache_key in st.session_state.data_cache:
         return st.session_state.data_cache[cache_key]
 
-    excel_path = os.getenv(
-        'FINANCIAL_DATA_XLSX',
-        os.path.join('attached_assets', 'Earnings + stocks  copy.xlsx')
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    excel_path = resolve_financial_data_xlsx(
+        [
+            os.path.join(base_dir, 'attached_assets', 'Earnings + stocks  copy.xlsx'),
+            os.path.join(base_dir, '..', 'Earnings + stocks  copy.xlsx'),
+            os.path.join(base_dir, 'Earnings + stocks  copy.xlsx'),
+        ]
     )
-    csv_path = os.path.join('/tmp', 'advertising_cache.csv')
     sheet_name = 'Country_Advertising_Data_FullVi'
 
     try:
-        if os.path.exists(csv_path):
-            df = pd.read_csv(csv_path)
-        else:
-            df = pd.read_excel(excel_path, sheet_name=sheet_name)
-            try:
-                df.to_csv(csv_path, index=False)
-            except Exception:
-                logger.warning("Unable to write advertising cache to /tmp; continuing without cache.")
-    except Exception as e:
-        logger.warning(f"Error reading CSV, falling back to Excel: {str(e)}")
+        if not excel_path or not os.path.exists(excel_path):
+            logger.warning("Primary workbook not found for advertising data.")
+            return pd.DataFrame(columns=['country', 'year', 'ad_type', 'value', 'macro_category', 'metric_type'])
         df = pd.read_excel(excel_path, sheet_name=sheet_name)
+    except Exception as e:
+        logger.warning(f"Error reading `{sheet_name}` from workbook: {str(e)}")
+        return pd.DataFrame(columns=['country', 'year', 'ad_type', 'value', 'macro_category', 'metric_type'])
 
     # Process data once and cache
     df = df.rename(columns={
@@ -156,22 +156,6 @@ def get_available_filters():
         # Mark that we've attempted initialization
         st.session_state.data_loader_init_attempted = True
         
-        # Try one more time with a basic initialization
-        try:
-            df = pd.read_csv(os.path.join('attached_assets', 'Country_Advertising_Data_FullVi.csv'))
-            if df is not None and not df.empty:
-                filters = {
-                    'countries': sorted(df['country'].unique().tolist()),
-                    'ad_types': sorted(df['ad_type'].unique().tolist()),
-                    'macro_categories': sorted(list(AD_MACRO_CATEGORIES.keys())),
-                    'ad_type_mappings': AD_MACRO_CATEGORIES
-                }
-                # Store in session state for backup
-                st.session_state.ad_filters = filters
-                return filters
-        except:
-            logger.error("Critical failure loading advertising data")
-            
         # Return default filters as a last resort
         st.session_state.ad_filters = default_filters
         return default_filters

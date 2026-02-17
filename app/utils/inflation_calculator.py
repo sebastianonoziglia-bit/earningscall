@@ -9,23 +9,17 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from typing import Optional
+from utils.workbook_source import resolve_financial_data_xlsx
 
 
 def _resolve_excel_path() -> Optional[str]:
-    env_path = os.getenv("FINANCIAL_DATA_XLSX")
-    if env_path and os.path.exists(env_path):
-        return env_path
-
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     candidates = [
         os.path.join(base_dir, "attached_assets", "Earnings + stocks  copy.xlsx"),
         os.path.join(base_dir, "..", "Earnings + stocks  copy.xlsx"),
         os.path.join(base_dir, "Earnings + stocks  copy.xlsx"),
     ]
-    for path in candidates:
-        if os.path.exists(path):
-            return os.path.abspath(path)
-    return None
+    return resolve_financial_data_xlsx(candidates)
 
 
 def _parse_percent_series(series: pd.Series) -> pd.Series:
