@@ -7,11 +7,11 @@ import numpy as np
 # Import from helpers module
 from utils.helpers import format_ad_revenue
 from handle_segments import get_wbd_segments, get_paramount_segments
-from utils.workbook_source import resolve_financial_data_xlsx
+from utils.workbook_source import resolve_financial_data_xlsx, get_workbook_source_stamp
 
 @lru_cache(maxsize=8)
-def _read_excel_sheet(path, sheet_name, usecols):
-    """Cache Excel sheet reads to avoid repeated disk IO."""
+def _read_excel_sheet(path, source_stamp, sheet_name, usecols):
+    """Cache Excel sheet reads; include source stamp so cache invalidates on workbook updates."""
     return pd.read_excel(path, sheet_name=sheet_name, usecols=list(usecols) if usecols else None)
 
 
@@ -36,6 +36,7 @@ class FinancialDataProcessor:
         self.employees_index = None
         self.market_cap_data = {}
         self.logger = None
+        self.source_stamp = 0
 
     def is_db_empty(self):
         return (self.df_metrics is None or self.df_metrics.empty) and (self.df_segments is None or self.df_segments.empty)
@@ -45,6 +46,8 @@ class FinancialDataProcessor:
         excel_path = self._resolve_excel_path()
         if not excel_path:
             print("Excel data file not found. Metrics/segments will be empty.")
+            self.data_path = None
+            self.source_stamp = 0
             self.df_metrics = pd.DataFrame(columns=['company', 'year'])
             self.df_segments = pd.DataFrame(columns=['company', 'year', 'segment', 'revenue'])
             self.df_employees = pd.DataFrame(columns=['company', 'year', 'employees'])
@@ -54,6 +57,7 @@ class FinancialDataProcessor:
             return
 
         self.data_path = excel_path
+        self.source_stamp = get_workbook_source_stamp(excel_path)
 
         try:
             metrics_cols = (
@@ -73,9 +77,9 @@ class FinancialDataProcessor:
             employees_cols = ("Company", "Year", "Employee Count")
             segments_cols = ("Company", "year", "segments", "Yearly Segment Revenue")
 
-            self.df_metrics = _read_excel_sheet(excel_path, "Company_metrics_earnings_values", metrics_cols).copy()
-            self.df_employees = _read_excel_sheet(excel_path, "Company_Employees", employees_cols).copy()
-            self.df_segments = _read_excel_sheet(excel_path, "Company_yearly_segments_values", segments_cols).copy()
+            self.df_metrics = _read_excel_sheet(excel_path, self.source_stamp, "Company_metrics_earnings_values", metrics_cols).copy()
+            self.df_employees = _read_excel_sheet(excel_path, self.source_stamp, "Company_Employees", employees_cols).copy()
+            self.df_segments = _read_excel_sheet(excel_path, self.source_stamp, "Company_yearly_segments_values", segments_cols).copy()
             # Load these lazily when needed
             self.df_ad_revenue = None
             self.df_revenue_by_region = None
@@ -104,6 +108,11 @@ class FinancialDataProcessor:
             os.path.join(base_dir, 'Earnings + stocks  copy.xlsx'),
         ]
         return resolve_financial_data_xlsx(candidates)
+
+    def is_source_updated(self):
+        if not self.data_path:
+            return False
+        return get_workbook_source_stamp(self.data_path) != int(self.source_stamp or 0)
 
     def _to_number(self, series):
         return pd.to_numeric(
@@ -135,6 +144,7 @@ class FinancialDataProcessor:
         try:
             self.df_ad_revenue = _read_excel_sheet(
                 self.data_path,
+                self.source_stamp,
                 "Company_advertising_revenue",
                 None,
             ).copy()
@@ -187,6 +197,7 @@ class FinancialDataProcessor:
             try:
                 df = _read_excel_sheet(
                     self.data_path,
+                    self.source_stamp,
                     "Company_metrics_earnings_values",
                     ("Company", "Year", "Market Cap."),
                 ).copy()

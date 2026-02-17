@@ -865,9 +865,10 @@ def _lookup_chart_comments_from_overview_sheet(
 ) -> tuple[str, str, str]:
     data_processor = get_data_processor()
     excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
     if not excel_path:
         return "", "", ""
-    df = _load_overview_charts_sheet(excel_path)
+    df = _load_overview_charts_sheet(excel_path, source_stamp)
     if df.empty:
         return "", "", ""
 
@@ -1288,7 +1289,7 @@ def get_available_years(data_processor):
     return sorted(available_years)
 
 @st.cache_data(ttl=3600)
-def _load_country_advertising_df(excel_path: str) -> pd.DataFrame:
+def _load_country_advertising_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
     path = Path(excel_path)
@@ -1326,7 +1327,7 @@ def _coerce_numeric(series: pd.Series) -> pd.Series:
 
 
 @st.cache_data(ttl=3600)
-def _load_groupm_channels_df(excel_path: str) -> pd.DataFrame:
+def _load_groupm_channels_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
     path = Path(excel_path)
@@ -1371,7 +1372,7 @@ def _load_groupm_channels_df(excel_path: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
-def _load_groupm_granular_df(excel_path: str) -> pd.DataFrame:
+def _load_groupm_granular_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
     path = Path(excel_path)
@@ -1413,7 +1414,7 @@ def _load_groupm_granular_df(excel_path: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
-def _load_groupm_total_ad_df(excel_path: str) -> pd.DataFrame:
+def _load_groupm_total_ad_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
     path = Path(excel_path)
@@ -1455,7 +1456,7 @@ def _coerce_percent_series(series: pd.Series) -> pd.Series:
 
 
 @st.cache_data(ttl=3600)
-def _load_m2_yearly_df(excel_path: str) -> pd.DataFrame:
+def _load_m2_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
     path = Path(excel_path)
@@ -1493,7 +1494,7 @@ def _load_m2_yearly_df(excel_path: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
-def _load_inflation_yearly_df(excel_path: str) -> pd.DataFrame:
+def _load_inflation_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
     path = Path(excel_path)
@@ -1523,7 +1524,7 @@ def _load_inflation_yearly_df(excel_path: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
-def _load_company_metrics_yearly_df(excel_path: str) -> pd.DataFrame:
+def _load_company_metrics_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
     path = Path(excel_path)
@@ -1567,7 +1568,7 @@ def _load_company_metrics_yearly_df(excel_path: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
-def _load_employee_yearly_df(excel_path: str) -> pd.DataFrame:
+def _load_employee_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
     path = Path(excel_path)
@@ -1600,7 +1601,7 @@ def _load_employee_yearly_df(excel_path: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
-def _load_global_ad_vs_gdp_df(excel_path: str) -> pd.DataFrame:
+def _load_global_ad_vs_gdp_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
     path = Path(excel_path)
@@ -1650,8 +1651,8 @@ _COUNTRY_OOH_METRICS = {"Digital OOH", "Traditional OOH"}
 
 
 @st.cache_data(ttl=3600)
-def _load_country_ad_channel_yearly_df(excel_path: str) -> pd.DataFrame:
-    src = _load_country_advertising_df(excel_path)
+def _load_country_ad_channel_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    src = _load_country_advertising_df(excel_path, source_stamp)
     if src.empty:
         return pd.DataFrame()
 
@@ -1690,7 +1691,7 @@ def _load_country_ad_channel_yearly_df(excel_path: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
-def _load_country_totals_vs_gdp_df(excel_path: str) -> pd.DataFrame:
+def _load_country_totals_vs_gdp_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
     path = Path(excel_path)
@@ -1891,7 +1892,7 @@ def _pick_rows_for_period(df: pd.DataFrame, selected_year: int | None, selected_
     return latest, latest_label
 
 
-def _read_excel_overview_sheet(excel_path: str, sheet_name: str) -> pd.DataFrame:
+def _read_excel_overview_sheet(excel_path: str, sheet_name: str, source_stamp: int = 0) -> pd.DataFrame:
     try:
         raw = pd.read_excel(excel_path, sheet_name=sheet_name)
     except Exception:
@@ -1916,8 +1917,8 @@ def _rename_overview_columns(raw: pd.DataFrame, aliases: dict[str, list[str]]) -
 
 
 @st.cache_data(show_spinner=False)
-def _load_overview_macro_sheet(excel_path: str) -> pd.DataFrame:
-    raw = _read_excel_overview_sheet(excel_path, "Overview_Macro")
+def _load_overview_macro_sheet(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    raw = _read_excel_overview_sheet(excel_path, "Overview_Macro", source_stamp)
     if raw.empty:
         return pd.DataFrame()
     df = _rename_overview_columns(raw, _OVERVIEW_MACRO_COLUMN_ALIASES)
@@ -1940,8 +1941,8 @@ def _load_overview_macro_sheet(excel_path: str) -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def _load_overview_insights_sheet(excel_path: str) -> pd.DataFrame:
-    raw = _read_excel_overview_sheet(excel_path, "Overview_Insights")
+def _load_overview_insights_sheet(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    raw = _read_excel_overview_sheet(excel_path, "Overview_Insights", source_stamp)
     if raw.empty:
         return pd.DataFrame()
     df = _rename_overview_columns(raw, _OVERVIEW_INSIGHTS_COLUMN_ALIASES)
@@ -1976,8 +1977,8 @@ def _load_overview_insights_sheet(excel_path: str) -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def _load_overview_charts_sheet(excel_path: str) -> pd.DataFrame:
-    raw = _read_excel_overview_sheet(excel_path, "Overview_Charts")
+def _load_overview_charts_sheet(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    raw = _read_excel_overview_sheet(excel_path, "Overview_Charts", source_stamp)
     if raw.empty:
         return pd.DataFrame()
     df = _rename_overview_columns(raw, _OVERVIEW_CHARTS_COLUMN_ALIASES)
@@ -2023,9 +2024,10 @@ def _render_excel_macro_section(
     selected_quarter: str,
 ) -> bool:
     excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
     if not excel_path:
         return False
-    macro_df = _load_overview_macro_sheet(excel_path)
+    macro_df = _load_overview_macro_sheet(excel_path, source_stamp)
     if macro_df.empty:
         return False
 
@@ -2063,9 +2065,10 @@ def _render_excel_overview_insights(
     selected_quarter: str | None,
 ) -> bool:
     excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
     if not excel_path:
         return False
-    insights_df = _load_overview_insights_sheet(excel_path)
+    insights_df = _load_overview_insights_sheet(excel_path, source_stamp)
     if insights_df.empty:
         return False
 
@@ -2177,16 +2180,17 @@ def _render_macro_bridge_charts(
     plotly_config: dict,
 ) -> bool:
     excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
     if not excel_path:
         return False
 
-    m2_df = _load_m2_yearly_df(excel_path)
-    inflation_df = _load_inflation_yearly_df(excel_path)
-    country_channel_df = _load_country_ad_channel_yearly_df(excel_path)
-    metrics_df = _load_company_metrics_yearly_df(excel_path)
-    employees_df = _load_employee_yearly_df(excel_path)
-    ad_gdp_df = _load_global_ad_vs_gdp_df(excel_path)
-    country_gdp_df = _load_country_totals_vs_gdp_df(excel_path)
+    m2_df = _load_m2_yearly_df(excel_path, source_stamp)
+    inflation_df = _load_inflation_yearly_df(excel_path, source_stamp)
+    country_channel_df = _load_country_ad_channel_yearly_df(excel_path, source_stamp)
+    metrics_df = _load_company_metrics_yearly_df(excel_path, source_stamp)
+    employees_df = _load_employee_yearly_df(excel_path, source_stamp)
+    ad_gdp_df = _load_global_ad_vs_gdp_df(excel_path, source_stamp)
+    country_gdp_df = _load_country_totals_vs_gdp_df(excel_path, source_stamp)
 
     year_candidates = []
     for df in [m2_df, inflation_df, country_channel_df, metrics_df, employees_df, ad_gdp_df, country_gdp_df]:
@@ -2789,7 +2793,9 @@ def _render_quarterly_intelligence_briefing(
     except Exception:
         pass
     ad_df = getattr(data_processor, "df_ad_revenue", None)
-    groupm_granular = _load_groupm_granular_df(getattr(data_processor, "data_path", ""))
+    excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    groupm_granular = _load_groupm_granular_df(excel_path, source_stamp)
 
     if ad_df is not None and not ad_df.empty and not groupm_granular.empty:
         ad_frame = ad_df.copy()
@@ -3354,7 +3360,9 @@ def _render_quarterly_intelligence_briefing(
     st.caption(
         "Retail media is benchmarked against traditional TV using GroupM channel totals."
     )
-    groupm_channels = _load_groupm_channels_df(getattr(data_processor, "data_path", ""))
+    excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    groupm_channels = _load_groupm_channels_df(excel_path, source_stamp)
     if not groupm_channels.empty:
         channels = groupm_channels[["Year", "Retail_Media", "Traditional_TV"]].copy()
         channels = channels.sort_values("Year")
@@ -3391,7 +3399,9 @@ def _render_quarterly_intelligence_briefing(
     st.caption(
         "Year-over-year growth from total global advertising spend. Useful for identifying regime breaks."
     )
-    total_ad_df = _load_groupm_total_ad_df(getattr(data_processor, "data_path", ""))
+    excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    total_ad_df = _load_groupm_total_ad_df(excel_path, source_stamp)
     if not total_ad_df.empty:
         yoy_df = total_ad_df.copy().sort_values("Year")
         yoy_df["YoY"] = yoy_df["Total Advertising"].pct_change() * 100.0
@@ -3491,7 +3501,10 @@ hover_border = "rgba(255,255,255,0.12)" if dark_mode else "rgba(15,23,42,0.15)"
 hover_font_color = "#FFFFFF" if dark_mode else "#0F172A"
 colorbar_font = "rgba(226, 232, 240, 0.8)" if dark_mode else "rgba(15, 23, 42, 0.6)"
 
-country_ad_df = _load_country_advertising_df(getattr(data_processor, "data_path", ""))
+country_ad_df = _load_country_advertising_df(
+    getattr(data_processor, "data_path", ""),
+    int(getattr(data_processor, "source_stamp", 0) or 0),
+)
 if not country_ad_df.empty:
     view_mode = st.radio(
         "Map view",

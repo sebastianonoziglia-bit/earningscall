@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 
 import pandas as pd
-from utils.workbook_source import resolve_financial_data_xlsx
+from utils.workbook_source import resolve_financial_data_xlsx, get_workbook_source_stamp
 
 
 def _resolve_data_path():
@@ -40,7 +40,7 @@ def _parse_numeric(value):
 
 
 @lru_cache(maxsize=1)
-def _load_stock_sheet(path):
+def _load_stock_sheet(path, source_stamp):
     if not path or not os.path.exists(path):
         return pd.DataFrame()
 
@@ -119,7 +119,8 @@ class StockDataProcessor:
 
     def get_company_data(self, company, timeframe="1M", expanded=False):
         self._increment_calls()
-        df = _load_stock_sheet(self.data_path)
+        source_stamp = get_workbook_source_stamp(self.data_path)
+        df = _load_stock_sheet(self.data_path, source_stamp)
         if df.empty:
             return None
         df_company = self._filter_company(df, company)

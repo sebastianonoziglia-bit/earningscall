@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 from typing import Optional
-from utils.workbook_source import resolve_financial_data_xlsx
+from utils.workbook_source import resolve_financial_data_xlsx, get_workbook_source_stamp
 
 
 def _resolve_excel_path() -> Optional[str]:
@@ -30,10 +30,7 @@ def _parse_percent_series(series: pd.Series) -> pd.Series:
 
 
 @st.cache_data(ttl=3600 * 24)
-def load_usd_inflation_table() -> pd.DataFrame:
-    path = _resolve_excel_path()
-    if not path:
-        return pd.DataFrame()
+def _load_usd_inflation_table_cached(path: str, source_stamp: int) -> pd.DataFrame:
     try:
         df = pd.read_excel(path, sheet_name="USD Inflation").copy()
     except Exception:
@@ -51,6 +48,14 @@ def load_usd_inflation_table() -> pd.DataFrame:
 
     df = df.dropna(subset=["Year"]).sort_values("Year").reset_index(drop=True)
     return df
+
+
+def load_usd_inflation_table() -> pd.DataFrame:
+    path = _resolve_excel_path()
+    if not path:
+        return pd.DataFrame()
+    source_stamp = get_workbook_source_stamp(path)
+    return _load_usd_inflation_table_cached(path, source_stamp)
 
 
 @st.cache_data(ttl=3600 * 24)

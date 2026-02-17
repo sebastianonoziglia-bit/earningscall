@@ -12,7 +12,7 @@ import logging
 import streamlit as st
 from functools import lru_cache
 from typing import Optional
-from utils.workbook_source import resolve_financial_data_xlsx
+from utils.workbook_source import resolve_financial_data_xlsx, get_workbook_source_stamp
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +30,7 @@ def _resolve_excel_path() -> Optional[str]:
 
 
 @st.cache_data(ttl=3600 * 24)
-def _load_m2_from_excel() -> pd.DataFrame:
+def _load_m2_from_excel_cached(path: str, source_stamp: int) -> pd.DataFrame:
     """
     Load M2 data from the Excel sheet 'M2_values' (preferred, no hard-coded data).
 
@@ -38,9 +38,6 @@ def _load_m2_from_excel() -> pd.DataFrame:
       - 'USD observation_date'
       - 'WM2NS' (billions USD)
     """
-    path = _resolve_excel_path()
-    if not path:
-        return pd.DataFrame()
     try:
         df = pd.read_excel(path, sheet_name="M2_values").copy()
     except Exception:
@@ -61,6 +58,14 @@ def _load_m2_from_excel() -> pd.DataFrame:
     out["month"] = out["date"].dt.month.astype(int)
     out["monthly_growth"] = out["value"].pct_change() * 100.0
     return out
+
+
+def _load_m2_from_excel() -> pd.DataFrame:
+    path = _resolve_excel_path()
+    if not path:
+        return pd.DataFrame()
+    source_stamp = get_workbook_source_stamp(path)
+    return _load_m2_from_excel_cached(path, source_stamp)
 
 
 def get_connection():

@@ -122,6 +122,13 @@ def get_data_processor(_cache_bust: str = "v2-nasdaq-2026-02-04"):
             data_processor = FinancialDataProcessor()
             data_processor.load_data()
             st.session_state.data_processor = data_processor
+        else:
+            try:
+                if hasattr(st.session_state.data_processor, "is_source_updated") and st.session_state.data_processor.is_source_updated():
+                    logger.info("Workbook source updated; reloading data processor.")
+                    st.session_state.data_processor.load_data()
+            except Exception as refresh_exc:
+                logger.warning(f"Could not auto-refresh data processor: {refresh_exc}")
 
         # Verify data is loaded properly by checking a basic method
         if not hasattr(st.session_state.data_processor, 'get_companies') or not st.session_state.data_processor.get_companies():

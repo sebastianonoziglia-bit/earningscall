@@ -33,6 +33,13 @@ class OptimizedDataLoader:
             self._data_processor.load_data()
             initialization_time = time.time() - start_time
             logger.info(f"Data processor initialized in {initialization_time:.2f} seconds")
+        else:
+            try:
+                if hasattr(self._data_processor, "is_source_updated") and self._data_processor.is_source_updated():
+                    logger.info("Workbook source updated; refreshing optimized data processor.")
+                    self._data_processor.load_data()
+            except Exception as refresh_exc:
+                logger.warning(f"Optimized loader refresh check failed: {refresh_exc}")
         return self._data_processor
         
     def preload_frequent_data(self):

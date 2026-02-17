@@ -3,7 +3,7 @@ import os
 import logging
 import streamlit as st
 from functools import lru_cache
-from utils.workbook_source import resolve_financial_data_xlsx
+from utils.workbook_source import resolve_financial_data_xlsx, get_workbook_source_stamp
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,13 +31,22 @@ AD_MACRO_CATEGORIES = {
 }
 
 @st.cache_data(ttl=3600*24)
+def _read_country_sheet_cached(excel_path: str, source_stamp: int):
+    return pd.read_excel(excel_path, sheet_name='Country_Advertising_Data_FullVi')
+
+
 def read_excel_data():
-    """Cache the Excel data to avoid repeated reads"""
+    """Load country advertising data from workbook with stamp-aware cache invalidation."""
     _ensure_loader_state()
     cache_key = 'excel_data'
 
     if cache_key in st.session_state.data_cache:
-        return st.session_state.data_cache[cache_key]
+        cached = st.session_state.data_cache[cache_key]
+        current_stamp = int(cached.get("source_stamp", 0))
+        current_path = str(cached.get("source_path", ""))
+        new_stamp = get_workbook_source_stamp(current_path)
+        if current_stamp != 0 and new_stamp == current_stamp:
+            return cached["df"]
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     excel_path = resolve_financial_data_xlsx(
@@ -53,7 +62,8 @@ def read_excel_data():
         if not excel_path or not os.path.exists(excel_path):
             logger.warning("Primary workbook not found for advertising data.")
             return pd.DataFrame(columns=['country', 'year', 'ad_type', 'value', 'macro_category', 'metric_type'])
-        df = pd.read_excel(excel_path, sheet_name=sheet_name)
+        source_stamp = get_workbook_source_stamp(excel_path)
+        df = _read_country_sheet_cached(excel_path, source_stamp)
     except Exception as e:
         logger.warning(f"Error reading `{sheet_name}` from workbook: {str(e)}")
         return pd.DataFrame(columns=['country', 'year', 'ad_type', 'value', 'macro_category', 'metric_type'])
@@ -72,7 +82,11 @@ def read_excel_data():
     df['macro_category'] = df['ad_type'].apply(lambda x: next((cat for cat, types in AD_MACRO_CATEGORIES.items() if x in types), x))
     df['metric_type'] = df['ad_type']
 
-    st.session_state.data_cache[cache_key] = df
+    st.session_state.data_cache[cache_key] = {
+        "df": df,
+        "source_path": excel_path,
+        "source_stamp": get_workbook_source_stamp(excel_path),
+    }
     return df
 
 @st.cache_data(ttl=3600)

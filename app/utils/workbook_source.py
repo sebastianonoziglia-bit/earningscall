@@ -40,7 +40,7 @@ def _is_valid_xlsx_payload(content_type: str, body: bytes) -> bool:
     return body.startswith(b"PK")
 
 
-def _download_google_sheet_xlsx(sheet_id: str, refresh_seconds: int = 300) -> Optional[str]:
+def _download_google_sheet_xlsx(sheet_id: str, refresh_seconds: int = 60) -> Optional[str]:
     cache_dir = Path(tempfile.gettempdir()) / "replit_revival_data"
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_file = cache_dir / f"{sheet_id}.xlsx"
@@ -89,7 +89,7 @@ def resolve_financial_data_xlsx(local_candidates: Iterable[str] | None = None) -
         )
         sheet_id = extract_google_sheet_id(sheet_ref)
         if sheet_id:
-            refresh_seconds = int(os.getenv("FINANCIAL_DATA_GSHEET_REFRESH_SECONDS", "300"))
+            refresh_seconds = int(os.getenv("FINANCIAL_DATA_GSHEET_REFRESH_SECONDS", "60"))
             downloaded = _download_google_sheet_xlsx(sheet_id, refresh_seconds=refresh_seconds)
             if downloaded and os.path.exists(downloaded):
                 return os.path.abspath(downloaded)
@@ -100,3 +100,11 @@ def resolve_financial_data_xlsx(local_candidates: Iterable[str] | None = None) -
 
     return None
 
+
+def get_workbook_source_stamp(path: str | None) -> int:
+    if not path:
+        return 0
+    try:
+        return int(os.stat(path).st_mtime_ns)
+    except OSError:
+        return 0

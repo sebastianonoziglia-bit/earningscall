@@ -11,7 +11,7 @@ from typing import Optional
 
 import pandas as pd
 import streamlit as st
-from utils.workbook_source import resolve_financial_data_xlsx
+from utils.workbook_source import resolve_financial_data_xlsx, get_workbook_source_stamp
 
 
 @lru_cache(maxsize=2)
@@ -33,10 +33,7 @@ def _pick_column(columns_lower_map: dict[str, str], *candidates: str) -> Optiona
 
 
 @st.cache_data(ttl=3600 * 24)
-def _load_fed_funds_from_excel() -> pd.DataFrame:
-    path = _resolve_excel_path()
-    if not path:
-        return pd.DataFrame()
+def _load_fed_funds_from_excel_cached(path: str, source_stamp: int) -> pd.DataFrame:
 
     sheet_candidates = [
         "Fed Fund Rates",
@@ -117,6 +114,14 @@ def _load_fed_funds_from_excel() -> pd.DataFrame:
     out["year"] = out["year"].astype(int)
     out = out.sort_values(["year", "date"]).reset_index(drop=True)
     return out
+
+
+def _load_fed_funds_from_excel() -> pd.DataFrame:
+    path = _resolve_excel_path()
+    if not path:
+        return pd.DataFrame()
+    source_stamp = get_workbook_source_stamp(path)
+    return _load_fed_funds_from_excel_cached(path, source_stamp)
 
 
 @st.cache_data(ttl=3600)
