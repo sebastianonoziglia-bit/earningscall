@@ -1604,6 +1604,39 @@ def _coerce_percent_series(series: pd.Series) -> pd.Series:
 
 
 @st.cache_data(ttl=3600)
+def _load_stocks_crypto_timeseries_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name="Stocks & Crypto", usecols=["date", "price", "asset"])
+    except Exception:
+        try:
+            df = pd.read_excel(path, sheet_name="Stocks & Crypto")
+        except Exception:
+            return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+    out = df.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    date_col = _find_column_by_alias(out, ["date", "datetime", "timestamp"])
+    price_col = _find_column_by_alias(out, ["price", "close", "close price", "closing price", "adj close", "adj_close"])
+    asset_col = _find_column_by_alias(out, ["asset", "name", "symbol", "ticker"])
+    if not date_col or not price_col or not asset_col:
+        return pd.DataFrame()
+    out = out.rename(columns={date_col: "date", price_col: "price", asset_col: "asset"})
+    out["date"] = pd.to_datetime(out["date"], errors="coerce")
+    out["price"] = pd.to_numeric(out["price"], errors="coerce")
+    out["asset"] = out["asset"].astype(str).str.strip()
+    out = out.dropna(subset=["date", "price", "asset"])
+    if out.empty:
+        return pd.DataFrame()
+    return out.sort_values("date")
+
+
+@st.cache_data(ttl=3600)
 def _load_m2_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -1876,6 +1909,489 @@ def _load_country_totals_vs_gdp_df(excel_path: str, source_stamp: int = 0) -> pd
     return out.sort_values(["Year", "Country"]).reset_index(drop=True)
 
 
+def _norm_sheet_col(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().lower()).strip("_")
+
+
+def _find_column_by_alias(df: pd.DataFrame, aliases: list[str]) -> str | None:
+    lookup = {_norm_sheet_col(c): c for c in df.columns}
+    for alias in aliases:
+        key = _norm_sheet_col(alias)
+        if key in lookup:
+            return lookup[key]
+    return None
+
+
+def _attach_year_quarter(
+    df: pd.DataFrame,
+    year_aliases: list[str],
+    quarter_aliases: list[str],
+    date_aliases: list[str],
+) -> pd.DataFrame:
+    out = df.copy()
+    out["_year"] = np.nan
+    out["_quarter_num"] = np.nan
+
+    year_col = _find_column_by_alias(out, year_aliases)
+    quarter_col = _find_column_by_alias(out, quarter_aliases)
+    date_col = _find_column_by_alias(out, date_aliases)
+
+    if year_col:
+        out["_year"] = pd.to_numeric(out[year_col], errors="coerce")
+    if quarter_col:
+        out["_quarter_num"] = out[quarter_col].apply(_parse_quarter_number)
+
+    if date_col:
+        text = out[date_col].astype(str).str.strip()
+        dt = pd.to_datetime(text, errors="coerce")
+        year_from_text = pd.to_numeric(text.str.extract(r"((?:19|20)\d{2})", expand=False), errors="coerce")
+        quarter_from_text = pd.to_numeric(text.str.extract(r"[Qq]\s*([1-4])", expand=False), errors="coerce")
+
+        out["_year"] = out["_year"].fillna(dt.dt.year)
+        out["_year"] = out["_year"].fillna(year_from_text)
+        out["_quarter_num"] = out["_quarter_num"].fillna(dt.dt.quarter)
+        out["_quarter_num"] = out["_quarter_num"].fillna(quarter_from_text)
+
+    out["_year"] = pd.to_numeric(out["_year"], errors="coerce")
+    out["_quarter_num"] = pd.to_numeric(out["_quarter_num"], errors="coerce").fillna(4)
+    out["_quarter_num"] = out["_quarter_num"].clip(lower=1, upper=4)
+    out = out.dropna(subset=["_year"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["Year"] = out["_year"].astype(int)
+    out["QuarterNum"] = out["_quarter_num"].astype(int)
+    out["Quarter"] = out["QuarterNum"].astype(int).apply(lambda q: f"Q{q}")
+    return out
+
+
+def _pick_macro_row_for_period(df: pd.DataFrame, selected_year: int, selected_quarter: str) -> pd.Series | None:
+    if df is None or df.empty:
+        return None
+    scoped = df.copy()
+    scoped["Year"] = pd.to_numeric(scoped["Year"], errors="coerce")
+    scoped["QuarterNum"] = pd.to_numeric(scoped.get("QuarterNum", 4), errors="coerce").fillna(4)
+    scoped = scoped.dropna(subset=["Year"]).copy()
+    if scoped.empty:
+        return None
+    scoped["Year"] = scoped["Year"].astype(int)
+    scoped["QuarterNum"] = scoped["QuarterNum"].astype(int).clip(lower=1, upper=4)
+
+    qnum = _parse_quarter_number(selected_quarter) or 4
+    eligible = scoped[
+        (scoped["Year"] < int(selected_year))
+        | ((scoped["Year"] == int(selected_year)) & (scoped["QuarterNum"] <= int(qnum)))
+    ].copy()
+    if eligible.empty:
+        eligible = scoped.copy()
+    if eligible.empty:
+        return None
+    return eligible.sort_values(["Year", "QuarterNum"]).iloc[-1]
+
+
+@st.cache_data(ttl=3600)
+def _load_macro_interest_rates_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    raw, _sheet_used = _read_excel_sheet_flexible(
+        excel_path=excel_path,
+        source_stamp=source_stamp,
+        preferred="Macro_Interest_Rates",
+        aliases=["Interest_Rates", "Macro Interest Rates", "Rates"],
+        contains_all=["rate"],
+        contains_any=["interest", "fed", "treasury", "yield", "funds"],
+    )
+    if raw.empty:
+        return pd.DataFrame()
+    out = _attach_year_quarter(
+        raw,
+        year_aliases=["year"],
+        quarter_aliases=["quarter", "qtr"],
+        date_aliases=["date", "period"],
+    )
+    if out.empty:
+        return pd.DataFrame()
+    fed_col = _find_column_by_alias(out, ["fed_funds_rate", "fed funds rate", "fed_rate"])
+    ten_col = _find_column_by_alias(out, ["10y_treasury", "10y", "ten_year_treasury", "treasury_10y"])
+    two_col = _find_column_by_alias(out, ["2y_treasury", "2y", "two_year_treasury", "treasury_2y"])
+    spread_col = _find_column_by_alias(out, ["yield_curve_spread", "yield_curve", "10y_2y_spread", "spread"])
+    ecb_col = _find_column_by_alias(out, ["ecb_rate", "ecb"])
+    regime_col = _find_column_by_alias(out, ["rate_regime", "regime"])
+    comment_col = _find_column_by_alias(out, ["comment", "note", "macro_comment"])
+
+    out["FedFundsRate"] = pd.to_numeric(out[fed_col], errors="coerce") if fed_col else np.nan
+    out["TenYearTreasury"] = pd.to_numeric(out[ten_col], errors="coerce") if ten_col else np.nan
+    out["TwoYearTreasury"] = pd.to_numeric(out[two_col], errors="coerce") if two_col else np.nan
+    out["YieldCurveSpread"] = pd.to_numeric(out[spread_col], errors="coerce") if spread_col else np.nan
+    out["ECBRate"] = pd.to_numeric(out[ecb_col], errors="coerce") if ecb_col else np.nan
+    if out["YieldCurveSpread"].isna().all() and out["TenYearTreasury"].notna().any() and out["TwoYearTreasury"].notna().any():
+        out["YieldCurveSpread"] = out["TenYearTreasury"] - out["TwoYearTreasury"]
+    out["RateRegime"] = out[regime_col].astype(str).str.strip() if regime_col else ""
+    out["Comment"] = out[comment_col].astype(str).str.strip() if comment_col else ""
+    cols = [
+        "Year",
+        "QuarterNum",
+        "Quarter",
+        "FedFundsRate",
+        "TenYearTreasury",
+        "TwoYearTreasury",
+        "YieldCurveSpread",
+        "ECBRate",
+        "RateRegime",
+        "Comment",
+    ]
+    return out[cols].sort_values(["Year", "QuarterNum"]).reset_index(drop=True)
+
+
+@st.cache_data(ttl=3600)
+def _load_macro_gdp_growth_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    raw, _sheet_used = _read_excel_sheet_flexible(
+        excel_path=excel_path,
+        source_stamp=source_stamp,
+        preferred="Macro_GDP_Growth",
+        aliases=["GDP_Growth", "Macro GDP Growth", "GDP"],
+        contains_all=["gdp"],
+        contains_any=["growth", "macro"],
+    )
+    if raw.empty:
+        # Fallback: derive global GDP YoY from Country_Totals_vs_GDP.
+        country_totals = _load_country_totals_vs_gdp_df(excel_path, source_stamp)
+        if country_totals.empty:
+            return pd.DataFrame()
+        gdp = (
+            country_totals.groupby("Year", as_index=False)["GDP_USD"]
+            .sum(min_count=1)
+            .sort_values("Year")
+        )
+        gdp["Global_GDP_YoY"] = gdp["GDP_USD"].pct_change() * 100.0
+        gdp = gdp.dropna(subset=["Global_GDP_YoY"]).copy()
+        if gdp.empty:
+            return pd.DataFrame()
+        gdp["QuarterNum"] = 4
+        gdp["Quarter"] = "Q4"
+        gdp["US_GDP_YoY"] = np.nan
+        gdp["Comment"] = "Derived from Country_Totals_vs_GDP"
+        return gdp[["Year", "QuarterNum", "Quarter", "US_GDP_YoY", "Global_GDP_YoY", "Comment"]]
+    out = _attach_year_quarter(
+        raw,
+        year_aliases=["year"],
+        quarter_aliases=["quarter", "qtr"],
+        date_aliases=["date", "period"],
+    )
+    if out.empty:
+        return pd.DataFrame()
+    us_yoy_col = _find_column_by_alias(out, ["us_gdp_yoy", "us_gdp_growth", "us_gdp_growth_yoy"])
+    global_yoy_col = _find_column_by_alias(out, ["global_gdp_yoy", "global_gdp_growth", "world_gdp_yoy"])
+    comment_col = _find_column_by_alias(out, ["comment", "note"])
+
+    out["US_GDP_YoY"] = pd.to_numeric(out[us_yoy_col], errors="coerce") if us_yoy_col else np.nan
+    out["Global_GDP_YoY"] = pd.to_numeric(out[global_yoy_col], errors="coerce") if global_yoy_col else np.nan
+    out["Comment"] = out[comment_col].astype(str).str.strip() if comment_col else ""
+    cols = ["Year", "QuarterNum", "Quarter", "US_GDP_YoY", "Global_GDP_YoY", "Comment"]
+    out = out[cols].dropna(subset=["US_GDP_YoY", "Global_GDP_YoY"], how="all")
+    return out.sort_values(["Year", "QuarterNum"]).reset_index(drop=True)
+
+
+@st.cache_data(ttl=3600)
+def _load_macro_labor_market_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    raw, _sheet_used = _read_excel_sheet_flexible(
+        excel_path=excel_path,
+        source_stamp=source_stamp,
+        preferred="Macro_Labor_Market",
+        aliases=["Labor_Market", "Macro Labor Market", "Labour Market"],
+        contains_all=["labor"],
+        contains_any=["market", "unemployment", "wage", "participation"],
+    )
+    if raw.empty:
+        return pd.DataFrame()
+    out = _attach_year_quarter(
+        raw,
+        year_aliases=["year"],
+        quarter_aliases=["quarter", "qtr"],
+        date_aliases=["date", "period"],
+    )
+    if out.empty:
+        return pd.DataFrame()
+    unemployment_col = _find_column_by_alias(out, ["us_unemployment_rate", "unemployment_rate", "unemployment"])
+    participation_col = _find_column_by_alias(out, ["labor_force_participation", "participation"])
+    real_wages_col = _find_column_by_alias(out, ["real_wages_yoy", "real_wage_yoy"])
+    comment_col = _find_column_by_alias(out, ["comment", "note"])
+
+    out["US_Unemployment_Rate"] = pd.to_numeric(out[unemployment_col], errors="coerce") if unemployment_col else np.nan
+    out["Labor_Force_Participation"] = pd.to_numeric(out[participation_col], errors="coerce") if participation_col else np.nan
+    out["Real_Wages_YoY"] = pd.to_numeric(out[real_wages_col], errors="coerce") if real_wages_col else np.nan
+    out["Comment"] = out[comment_col].astype(str).str.strip() if comment_col else ""
+    cols = ["Year", "QuarterNum", "Quarter", "US_Unemployment_Rate", "Labor_Force_Participation", "Real_Wages_YoY", "Comment"]
+    out = out[cols].dropna(subset=["US_Unemployment_Rate", "Labor_Force_Participation", "Real_Wages_YoY"], how="all")
+    return out.sort_values(["Year", "QuarterNum"]).reset_index(drop=True)
+
+
+@st.cache_data(ttl=3600)
+def _load_macro_currency_index_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    raw, _sheet_used = _read_excel_sheet_flexible(
+        excel_path=excel_path,
+        source_stamp=source_stamp,
+        preferred="Macro_Currency_Index",
+        aliases=["Currency_Index", "FX", "Macro FX"],
+        contains_all=["currency"],
+        contains_any=["dxy", "usd", "fx", "index"],
+    )
+    if raw.empty:
+        stocks = _load_stocks_crypto_timeseries_df(excel_path, source_stamp)
+        if stocks.empty:
+            return pd.DataFrame()
+        mask = stocks["asset"].str.lower().str.contains("dxy|dollar index|usd index", regex=True, na=False)
+        dxy = stocks[mask].copy()
+        if dxy.empty:
+            return pd.DataFrame()
+        dxy["Year"] = dxy["date"].dt.year.astype(int)
+        dxy["QuarterNum"] = dxy["date"].dt.quarter.astype(int)
+        dxy = (
+            dxy.sort_values(["Year", "QuarterNum", "date"])
+            .groupby(["Year", "QuarterNum"], as_index=False)
+            .tail(1)
+        )
+        dxy["Quarter"] = dxy["QuarterNum"].apply(lambda q: f"Q{int(q)}")
+        dxy["USD_Index_DXY"] = dxy["price"]
+        dxy["Comment"] = "Derived from Stocks & Crypto"
+        return dxy[["Year", "QuarterNum", "Quarter", "USD_Index_DXY", "Comment"]].sort_values(["Year", "QuarterNum"])
+    out = _attach_year_quarter(
+        raw,
+        year_aliases=["year"],
+        quarter_aliases=["quarter", "qtr"],
+        date_aliases=["date", "period"],
+    )
+    if out.empty:
+        return pd.DataFrame()
+    dxy_col = _find_column_by_alias(out, ["usd_index_dxy", "dxy", "usd_index"])
+    comment_col = _find_column_by_alias(out, ["comment", "note"])
+    out["USD_Index_DXY"] = pd.to_numeric(out[dxy_col], errors="coerce") if dxy_col else np.nan
+    out["Comment"] = out[comment_col].astype(str).str.strip() if comment_col else ""
+    cols = ["Year", "QuarterNum", "Quarter", "USD_Index_DXY", "Comment"]
+    out = out[cols].dropna(subset=["USD_Index_DXY"], how="all")
+    return out.sort_values(["Year", "QuarterNum"]).reset_index(drop=True)
+
+
+@st.cache_data(ttl=3600)
+def _load_macro_tech_valuations_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    raw, _sheet_used = _read_excel_sheet_flexible(
+        excel_path=excel_path,
+        source_stamp=source_stamp,
+        preferred="Macro_Tech_Valuations",
+        aliases=["Tech_Valuations", "Valuations", "Macro Tech Valuations"],
+        contains_any=["vix", "pe", "valuation", "nasdaq"],
+    )
+    if raw.empty:
+        stocks = _load_stocks_crypto_timeseries_df(excel_path, source_stamp)
+        if stocks.empty:
+            return pd.DataFrame()
+        vix = stocks[stocks["asset"].str.lower().str.contains("vix", regex=False, na=False)].copy()
+        if vix.empty:
+            return pd.DataFrame()
+        vix["Year"] = vix["date"].dt.year.astype(int)
+        vix["QuarterNum"] = vix["date"].dt.quarter.astype(int)
+        vix = (
+            vix.sort_values(["Year", "QuarterNum", "date"])
+            .groupby(["Year", "QuarterNum"], as_index=False)
+            .tail(1)
+        )
+        vix["Quarter"] = vix["QuarterNum"].apply(lambda q: f"Q{int(q)}")
+        vix["Tech_Aggregate_PE"] = np.nan
+        vix["VIX_Volatility"] = vix["price"]
+        vix["Comment"] = "Derived from Stocks & Crypto"
+        return vix[["Year", "QuarterNum", "Quarter", "Tech_Aggregate_PE", "VIX_Volatility", "Comment"]].sort_values(["Year", "QuarterNum"])
+    out = _attach_year_quarter(
+        raw,
+        year_aliases=["year"],
+        quarter_aliases=["quarter", "qtr"],
+        date_aliases=["date", "period"],
+    )
+    if out.empty:
+        return pd.DataFrame()
+    tech_pe_col = _find_column_by_alias(out, ["tech_aggregate_pe", "big_tech_pe", "tech_pe"])
+    vix_col = _find_column_by_alias(out, ["vix_volatility", "vix"])
+    comment_col = _find_column_by_alias(out, ["comment", "note"])
+
+    out["Tech_Aggregate_PE"] = pd.to_numeric(out[tech_pe_col], errors="coerce") if tech_pe_col else np.nan
+    out["VIX_Volatility"] = pd.to_numeric(out[vix_col], errors="coerce") if vix_col else np.nan
+    out["Comment"] = out[comment_col].astype(str).str.strip() if comment_col else ""
+    cols = ["Year", "QuarterNum", "Quarter", "Tech_Aggregate_PE", "VIX_Volatility", "Comment"]
+    out = out[cols].dropna(subset=["Tech_Aggregate_PE", "VIX_Volatility"], how="all")
+    return out.sort_values(["Year", "QuarterNum"]).reset_index(drop=True)
+
+
+@st.cache_data(ttl=3600)
+def _load_company_revenue_by_region_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    path = Path(excel_path)
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(path, sheet_name="Company_revenue_by_region")
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+    out = df.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    required = ["company", "year", "segment_name", "revenue_millions"]
+    if not set(required).issubset(set(out.columns)):
+        return pd.DataFrame()
+    out["company"] = out["company"].astype(str).str.strip()
+    out["year"] = pd.to_numeric(out["year"], errors="coerce")
+    out["segment_name"] = out["segment_name"].astype(str).str.strip()
+    out["revenue_millions"] = pd.to_numeric(out["revenue_millions"], errors="coerce")
+    out = out.dropna(subset=["company", "year", "segment_name", "revenue_millions"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["year"] = out["year"].astype(int)
+    return out.sort_values(["company", "year", "segment_name"]).reset_index(drop=True)
+
+
+@st.cache_data(ttl=3600)
+def _load_macro_wealth_by_generation_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    raw, _sheet_used = _read_excel_sheet_flexible(
+        excel_path=excel_path,
+        source_stamp=source_stamp,
+        preferred="Macro_Wealth_by_Generation",
+        aliases=["Wealth_by_Generation", "Macro Wealth by Generation"],
+        contains_all=["wealth", "generation"],
+    )
+    if raw.empty:
+        return pd.DataFrame()
+    out = raw.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    country_col = _find_column_by_alias(out, ["country"])
+    year_col = _find_column_by_alias(out, ["year"])
+    generation_col = _find_column_by_alias(out, ["generation_label", "generation", "age_group"])
+    share_col = _find_column_by_alias(out, ["wealth_share_pct", "wealth_share", "share_pct"])
+    total_col = _find_column_by_alias(out, ["total_wealth_billion_usd", "total_wealth", "wealth_billion"])
+    if not country_col or not year_col or not generation_col:
+        return pd.DataFrame()
+    out = out.rename(
+        columns={
+            country_col: "Country",
+            year_col: "Year",
+            generation_col: "Generation",
+        }
+    )
+    out["Country"] = out["Country"].astype(str).str.strip()
+    out["Year"] = pd.to_numeric(out["Year"], errors="coerce")
+    out["Generation"] = out["Generation"].astype(str).str.strip()
+    if share_col:
+        out["WealthSharePct"] = pd.to_numeric(out[share_col], errors="coerce")
+    else:
+        out["WealthSharePct"] = np.nan
+    if total_col:
+        out["TotalWealthBUSD"] = pd.to_numeric(out[total_col], errors="coerce")
+    else:
+        out["TotalWealthBUSD"] = np.nan
+    out = out.dropna(subset=["Country", "Year", "Generation"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["Year"] = out["Year"].astype(int)
+    return out[["Country", "Year", "Generation", "WealthSharePct", "TotalWealthBUSD"]].sort_values(["Year", "Country", "Generation"])
+
+
+@st.cache_data(ttl=3600)
+def _load_hardware_smartphone_shipments_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    raw, _sheet_used = _read_excel_sheet_flexible(
+        excel_path=excel_path,
+        source_stamp=source_stamp,
+        preferred="Hardware_Smartphone_Shipments",
+        aliases=["Smartphone_Shipments", "Hardware Smartphone Shipments"],
+        contains_all=["smartphone", "ship"],
+    )
+    if raw.empty:
+        return pd.DataFrame()
+    out = raw.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    year_col = _find_column_by_alias(out, ["year"])
+    apple_col = _find_column_by_alias(out, ["apple_iphone_units_m", "apple_iphone_units", "iphone_units"])
+    total_col = _find_column_by_alias(out, ["total_global_units_m", "total_global_units", "total_units"])
+    if not year_col or not apple_col or not total_col:
+        return pd.DataFrame()
+    out = out.rename(columns={year_col: "Year", apple_col: "Apple_iPhone_Units_M", total_col: "Total_Global_Units_M"})
+    out["Year"] = pd.to_numeric(out["Year"], errors="coerce")
+    out["Apple_iPhone_Units_M"] = pd.to_numeric(out["Apple_iPhone_Units_M"], errors="coerce")
+    out["Total_Global_Units_M"] = pd.to_numeric(out["Total_Global_Units_M"], errors="coerce")
+    out = out.dropna(subset=["Year", "Apple_iPhone_Units_M", "Total_Global_Units_M"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out = out[out["Total_Global_Units_M"] > 0].copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["Year"] = out["Year"].astype(int)
+    out["AppleSharePct"] = (out["Apple_iPhone_Units_M"] / out["Total_Global_Units_M"]) * 100.0
+    return out[["Year", "Apple_iPhone_Units_M", "Total_Global_Units_M", "AppleSharePct"]].sort_values("Year")
+
+
+def _parse_hours_minutes(value) -> float:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return np.nan
+    text = str(value).strip()
+    if not text:
+        return np.nan
+    if ":" in text:
+        try:
+            hh, mm = text.split(":", 1)
+            return float(hh) + (float(mm) / 60.0)
+        except Exception:
+            return np.nan
+    try:
+        raw = float(text)
+    except Exception:
+        return np.nan
+    hours = int(raw)
+    minutes = int(round((raw - hours) * 100))
+    minutes = max(0, min(minutes, 59))
+    return float(hours) + (minutes / 60.0)
+
+
+@st.cache_data(ttl=3600)
+def _load_country_avg_internet_time_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    raw, _sheet_used = _read_excel_sheet_flexible(
+        excel_path=excel_path,
+        source_stamp=source_stamp,
+        preferred="Country_avg_timespent_intrnt24",
+        aliases=["Country_avg_timespent_internet24", "Country Avg Time Spent Internet"],
+        contains_all=["time", "internet"],
+        contains_any=["country", "avg"],
+    )
+    if raw.empty:
+        return pd.DataFrame()
+    out = raw.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    country_col = _find_column_by_alias(out, ["country"])
+    time_col = _find_column_by_alias(out, ["daily_time_spent_internet_hours_minutes", "daily_time_spent_internet", "time_spent_internet"])
+    if not country_col or not time_col:
+        return pd.DataFrame()
+    out = out.rename(columns={country_col: "Country", time_col: "DailyInternetTimeRaw"})
+    out["Country"] = out["Country"].astype(str).str.strip()
+    out["DailyInternetHours"] = out["DailyInternetTimeRaw"].apply(_parse_hours_minutes)
+    out = out.dropna(subset=["Country", "DailyInternetHours"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    return out[["Country", "DailyInternetHours"]].sort_values("DailyInternetHours", ascending=False)
+
+
+def _is_international_region_label(name: str) -> bool:
+    text = str(name or "").strip().lower()
+    return any(
+        token in text
+        for token in (
+            "international",
+            "outside",
+            "emea",
+            "apac",
+            "asia",
+            "europe",
+            "latam",
+            "latin",
+            "rest of world",
+            "worldwide",
+        )
+    )
+
+
 def _latest_subscriber_history(subscriber_df: pd.DataFrame, services: list[str]) -> pd.DataFrame:
     if subscriber_df is None or subscriber_df.empty:
         return pd.DataFrame()
@@ -2052,6 +2568,86 @@ def _read_excel_overview_sheet(excel_path: str, sheet_name: str, source_stamp: i
     return raw
 
 
+@st.cache_data(ttl=3600)
+def _list_workbook_sheet_names(excel_path: str, source_stamp: int = 0) -> list[str]:
+    if not excel_path:
+        return []
+    path = Path(excel_path)
+    if not path.exists():
+        return []
+    try:
+        xl = pd.ExcelFile(path)
+    except Exception:
+        return []
+    return [str(s).strip() for s in xl.sheet_names]
+
+
+def _find_sheet_name(
+    excel_path: str,
+    source_stamp: int = 0,
+    preferred: str | None = None,
+    aliases: list[str] | None = None,
+    contains_all: list[str] | None = None,
+    contains_any: list[str] | None = None,
+) -> str:
+    sheet_names = _list_workbook_sheet_names(excel_path, source_stamp)
+    if not sheet_names:
+        return ""
+
+    if preferred:
+        preferred_str = str(preferred).strip()
+        if preferred_str in sheet_names:
+            return preferred_str
+
+    normalized_map = {_norm_sheet_col(s): s for s in sheet_names}
+    for alias in aliases or []:
+        alias_norm = _norm_sheet_col(alias)
+        if alias_norm in normalized_map:
+            return normalized_map[alias_norm]
+
+    all_tokens = [_norm_sheet_col(t) for t in (contains_all or []) if str(t).strip()]
+    any_tokens = [_norm_sheet_col(t) for t in (contains_any or []) if str(t).strip()]
+    if not all_tokens and not any_tokens:
+        return ""
+
+    candidates: list[tuple[int, int, str]] = []
+    for sheet in sheet_names:
+        norm = _norm_sheet_col(sheet)
+        if all_tokens and not all(tok in norm for tok in all_tokens):
+            continue
+        if any_tokens and not any(tok in norm for tok in any_tokens):
+            continue
+        score = 0
+        score += sum(tok in norm for tok in all_tokens) * 3
+        score += sum(tok in norm for tok in any_tokens)
+        candidates.append((score, -len(norm), sheet))
+    if not candidates:
+        return ""
+    candidates.sort(reverse=True)
+    return candidates[0][2]
+
+
+def _read_excel_sheet_flexible(
+    excel_path: str,
+    source_stamp: int = 0,
+    preferred: str | None = None,
+    aliases: list[str] | None = None,
+    contains_all: list[str] | None = None,
+    contains_any: list[str] | None = None,
+) -> tuple[pd.DataFrame, str]:
+    sheet_name = _find_sheet_name(
+        excel_path=excel_path,
+        source_stamp=source_stamp,
+        preferred=preferred,
+        aliases=aliases,
+        contains_all=contains_all,
+        contains_any=contains_any,
+    )
+    if not sheet_name:
+        return pd.DataFrame(), ""
+    return _read_excel_overview_sheet(excel_path, sheet_name, source_stamp), sheet_name
+
+
 def _rename_overview_columns(raw: pd.DataFrame, aliases: dict[str, list[str]]) -> pd.DataFrame:
     normalized_lookup = {_normalize_overview_colname(c): c for c in raw.columns}
     rename_map = {}
@@ -2164,6 +2760,518 @@ def _format_macro_metric(value, suffix: str = "") -> str:
         return f"{number:,.1f}"
     except Exception:
         return "N/A"
+
+
+def _format_compact_metric(value, suffix: str = "", decimals: int = 1) -> str:
+    try:
+        if value is None or pd.isna(value):
+            return "N/A"
+        number = float(value)
+        if suffix:
+            return f"{number:,.{decimals}f}{suffix}"
+        return f"{number:,.{decimals}f}"
+    except Exception:
+        return "N/A"
+
+
+def _render_macro_context_dashboard(
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    selected_quarter: str,
+) -> bool:
+    excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    if not excel_path:
+        return False
+
+    rates_df = _load_macro_interest_rates_df(excel_path, source_stamp)
+    labor_df = _load_macro_labor_market_df(excel_path, source_stamp)
+    currency_df = _load_macro_currency_index_df(excel_path, source_stamp)
+    tech_val_df = _load_macro_tech_valuations_df(excel_path, source_stamp)
+    m2_df = _load_m2_yearly_df(excel_path, source_stamp)
+    inflation_df = _load_inflation_yearly_df(excel_path, source_stamp)
+
+    rate_row = _pick_macro_row_for_period(rates_df, selected_year, selected_quarter)
+    labor_row = _pick_macro_row_for_period(labor_df, selected_year, selected_quarter)
+    currency_row = _pick_macro_row_for_period(currency_df, selected_year, selected_quarter)
+    tech_row = _pick_macro_row_for_period(tech_val_df, selected_year, selected_quarter)
+
+    m2_yoy = np.nan
+    if m2_df is not None and not m2_df.empty:
+        m2 = m2_df.copy().sort_values("Year")
+        m2["M2_YoY"] = m2["M2_B"].pct_change() * 100.0
+        m2_scope = m2[m2["Year"] <= int(selected_year)]
+        if not m2_scope.empty:
+            m2_yoy = m2_scope.iloc[-1]["M2_YoY"]
+
+    inflation_yoy = np.nan
+    if inflation_df is not None and not inflation_df.empty:
+        infl_scope = inflation_df[inflation_df["Year"] <= int(selected_year)]
+        if not infl_scope.empty:
+            inflation_yoy = infl_scope.iloc[-1]["Inflation_YoY"]
+
+    if all(
+        row is None
+        for row in [rate_row, labor_row, currency_row, tech_row]
+    ) and (pd.isna(m2_yoy) and pd.isna(inflation_yoy)):
+        return False
+
+    st.markdown("### Macro Context Dashboard")
+    st.caption("Auto-read from available Google Sheet tabs (flexible name matching) plus existing M2/Inflation sheets.")
+
+    card_data = [
+        ("Fed Rate", _format_compact_metric(rate_row.get("FedFundsRate") if rate_row is not None else np.nan, "%", 2)),
+        ("M2 YoY", _format_compact_metric(m2_yoy, "%", 1)),
+        ("Inflation", _format_compact_metric(inflation_yoy, "%", 1)),
+        ("USD Index (DXY)", _format_compact_metric(currency_row.get("USD_Index_DXY") if currency_row is not None else np.nan, "", 1)),
+        ("Unemployment", _format_compact_metric(labor_row.get("US_Unemployment_Rate") if labor_row is not None else np.nan, "%", 1)),
+        ("VIX", _format_compact_metric(tech_row.get("VIX_Volatility") if tech_row is not None else np.nan, "", 1)),
+        ("10Y-2Y Spread", _format_compact_metric(rate_row.get("YieldCurveSpread") if rate_row is not None else np.nan, "%", 2)),
+        ("Tech P/E", _format_compact_metric(tech_row.get("Tech_Aggregate_PE") if tech_row is not None else np.nan, "x", 1)),
+    ]
+
+    top_cols = st.columns(4)
+    for col, (label, value) in zip(top_cols, card_data[:4]):
+        with col:
+            st.metric(label, value)
+    bottom_cols = st.columns(4)
+    for col, (label, value) in zip(bottom_cols, card_data[4:]):
+        with col:
+            st.metric(label, value)
+
+    notes = []
+    if rate_row is not None:
+        regime = _clean_overview_text(rate_row.get("RateRegime"))
+        rate_comment = _clean_overview_text(rate_row.get("Comment"))
+        if regime:
+            notes.append(f"Rate regime: {regime}")
+        if rate_comment:
+            notes.append(rate_comment)
+    if labor_row is not None:
+        labor_comment = _clean_overview_text(labor_row.get("Comment"))
+        if labor_comment:
+            notes.append(labor_comment)
+    if notes:
+        st.caption(" | ".join(notes[:3]))
+    return True
+
+
+def _add_rate_regime_bands(fig: go.Figure, rates_df: pd.DataFrame) -> None:
+    if rates_df is None or rates_df.empty or "Year" not in rates_df.columns or "RateRegime" not in rates_df.columns:
+        return
+    regime_df = rates_df[["Year", "RateRegime"]].dropna(subset=["Year"]).copy()
+    if regime_df.empty:
+        return
+    regime_df["Year"] = pd.to_numeric(regime_df["Year"], errors="coerce")
+    regime_df["RateRegime"] = regime_df["RateRegime"].astype(str).str.strip()
+    regime_df = regime_df.dropna(subset=["Year"])
+    regime_df = regime_df[regime_df["RateRegime"] != ""].copy()
+    if regime_df.empty:
+        return
+    regime_df["Year"] = regime_df["Year"].astype(int)
+    yearly_regime = (
+        regime_df.sort_values(["Year"])
+        .groupby("Year", as_index=False)
+        .tail(1)
+        .sort_values("Year")
+    )
+    if yearly_regime.empty:
+        return
+    colors = {
+        "zirp era": "rgba(16,185,129,0.10)",
+        "rate shock": "rgba(245,158,11,0.12)",
+        "normalization": "rgba(37,99,235,0.10)",
+    }
+
+    current_regime = None
+    start_year = None
+    prev_year = None
+    for _, row in yearly_regime.iterrows():
+        year = int(row["Year"])
+        regime = str(row["RateRegime"]).strip()
+        if current_regime is None:
+            current_regime = regime
+            start_year = year
+            prev_year = year
+            continue
+        if regime == current_regime and year == (prev_year + 1):
+            prev_year = year
+            continue
+        color = colors.get(current_regime.lower(), "rgba(148,163,184,0.08)")
+        fig.add_vrect(
+            x0=start_year - 0.5,
+            x1=prev_year + 0.5,
+            fillcolor=color,
+            opacity=1.0,
+            layer="below",
+            line_width=0,
+        )
+        current_regime = regime
+        start_year = year
+        prev_year = year
+
+    if current_regime is not None and start_year is not None and prev_year is not None:
+        color = colors.get(current_regime.lower(), "rgba(148,163,184,0.08)")
+        fig.add_vrect(
+            x0=start_year - 0.5,
+            x1=prev_year + 0.5,
+            fillcolor=color,
+            opacity=1.0,
+            layer="below",
+            line_width=0,
+        )
+
+
+def _render_macro_expansion_sections(
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    selected_quarter: str,
+    plotly_config: dict,
+) -> bool:
+    excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    if not excel_path:
+        return False
+
+    rates_df = _load_macro_interest_rates_df(excel_path, source_stamp)
+    gdp_df = _load_macro_gdp_growth_df(excel_path, source_stamp)
+    labor_df = _load_macro_labor_market_df(excel_path, source_stamp)
+    currency_df = _load_macro_currency_index_df(excel_path, source_stamp)
+    metrics_df = _load_company_metrics_yearly_df(excel_path, source_stamp)
+    employees_df = _load_employee_yearly_df(excel_path, source_stamp)
+    country_channel_df = _load_country_ad_channel_yearly_df(excel_path, source_stamp)
+    revenue_region_df = _load_company_revenue_by_region_yearly_df(excel_path, source_stamp)
+    wealth_df = _load_macro_wealth_by_generation_df(excel_path, source_stamp)
+    smartphone_df = _load_hardware_smartphone_shipments_df(excel_path, source_stamp)
+    internet_time_df = _load_country_avg_internet_time_df(excel_path, source_stamp)
+
+    rendered_any = False
+    tech_companies = {"Alphabet", "Amazon", "Apple", "Meta Platforms", "Microsoft", "Netflix", "Roku", "Spotify"}
+    tech_companies_with_aliases = tech_companies | {"Meta", "Paramount", "Warner Bros Discovery", "Warner Bros. Discovery"}
+
+    # Monetary Policy Impact
+    if not rates_df.empty and metrics_df is not None and not metrics_df.empty:
+        metrics = metrics_df.copy()
+        metrics = metrics[metrics["Company"].isin(tech_companies_with_aliases)].copy()
+        if not metrics.empty:
+            capex_df = metrics.groupby("Year", as_index=False)[["Capex", "Revenue"]].sum(min_count=1)
+            capex_df = capex_df[capex_df["Revenue"] > 0].copy()
+            capex_df["Capex_Intensity"] = (capex_df["Capex"] / capex_df["Revenue"]) * 100.0
+
+            rates_year = rates_df.groupby("Year", as_index=False).agg(
+                FedFundsRate=("FedFundsRate", "mean"),
+                RateRegime=("RateRegime", "last"),
+            )
+            plot_df = rates_year.merge(capex_df[["Year", "Capex_Intensity"]], on="Year", how="inner").sort_values("Year")
+            if not plot_df.empty:
+                st.markdown("### Monetary Policy Impact")
+                title = "Interest Rates vs Big Tech Capex Intensity"
+                st.markdown(f"#### {title}")
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_df["Year"],
+                        y=plot_df["FedFundsRate"],
+                        mode="lines+markers",
+                        name="Fed Funds Rate (%)",
+                        line=dict(color="#DC2626", width=3),
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_df["Year"],
+                        y=plot_df["Capex_Intensity"],
+                        mode="lines+markers",
+                        name="Big Tech Capex / Revenue (%)",
+                        line=dict(color="#2563EB", width=3),
+                        yaxis="y2",
+                    )
+                )
+                _add_rate_regime_bands(fig, rates_df)
+                fig.update_layout(
+                    height=450,
+                    margin=_overview_chart_margin(left=30, right=34, top=104),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    yaxis=dict(title="Fed funds rate (%)"),
+                    yaxis2=dict(title="Capex intensity (%)", overlaying="y", side="right", showgrid=False),
+                    legend=_overview_legend_style(),
+                )
+                fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+                rendered_any = True
+
+    # Economic Cycle Indicators
+    section_started = False
+    ad_totals_df = (
+        country_channel_df[["Year", "TotalAdvertising_BUSD"]]
+        .dropna()
+        .drop_duplicates(subset=["Year"])
+        .sort_values("Year")
+        if not country_channel_df.empty
+        else pd.DataFrame()
+    )
+
+    if not gdp_df.empty and not ad_totals_df.empty:
+        gdp_year = gdp_df.groupby("Year", as_index=False)["Global_GDP_YoY"].mean()
+        ad_year = ad_totals_df.copy()
+        ad_year["Ad_YoY"] = ad_year["TotalAdvertising_BUSD"].pct_change() * 100.0
+        merge = gdp_year.merge(ad_year[["Year", "Ad_YoY"]], on="Year", how="inner").dropna()
+        if not merge.empty:
+            if not section_started:
+                st.markdown("### Economic Cycle Indicators")
+                section_started = True
+            title = "GDP Growth vs Ad Spend Growth"
+            st.markdown(f"#### {title}")
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=merge["Year"], y=merge["Global_GDP_YoY"], name="Global GDP YoY %", marker_color="#94A3B8"))
+            fig.add_trace(go.Bar(x=merge["Year"], y=merge["Ad_YoY"], name="Global Ad Spend YoY %", marker_color="#2563EB"))
+            fig.update_layout(
+                barmode="group",
+                height=420,
+                margin=_overview_chart_margin(),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis_title="YoY %",
+                legend=_overview_legend_style(),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+            rendered_any = True
+
+    if not labor_df.empty and employees_df is not None and not employees_df.empty:
+        labor_year = labor_df.groupby("Year", as_index=False)["US_Unemployment_Rate"].mean()
+        emp = employees_df.copy()
+        emp = emp[emp["Company"].isin(tech_companies_with_aliases)].copy()
+        if not emp.empty:
+            emp_year = emp.groupby("Year", as_index=False)["Employees"].sum(min_count=1)
+            emp_year["Employees_M"] = emp_year["Employees"] / 1_000_000.0
+            merge = labor_year.merge(emp_year[["Year", "Employees_M"]], on="Year", how="inner").sort_values("Year")
+            if not merge.empty:
+                if not section_started:
+                    st.markdown("### Economic Cycle Indicators")
+                    section_started = True
+                title = "Unemployment vs Tech Headcount"
+                st.markdown(f"#### {title}")
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=merge["Year"],
+                        y=merge["US_Unemployment_Rate"],
+                        mode="lines+markers",
+                        name="US Unemployment Rate (%)",
+                        line=dict(color="#DC2626", width=3),
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=merge["Year"],
+                        y=merge["Employees_M"],
+                        mode="lines+markers",
+                        name="Big Tech Headcount (Millions)",
+                        line=dict(color="#2563EB", width=3),
+                        yaxis="y2",
+                    )
+                )
+                fig.update_layout(
+                    height=440,
+                    margin=_overview_chart_margin(left=30, right=34, top=104),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    yaxis=dict(title="Unemployment (%)"),
+                    yaxis2=dict(title="Headcount (M)", overlaying="y", side="right", showgrid=False),
+                    legend=_overview_legend_style(),
+                )
+                fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+                rendered_any = True
+
+    # Currency & International Revenue
+    if not currency_df.empty and not revenue_region_df.empty:
+        currency_year = currency_df.groupby("Year", as_index=False)["USD_Index_DXY"].mean()
+        rev = revenue_region_df.copy()
+        rev["company"] = rev["company"].astype(str).str.strip()
+        rev["company_norm"] = rev["company"].replace({"Google": "Alphabet", "Meta": "Meta Platforms"})
+        rev = rev[rev["company_norm"].isin(tech_companies)].copy()
+        rev["is_international"] = rev["segment_name"].apply(_is_international_region_label)
+        rev_group = rev.groupby(["year", "is_international"], as_index=False)["revenue_millions"].sum(min_count=1)
+        intl = rev_group[rev_group["is_international"]].rename(columns={"year": "Year", "revenue_millions": "IntlRevenueM"})
+        if not intl.empty:
+            intl = intl.sort_values("Year")
+            intl["IntlRevenue_YoY"] = intl["IntlRevenueM"].pct_change() * 100.0
+            merge = currency_year.merge(intl[["Year", "IntlRevenue_YoY"]], on="Year", how="inner").dropna().sort_values("Year")
+            if not merge.empty:
+                st.markdown("### Currency & International Revenue")
+                title = "USD Strength vs International Revenue Growth"
+                st.markdown(f"#### {title}")
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Scatter(
+                        x=merge["Year"],
+                        y=merge["USD_Index_DXY"],
+                        mode="lines+markers",
+                        name="USD Index (DXY)",
+                        line=dict(color="#0EA5E9", width=3),
+                    )
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=merge["Year"],
+                        y=merge["IntlRevenue_YoY"],
+                        mode="lines+markers",
+                        name="Big Tech Intl Revenue YoY (%)",
+                        line=dict(color="#2563EB", width=3),
+                        yaxis="y2",
+                    )
+                )
+                fig.update_layout(
+                    height=440,
+                    margin=_overview_chart_margin(left=30, right=34, top=104),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    yaxis=dict(title="DXY"),
+                    yaxis2=dict(title="International revenue YoY (%)", overlaying="y", side="right", showgrid=False),
+                    legend=_overview_legend_style(),
+                )
+                fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+                rendered_any = True
+
+    # Demographics & Attention Shift
+    structural_started = False
+    if not wealth_df.empty:
+        year_df = wealth_df[wealth_df["Year"] == int(selected_year)].copy()
+        if year_df.empty:
+            year_df = wealth_df[wealth_df["Year"] <= int(selected_year)].copy()
+            target_year = int(year_df["Year"].max()) if not year_df.empty else None
+            if target_year is not None:
+                year_df = wealth_df[wealth_df["Year"] == target_year].copy()
+        else:
+            target_year = int(selected_year)
+        if not year_df.empty:
+            if not structural_started:
+                st.markdown("### Demographics & Attention Shift")
+                structural_started = True
+            year_df["IsBoomer"] = year_df["Generation"].str.lower().str.contains("boomer", na=False)
+            share = (
+                year_df.groupby(["Country", "IsBoomer"], as_index=False)["WealthSharePct"]
+                .sum(min_count=1)
+                .pivot(index="Country", columns="IsBoomer", values="WealthSharePct")
+                .fillna(0.0)
+                .rename(columns={True: "Boomer Share", False: "Non-Boomer Share"})
+                .reset_index()
+            )
+            if "Boomer Share" not in share.columns:
+                share["Boomer Share"] = 0.0
+            if "Non-Boomer Share" not in share.columns:
+                share["Non-Boomer Share"] = 0.0
+            share = share.sort_values("Boomer Share", ascending=True)
+            if not share.empty:
+                title = "Wealth Concentration by Generation (Boomer vs Rest)"
+                st.markdown(f"#### {title}")
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Bar(
+                        y=share["Country"],
+                        x=share["Non-Boomer Share"],
+                        name="Non-Boomer wealth share (%)",
+                        orientation="h",
+                        marker_color="#94A3B8",
+                    )
+                )
+                fig.add_trace(
+                    go.Bar(
+                        y=share["Country"],
+                        x=share["Boomer Share"],
+                        name="Boomer wealth share (%)",
+                        orientation="h",
+                        marker_color="#2563EB",
+                    )
+                )
+                fig.update_layout(
+                    barmode="stack",
+                    height=max(340, min(760, 32 * len(share))),
+                    margin=_overview_chart_margin(left=30, right=20, top=104),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis_title="Wealth share (%)",
+                    yaxis_title="",
+                    legend=_overview_legend_style(),
+                )
+                fig.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+                if target_year is not None:
+                    st.caption(f"Year shown: {target_year}")
+                rendered_any = True
+
+    if not smartphone_df.empty:
+        if not structural_started:
+            st.markdown("### Demographics & Attention Shift")
+            structural_started = True
+        title = "Smartphone Shipments & Apple Share (Attention Shift Proxy)"
+        st.markdown(f"#### {title}")
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=smartphone_df["Year"],
+                y=smartphone_df["Total_Global_Units_M"],
+                mode="lines+markers",
+                name="Global smartphone shipments (M units)",
+                line=dict(color="#2563EB", width=3),
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=smartphone_df["Year"],
+                y=smartphone_df["AppleSharePct"],
+                mode="lines+markers",
+                name="Apple shipment share (%)",
+                line=dict(color="#0EA5E9", width=3),
+                yaxis="y2",
+            )
+        )
+        fig.update_layout(
+            height=440,
+            margin=_overview_chart_margin(left=30, right=34, top=104),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            yaxis=dict(title="Units (Millions)"),
+            yaxis2=dict(title="Apple share (%)", overlaying="y", side="right", showgrid=False),
+            legend=_overview_legend_style(),
+        )
+        fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+        st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        st.caption("Mobile distribution scale continues to dominate attention pathways, which pressures legacy linear-TV economics.")
+        rendered_any = True
+
+    if not internet_time_df.empty:
+        if not structural_started:
+            st.markdown("### Demographics & Attention Shift")
+            structural_started = True
+        title = "Daily Internet Time Spent by Country"
+        st.markdown(f"#### {title}")
+        top = internet_time_df.head(20).copy().sort_values("DailyInternetHours", ascending=True)
+        fig = px.bar(
+            top,
+            x="DailyInternetHours",
+            y="Country",
+            orientation="h",
+            labels={"DailyInternetHours": "Hours per day", "Country": ""},
+            color="DailyInternetHours",
+            color_continuous_scale="Blues",
+        )
+        fig.update_layout(
+            height=max(340, min(760, 28 * len(top))),
+            margin=_overview_chart_margin(left=30, right=20, top=24),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            coloraxis_showscale=False,
+        )
+        fig.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
+        st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        rendered_any = True
+
+    return rendered_any
 
 
 def _render_excel_macro_section(
@@ -2950,6 +4058,17 @@ def _render_excel_overview_layers(
     insights_rendered = _render_excel_overview_insights(data_processor, selected_year, selected_quarter)
     if not insights_rendered:
         st.info("No active `Overview_Insights` rows found for the selected period.")
+    macro_expansion_rendered = _render_macro_expansion_sections(
+        data_processor,
+        selected_year,
+        selected_quarter,
+        plotly_config,
+    )
+    if not macro_expansion_rendered:
+        st.caption(
+            "Expanded macro cross-sheet charts will auto-populate when matching rate/GDP/labor/currency fields "
+            "exist in your Google Sheets tabs (name does not need to follow `Macro_*`)."
+        )
     macro_chart_rendered = _render_macro_bridge_charts(data_processor, selected_year, selected_quarter, plotly_config)
     if not macro_chart_rendered:
         st.info("Macro bridge charts are unavailable because required source sheets are missing.")
@@ -3678,6 +4797,14 @@ with quarter_col:
     )
 
 st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
+
+# NEW SECTION — MACRO CONTEXT DASHBOARD
+macro_context_rendered = _render_macro_context_dashboard(data_processor, selected_year, selected_quarter)
+if not macro_context_rendered:
+    st.caption(
+        "Macro context dashboard is ready and connected. It auto-reads whichever tabs contain "
+        "matching rate/labor/currency/valuation fields (no strict sheet naming required)."
+    )
 
 # SECTION 1 — GLOBAL CONTEXT (WORLD MAP)
 st.subheader("The Global Media Economy")
