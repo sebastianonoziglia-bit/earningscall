@@ -63,7 +63,7 @@ def create_animation_buttons(x_position=0.5, y_position=1.18):
                 'label': '▶',
                 'method': 'animate',
                 'args': [None, {
-                    'frame': {'duration': 500, 'redraw': False},  # avoid layout reflow/jitter
+                    'frame': {'duration': 500, 'redraw': True},
                     'fromcurrent': True,
                     'transition': {'duration': 300, 'easing': 'cubic-in-out'}
                 }]

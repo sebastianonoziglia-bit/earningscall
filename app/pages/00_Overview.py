@@ -6172,10 +6172,28 @@ top_subscribers = subscribers_data[0] if subscribers_data else None
 def _top_growth(data_list, yoy_key):
     if not data_list:
         return None
-    growth_data = [d for d in data_list if d.get(yoy_key) is not None]
+    growth_data = []
+    for d in data_list:
+        value = d.get(yoy_key)
+        try:
+            num = float(value)
+        except (TypeError, ValueError):
+            continue
+        if np.isfinite(num):
+            growth_data.append(d)
     if not growth_data:
         return None
     return max(growth_data, key=lambda x: x[yoy_key])
+
+
+def _format_growth_pct(value) -> str:
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return "N/A"
+    if not np.isfinite(num):
+        return "N/A"
+    return f"{num:+.1f}%"
 
 
 top_growth_market_cap = _top_growth(market_cap_data, "Market Cap YoY")
@@ -6229,16 +6247,18 @@ def render_executive_summary_section() -> None:
             ),
         ]
         for left_title, top_row, left_key, icon_key, right_title, growth_row, yoy_key in pairs:
-            if not top_row or not growth_row:
+            if not top_row:
                 continue
+            growth_company = growth_row["Company"] if growth_row else top_row["Company"]
+            growth_value = growth_row.get(yoy_key) if growth_row else None
             st.markdown(
                 render_split_summary_card(
                     left_title,
                     top_row["Company"],
                     format_large_number(top_row[left_key]),
                     right_title,
-                    growth_row["Company"],
-                    f"{growth_row[yoy_key]:+.1f}%",
+                    growth_company,
+                    _format_growth_pct(growth_value),
                     company_logos,
                     left_icon_key=icon_key,
                     right_icon_key=icon_key,
@@ -6246,10 +6266,20 @@ def render_executive_summary_section() -> None:
                 unsafe_allow_html=True,
             )
 
-        if operating_income_data and top_growth_operating_income:
+        if operating_income_data:
             top_operating_income = max(
                 operating_income_data,
                 key=lambda x: x.get("Operating Income", float("-inf")),
+            )
+            operating_growth_company = (
+                top_growth_operating_income["Company"]
+                if top_growth_operating_income
+                else top_operating_income["Company"]
+            )
+            operating_growth_value = (
+                top_growth_operating_income.get("Operating Income YoY")
+                if top_growth_operating_income
+                else None
             )
             st.markdown(
                 render_split_summary_card(
@@ -6257,8 +6287,8 @@ def render_executive_summary_section() -> None:
                     top_operating_income["Company"],
                     format_large_number(top_operating_income["Operating Income"]),
                     "Operating Income Growth",
-                    top_growth_operating_income["Company"],
-                    f"{top_growth_operating_income['Operating Income YoY']:+.1f}%",
+                    operating_growth_company,
+                    _format_growth_pct(operating_growth_value),
                     company_logos,
                     left_icon_key="operating_income",
                     right_icon_key="operating_income",
@@ -6266,18 +6296,20 @@ def render_executive_summary_section() -> None:
                 unsafe_allow_html=True,
             )
 
-        if cash_balance_data and top_growth_cash:
+        if cash_balance_data:
             top_cash_balance = max(
                 cash_balance_data, key=lambda x: x.get("Cash Balance", float("-inf"))
             )
+            cash_growth_company = top_growth_cash["Company"] if top_growth_cash else top_cash_balance["Company"]
+            cash_growth_value = top_growth_cash.get("Cash Balance YoY") if top_growth_cash else None
             st.markdown(
                 render_split_summary_card(
                     "Highest Cash Balance",
                     top_cash_balance["Company"],
                     format_large_number(top_cash_balance["Cash Balance"]),
                     "Cash Balance Growth",
-                    top_growth_cash["Company"],
-                    f"{top_growth_cash['Cash Balance YoY']:+.1f}%",
+                    cash_growth_company,
+                    _format_growth_pct(cash_growth_value),
                     company_logos,
                     left_icon_key="cash_balance",
                     right_icon_key="cash_balance",
@@ -6285,15 +6317,17 @@ def render_executive_summary_section() -> None:
                 unsafe_allow_html=True,
             )
 
-        if top_rd and top_growth_rd:
+        if top_rd:
+            rd_growth_company = top_growth_rd["Company"] if top_growth_rd else top_rd["Company"]
+            rd_growth_value = top_growth_rd.get("R&D YoY") if top_growth_rd else None
             st.markdown(
                 render_split_summary_card(
                     "Highest R&D Spending",
                     top_rd["Company"],
                     format_large_number(top_rd["R&D"]),
                     "R&D Spending Growth",
-                    top_growth_rd["Company"],
-                    f"{top_growth_rd['R&D YoY']:+.1f}%",
+                    rd_growth_company,
+                    _format_growth_pct(rd_growth_value),
                     company_logos,
                     left_icon_key="rd",
                     right_icon_key="rd",
@@ -6301,15 +6335,17 @@ def render_executive_summary_section() -> None:
                 unsafe_allow_html=True,
             )
 
-        if top_debt and top_growth_debt:
+        if top_debt:
+            debt_growth_company = top_growth_debt["Company"] if top_growth_debt else top_debt["Company"]
+            debt_growth_value = top_growth_debt.get("Debt YoY") if top_growth_debt else None
             st.markdown(
                 render_split_summary_card(
                     "Highest Debt",
                     top_debt["Company"],
                     format_large_number(top_debt["Debt"]),
                     "Debt Growth",
-                    top_growth_debt["Company"],
-                    f"{top_growth_debt['Debt YoY']:+.1f}%",
+                    debt_growth_company,
+                    _format_growth_pct(debt_growth_value),
                     company_logos,
                     left_icon_key="debt",
                     right_icon_key="debt",
@@ -6317,15 +6353,17 @@ def render_executive_summary_section() -> None:
                 unsafe_allow_html=True,
             )
 
-        if top_capex and top_growth_capex:
+        if top_capex:
+            capex_growth_company = top_growth_capex["Company"] if top_growth_capex else top_capex["Company"]
+            capex_growth_value = top_growth_capex.get("Capex YoY") if top_growth_capex else None
             st.markdown(
                 render_split_summary_card(
                     "Highest Capital Expenditure",
                     top_capex["Company"],
                     format_large_number(top_capex["Capex"]),
                     "Capital Expenditure Growth",
-                    top_growth_capex["Company"],
-                    f"{top_growth_capex['Capex YoY']:+.1f}%",
+                    capex_growth_company,
+                    _format_growth_pct(capex_growth_value),
                     company_logos,
                     left_icon_key="capex",
                     right_icon_key="capex",
@@ -6333,15 +6371,17 @@ def render_executive_summary_section() -> None:
                 unsafe_allow_html=True,
             )
 
-        if top_cost_of_revenue and top_growth_cost:
+        if top_cost_of_revenue:
+            cost_growth_company = top_growth_cost["Company"] if top_growth_cost else top_cost_of_revenue["Company"]
+            cost_growth_value = top_growth_cost.get("Cost of Revenue YoY") if top_growth_cost else None
             st.markdown(
                 render_split_summary_card(
                     "Highest Cost of Revenue",
                     top_cost_of_revenue["Company"],
                     format_large_number(top_cost_of_revenue["Cost of Revenue"]),
                     "Cost of Revenue Growth",
-                    top_growth_cost["Company"],
-                    f"{top_growth_cost['Cost of Revenue YoY']:+.1f}%",
+                    cost_growth_company,
+                    _format_growth_pct(cost_growth_value),
                     company_logos,
                     left_icon_key="cost_of_revenue",
                     right_icon_key="cost_of_revenue",
@@ -6365,10 +6405,18 @@ def render_executive_summary_section() -> None:
             )
 
         if ad_revenue_data:
-            growth_data = [d for d in ad_revenue_data if d.get("Ad Revenue YoY") is not None]
+            growth_data = []
+            for d in ad_revenue_data:
+                v = d.get("Ad Revenue YoY")
+                try:
+                    num = float(v)
+                except (TypeError, ValueError):
+                    continue
+                if np.isfinite(num):
+                    growth_data.append(d)
             if growth_data:
                 top_growth = max(growth_data, key=lambda x: x["Ad Revenue YoY"])
-                yoy_text = f"{top_growth['Ad Revenue YoY']:+.1f}%"
+                yoy_text = _format_growth_pct(top_growth.get("Ad Revenue YoY"))
                 st.markdown(
                     render_summary_card(
                         "Advertising Revenue Growth",
@@ -6396,10 +6444,18 @@ def render_executive_summary_section() -> None:
             )
 
         if subscribers_data:
-            growth_data = [d for d in subscribers_data if d.get("Subscribers YoY") is not None]
+            growth_data = []
+            for d in subscribers_data:
+                v = d.get("Subscribers YoY")
+                try:
+                    num = float(v)
+                except (TypeError, ValueError):
+                    continue
+                if np.isfinite(num):
+                    growth_data.append(d)
             if growth_data:
                 top_growth = max(growth_data, key=lambda x: x["Subscribers YoY"])
-                yoy_text = f"{top_growth['Subscribers YoY']:+.1f}%"
+                yoy_text = _format_growth_pct(top_growth.get("Subscribers YoY"))
                 st.markdown(
                     render_summary_card(
                         "Subscribers Growth",
@@ -6424,10 +6480,18 @@ def render_executive_summary_section() -> None:
             )
 
         if employee_data:
-            growth_data = [d for d in employee_data if d.get("Employees YoY") is not None]
+            growth_data = []
+            for d in employee_data:
+                v = d.get("Employees YoY")
+                try:
+                    num = float(v)
+                except (TypeError, ValueError):
+                    continue
+                if np.isfinite(num):
+                    growth_data.append(d)
             if growth_data:
                 top_growth = max(growth_data, key=lambda x: x["Employees YoY"])
-                yoy_text = f"{top_growth['Employees YoY']:+.1f}%"
+                yoy_text = _format_growth_pct(top_growth.get("Employees YoY"))
                 st.markdown(
                     render_summary_card(
                         "Employee Count Growth",
@@ -6571,7 +6635,7 @@ if market_cap_data and nasdaq_market_cap:
         pie_buttons = create_animation_buttons(x_position=0.01, y_position=1.05)
         for btn in pie_buttons[0]["buttons"]:
             if "frame" in btn["args"][1]:
-                btn["args"][1]["frame"]["redraw"] = False
+                btn["args"][1]["frame"]["redraw"] = True
                 btn["args"][1]["transition"]["duration"] = 600
         pie_fig.update_layout(updatemenus=pie_buttons, transition=dict(duration=500, easing="cubic-in-out"))
     pie_fig.update_layout(
@@ -6666,7 +6730,7 @@ if market_cap_data:
         treemap_buttons = create_animation_buttons(x_position=0.01, y_position=1.05)
         for btn in treemap_buttons[0]["buttons"]:
             if "frame" in btn["args"][1]:
-                btn["args"][1]["frame"]["redraw"] = False
+                btn["args"][1]["frame"]["redraw"] = True
                 btn["args"][1]["transition"]["duration"] = 600
         treemap_fig.update_layout(updatemenus=treemap_buttons, transition=dict(duration=500, easing="cubic-in-out"))
     treemap_fig.update_layout(
