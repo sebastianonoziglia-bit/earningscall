@@ -20,6 +20,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--iconic-tab", default="Overview_Iconic_Quotes", help="Destination tab for iconic rows")
     parser.add_argument("--highlights-tab", default="Earnings_Call_Highlights", help="Destination tab for full highlight rows")
     parser.add_argument("--extract-first", action="store_true", help="Run highlights extraction before upload")
+    parser.add_argument(
+        "--upload-transcripts-first",
+        action="store_true",
+        help="Upload local transcript .txt files into the sheet before extraction",
+    )
+    parser.add_argument(
+        "--transcript-root",
+        default="earningscall_transcripts",
+        help="Local transcript root used by upload step",
+    )
+    parser.add_argument(
+        "--transcript-tab",
+        default="Earnings_Call_Transcripts",
+        help="Transcript destination tab used by upload and extraction",
+    )
     parser.add_argument("--batch-size", type=int, default=500, help="Rows per write request")
     return parser.parse_args()
 
@@ -191,15 +206,50 @@ def to_highlight_rows(df: pd.DataFrame) -> list[list]:
     return rows
 
 
+def run_transcript_upload(repo_root: Path, sheet_id: str, transcript_root: str, transcript_tab: str) -> None:
+    cmd = [
+        "python3",
+        str(repo_root / "scripts" / "upload_local_transcripts_to_gsheet.py"),
+        "--sheet-id",
+        sheet_id,
+        "--root",
+        transcript_root,
+        "--tab",
+        transcript_tab,
+    ]
+    subprocess.run(cmd, check=True)
+
+
+def run_highlight_extract(repo_root: Path, sheet_id: str) -> None:
+    env = os.environ.copy()
+    env["FINANCIAL_DATA_SOURCE"] = "google"
+    env["FINANCIAL_DATA_GSHEET_ID"] = sheet_id
+    # Force a fresh export read after writes so extraction sees latest tabs/rows.
+    env["FINANCIAL_DATA_GSHEET_REFRESH_SECONDS"] = "0"
+    cmd = [
+        "python3",
+        str(repo_root / "scripts" / "extract_transcript_highlights_from_sheet.py"),
+    ]
+    subprocess.run(cmd, check=True, env=env)
+
+
 def main() -> None:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[1]
+    sheet_id = resolve_sheet_id(args.sheet_id)
+
+    if args.upload_transcripts_first:
+        run_transcript_upload(repo_root, sheet_id, args.transcript_root, args.transcript_tab)
 
     if args.extract_first:
-        subprocess.run(
-            ["python3", str(repo_root / "scripts" / "extract_transcript_highlights_from_sheet.py")],
-            check=True,
-        )
+        try:
+            run_highlight_extract(repo_root, sheet_id)
+        except subprocess.CalledProcessError:
+            if args.upload_transcripts_first:
+                raise
+            # Recovery path: missing transcript sheet rows.
+            run_transcript_upload(repo_root, sheet_id, args.transcript_root, args.transcript_tab)
+            run_highlight_extract(repo_root, sheet_id)
 
     iconic_path = (repo_root / args.iconic_csv).resolve()
     highlights_path = (repo_root / args.highlights_csv).resolve()
@@ -214,7 +264,6 @@ def main() -> None:
     iconic_rows = to_iconic_rows(iconic_df)
     highlights_rows = to_highlight_rows(highlights_df)
 
-    sheet_id = resolve_sheet_id(args.sheet_id)
     service = build_service()
 
     ensure_tab(service, sheet_id, args.iconic_tab)
@@ -246,4 +295,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

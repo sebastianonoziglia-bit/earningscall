@@ -4508,7 +4508,7 @@ def _render_excel_overview_layers(
     if not iconic_quotes_rendered:
         st.caption(
             "No iconic CEO/CFO quote rows found for this period. Run "
-            "`python3 scripts/extract_transcript_highlights_from_sheet.py` "
+            "`python3 scripts/sync_iconic_quotes_to_gsheet.py --upload-transcripts-first --extract-first` "
             "or populate `Overview_Iconic_Quotes` in the workbook."
         )
 
