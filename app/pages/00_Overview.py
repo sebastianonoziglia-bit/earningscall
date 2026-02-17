@@ -852,6 +852,48 @@ def _clean_overview_text(value) -> str:
     return "" if text.lower() in {"nan", "none", "null"} else text
 
 
+def _clean_insight_comment_text(value) -> str:
+    text = _clean_overview_text(value)
+    if not text:
+        return ""
+    # Remove worksheet artifacts like "Chart: c1", "[Chart: nan]" and "(Chart note: ...)".
+    text = re.sub(r"\[?\s*chart\s*:\s*[^\]\n\r]+?\]?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bchart\s*c\d+\b", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\(?\s*chart\s*note\s*:\s*[^)\n\r]+?\)?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s{2,}", " ", text).strip()
+    return text
+
+
+_COUNTRY_LABEL_OVERRIDES = {
+    "United States": "USA",
+    "United Kingdom": "UK",
+    "United Arab Emirates": "UAE",
+    "South Korea": "KOR",
+    "Saudi Arabia": "SAU",
+    "New Zealand": "NZ",
+    "Czech Republic": "CZE",
+    "Hong Kong": "HK",
+    "Italy": "ITA",
+}
+
+
+def _country_short_label(country: str) -> str:
+    name = str(country or "").strip()
+    if not name:
+        return ""
+    if name in _COUNTRY_LABEL_OVERRIDES:
+        return _COUNTRY_LABEL_OVERRIDES[name]
+    parts = re.findall(r"[A-Za-z]+", name)
+    if not parts:
+        return name[:3].upper()
+    if len(parts) == 1:
+        return parts[0][:3].upper()
+    initials = "".join(p[0] for p in parts[:3]).upper()
+    if len(initials) >= 2:
+        return initials
+    return name[:3].upper()
+
+
 def _normalize_quarter_label(value) -> str:
     q = _parse_quarter_number(value)
     return f"Q{q}" if q else ""
@@ -2037,7 +2079,7 @@ def _render_excel_macro_section(
     row = scoped_df.sort_values(["year", "quarter"], ascending=[False, False]).iloc[0]
 
     st.markdown("### Macro KPI Bar")
-    st.caption(f"Source: `Overview_Macro` · Period: {selected_period}")
+    st.caption(f"Source: Overview_Macro · Period: {selected_period}")
     metric_items = [
         ("M2", row.get("m2_value"), "B"),
         ("Global Ad Market", row.get("global_ad_market"), "B"),
@@ -2078,7 +2120,7 @@ def _render_excel_overview_insights(
     scoped_df = scoped_df.sort_values(["sort_order", "insight_id", "title"]).copy()
 
     st.markdown("### Insights by Category")
-    st.caption(f"Source: `Overview_Insights` · Period: {selected_period} · {len(scoped_df)} insights")
+    st.caption(f"Source: Overview_Insights · Period: {selected_period} · {len(scoped_df)} insights")
 
     categories_present = scoped_df["category"].dropna().astype(str).str.strip().unique().tolist()
     ordered_categories = [
@@ -2101,9 +2143,9 @@ def _render_excel_overview_insights(
         for _, row in cat_df.iterrows():
             insight_id = _clean_overview_text(row.get("insight_id")) or "—"
             title = _clean_overview_text(row.get("title"))
-            comment = _clean_overview_text(row.get("comment"))
+            comment = _clean_insight_comment_text(row.get("comment"))
             chart_key = _clean_overview_text(row.get("chart_key"))
-            meta_text = f"Chart: {chart_key}" if chart_key else ""
+            meta_text = ""
             st.markdown(
                 _html_block(
                     f"""
@@ -2565,21 +2607,42 @@ def _render_macro_bridge_charts(
             year_df = country_window[country_window["Year"] == target_year].copy()
         else:
             target_year = int(selected_year)
-        year_df = year_df.sort_values("AdSpending_BUSD", ascending=False).head(60)
+        year_df = year_df[(year_df["GDP_BUSD"] > 0) & (year_df["AdSpending_BUSD"] > 0)].copy()
+        year_df = year_df.sort_values("AdSpending_BUSD", ascending=False).head(75)
+        year_df["CountryCode"] = year_df["Country"].apply(_country_short_label)
+        # Compress outliers and keep small countries visible.
+        year_df["BubbleSize"] = np.log10((year_df["AdSpending_BUSD"] * 1_000.0).clip(lower=1.0))
+        year_df["BubbleSize"] = year_df["BubbleSize"].clip(lower=0.7)
+        label_color = "#F8FAFC" if get_theme_mode() == "dark" else "#0F172A"
         fig = px.scatter(
             year_df,
             x="GDP_BUSD",
             y="AdSpending_BUSD",
-            size="Ad_vs_GDP_pct",
+            size="BubbleSize",
             color="Ad_vs_GDP_pct",
-            color_continuous_scale="Blues",
+            color_continuous_scale="Turbo",
             hover_name="Country",
+            text="CountryCode",
             labels={
                 "GDP_BUSD": "GDP (USD billions)",
                 "AdSpending_BUSD": "Ad spend (USD billions)",
                 "Ad_vs_GDP_pct": "Ad/GDP %",
             },
             log_x=True,
+            log_y=True,
+            size_max=74,
+        )
+        fig.update_traces(
+            textposition="middle center",
+            textfont=dict(size=10, color=label_color),
+            marker=dict(opacity=0.92, line=dict(width=1, color="rgba(15,23,42,0.55)")),
+            hovertemplate=(
+                "<b>%{hovertext}</b>"
+                "<br>GDP: %{x:,.0f}B USD"
+                "<br>Ad Spend: %{y:,.2f}B USD"
+                "<br>Ad/GDP: %{marker.color:.2f}%"
+                "<extra></extra>"
+            ),
         )
         fig.update_layout(
             height=500,
@@ -2588,6 +2651,7 @@ def _render_macro_bridge_charts(
             plot_bgcolor="rgba(0,0,0,0)",
             coloraxis_colorbar=dict(title="Ad/GDP %"),
         )
+        fig.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
         fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
         st.plotly_chart(fig, use_container_width=True, config=plotly_config)
         st.caption(f"Year shown: {target_year}")
@@ -2684,7 +2748,7 @@ def _render_transcript_topic_growth_chart(
 
     st.markdown("### Topic Signal Map")
     st.caption(
-        f"Source: `earningscall_transcripts/topic_metrics.csv` · Period: {selected_period} · "
+        f"Source: earningscall_transcripts/topic_metrics.csv · Period: {selected_period} · "
         f"{int(scoped_df['total_companies'].max()) if not scoped_df['total_companies'].isna().all() else 0} companies"
     )
     render_standard_overview_comment("Transcript Topic Growth vs Importance", selected_year)
