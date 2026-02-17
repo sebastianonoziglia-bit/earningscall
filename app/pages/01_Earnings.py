@@ -6,6 +6,7 @@ import os
 import re
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -22,6 +23,7 @@ from utils.state_management import get_data_processor
 from utils.styles import get_page_style
 from utils.header import display_header
 from utils.theme import get_theme_mode
+from utils.data_availability import get_available_quarters
 
 # Page config must be the first Streamlit command
 st.set_page_config(page_title="Earnings", page_icon="E", layout="wide")
@@ -1364,10 +1366,316 @@ def load_company_insights_text(excel_path):
             raise ValueError(f"Missing columns in company insights: {sorted(required - set(df.columns))}")
         if "category" not in df.columns:
             df["category"] = ""
+        if "quarter" not in df.columns:
+            df["quarter"] = ""
         return df
     except Exception as exc:
         logger.warning("Company insights load failed: %s", exc)
         return pd.DataFrame()
+
+
+def _parse_quarter_int(value) -> int | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    text = str(value).strip().upper()
+    if not text:
+        return None
+    if text == "ANNUAL":
+        return None
+    if text.startswith("Q") and len(text) > 1 and text[1].isdigit():
+        q = int(text[1])
+        return q if 1 <= q <= 4 else None
+    match = re.search(r"\b([1-4])\b", text)
+    if match:
+        return int(match.group(1))
+    num = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    if pd.isna(num):
+        return None
+    q = int(num)
+    return q if 1 <= q <= 4 else None
+
+
+@st.cache_data(show_spinner=False)
+def _load_quarterly_kpis(excel_path: str, file_mtime=0) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    try:
+        df = pd.read_excel(excel_path, sheet_name="Company_Quarterly_segments_valu")
+    except Exception as exc:
+        logger.warning("Quarterly KPI sheet load failed: %s", exc)
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    out = df.copy().sort_index()
+    out.columns = [str(c).strip() for c in out.columns]
+    if "Ticker" not in out.columns or "Year" not in out.columns:
+        return pd.DataFrame()
+
+    out["Ticker"] = out["Ticker"].astype(str).str.strip().str.upper()
+    out["Year"] = pd.to_numeric(out["Year"], errors="coerce")
+    out = out.dropna(subset=["Ticker", "Year"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["Year"] = out["Year"].astype(int)
+    out["Quarter"] = out.groupby(["Ticker", "Year"]).cumcount() + 1
+
+    counts = out.groupby(["Ticker", "Year"])["Quarter"].count().reset_index(name="quarter_count")
+    complete = counts[counts["quarter_count"] == 4][["Ticker", "Year"]]
+    out = out.merge(complete, on=["Ticker", "Year"], how="inner")
+    if out.empty:
+        return pd.DataFrame()
+
+    rename_map = {
+        "Revenue": "revenue",
+        "Cost Of Revenue": "cost_of_revenue",
+        "Operating Income": "operating_income",
+        "Net Income": "net_income",
+        "Capex": "capex",
+        "R&D": "rd",
+        "Total Assets": "total_assets",
+        "Cash Balance": "cash_balance",
+        "Debt": "debt",
+        "Quarter": "quarter_num",
+    }
+    out = out.rename(columns=rename_map)
+
+    numeric_cols = [
+        "revenue",
+        "cost_of_revenue",
+        "operating_income",
+        "net_income",
+        "capex",
+        "rd",
+        "total_assets",
+        "cash_balance",
+        "debt",
+    ]
+    for col in numeric_cols:
+        if col in out.columns:
+            out[col] = pd.to_numeric(out[col], errors="coerce")
+        else:
+            out[col] = np.nan
+
+    ticker_to_company = {}
+    for company_name, tickers in COMPANY_TICKERS.items():
+        for t in tickers:
+            ticker_to_company[str(t).strip().upper()] = normalize_company(company_name)
+
+    out["company"] = out["Ticker"].map(ticker_to_company).fillna(out["Ticker"]).apply(normalize_company)
+    out["period_label"] = out["Year"].astype(str) + " Q" + out["quarter_num"].astype(int).astype(str)
+    keep_cols = [
+        "company",
+        "Ticker",
+        "Year",
+        "quarter_num",
+        "period_label",
+        *numeric_cols,
+    ]
+    return out[keep_cols].sort_values(["company", "Year", "quarter_num"]).reset_index(drop=True)
+
+
+def _get_available_quarters_for_earnings(
+    selected_year: int,
+    company_name: str,
+    quarterly_kpis_df: pd.DataFrame,
+) -> list[int]:
+    if quarterly_kpis_df is None or quarterly_kpis_df.empty:
+        return []
+    canonical = normalize_company(company_name)
+    return get_available_quarters(quarterly_kpis_df, year=int(selected_year), company=canonical)
+
+
+def _get_quarterly_metrics_snapshot(
+    company_name: str,
+    selected_year: int,
+    selected_quarter: str,
+    quarterly_kpis_df: pd.DataFrame,
+    annual_metrics: dict,
+) -> tuple[dict | None, str]:
+    qnum = _parse_quarter_int(selected_quarter)
+    if qnum is None or quarterly_kpis_df is None or quarterly_kpis_df.empty:
+        return None, f"Annual {selected_year}"
+
+    canonical = normalize_company(company_name)
+    current = quarterly_kpis_df[
+        (quarterly_kpis_df["company"] == canonical)
+        & (quarterly_kpis_df["Year"] == int(selected_year))
+        & (quarterly_kpis_df["quarter_num"] == int(qnum))
+    ].copy()
+    if current.empty:
+        return None, f"Annual {selected_year}"
+
+    row = current.iloc[0]
+    output = {}
+    metric_keys = [
+        "revenue",
+        "cost_of_revenue",
+        "operating_income",
+        "net_income",
+        "capex",
+        "rd",
+        "total_assets",
+        "cash_balance",
+        "debt",
+    ]
+    for key in metric_keys:
+        output[key] = row.get(key)
+        output[f"{key}_yoy"] = np.nan
+
+    # Keep market cap from annual sheet when quarterly source does not provide it.
+    output["market_cap"] = annual_metrics.get("market_cap") if isinstance(annual_metrics, dict) else None
+    output["market_cap_yoy"] = annual_metrics.get("market_cap_yoy") if isinstance(annual_metrics, dict) else np.nan
+
+    prev = quarterly_kpis_df[
+        (quarterly_kpis_df["company"] == canonical)
+        & (quarterly_kpis_df["Year"] == int(selected_year) - 1)
+        & (quarterly_kpis_df["quarter_num"] == int(qnum))
+    ]
+    if not prev.empty:
+        prev_row = prev.iloc[0]
+        for key in metric_keys:
+            cur = pd.to_numeric(pd.Series([output.get(key)]), errors="coerce").iloc[0]
+            prv = pd.to_numeric(pd.Series([prev_row.get(key)]), errors="coerce").iloc[0]
+            if pd.notna(cur) and pd.notna(prv) and float(prv) != 0:
+                output[f"{key}_yoy"] = ((float(cur) - float(prv)) / float(prv)) * 100.0
+
+    return output, f"Q{qnum} {selected_year}"
+
+
+def render_company_kpi_auto_block(metrics: dict, source_label: str) -> None:
+    if not metrics:
+        return
+    st.markdown("#### KPI Auto Summary")
+    st.caption(f"Source: {source_label}")
+    row1 = (
+        f"Revenue: {format_metric_value(metrics.get('revenue'))} ({format_yoy_value(metrics.get('revenue_yoy'))})  |  "
+        f"Net Income: {format_metric_value(metrics.get('net_income'))} ({format_yoy_value(metrics.get('net_income_yoy'))})"
+    )
+    row2 = (
+        f"Operating Income: {format_metric_value(metrics.get('operating_income'))} ({format_yoy_value(metrics.get('operating_income_yoy'))})  |  "
+        f"Market Cap: {format_metric_value(metrics.get('market_cap'))}"
+    )
+    row3 = (
+        f"R&D: {format_metric_value(metrics.get('rd'))}  |  "
+        f"Capex: {format_metric_value(metrics.get('capex'))}  |  "
+        f"Cash: {format_metric_value(metrics.get('cash_balance'))}  |  "
+        f"Debt: {format_metric_value(metrics.get('debt'))}"
+    )
+    st.markdown(row1)
+    st.markdown(row2)
+    st.markdown(row3)
+
+
+def render_segment_breakdown_auto_block(
+    canonical_company: str,
+    selected_year: int,
+    selected_quarter: str,
+    yearly_segments_df: pd.DataFrame,
+    quarterly_segments_df: pd.DataFrame,
+) -> None:
+    qnum = _parse_quarter_int(selected_quarter)
+    segment_df = pd.DataFrame()
+    period_label = f"Annual {selected_year}"
+
+    if qnum is not None and quarterly_segments_df is not None and not quarterly_segments_df.empty:
+        segment_df = quarterly_segments_df[
+            (quarterly_segments_df["company"] == canonical_company)
+            & (quarterly_segments_df["year"] == int(selected_year))
+            & (quarterly_segments_df["quarter_num"] == int(qnum))
+        ][["segment", "revenue"]].copy()
+        period_label = f"Q{qnum} {selected_year}"
+
+    if segment_df.empty and yearly_segments_df is not None and not yearly_segments_df.empty:
+        segment_df = yearly_segments_df[
+            (yearly_segments_df["company"] == canonical_company)
+            & (pd.to_numeric(yearly_segments_df["year"], errors="coerce") == int(selected_year))
+        ][["segment", "revenue"]].copy()
+
+    if segment_df.empty:
+        return
+
+    segment_df["revenue"] = pd.to_numeric(segment_df["revenue"], errors="coerce")
+    segment_df = segment_df.dropna(subset=["segment", "revenue"])
+    segment_df = segment_df.groupby("segment", as_index=False)["revenue"].sum().sort_values("revenue", ascending=False)
+    if segment_df.empty:
+        return
+
+    total = float(segment_df["revenue"].sum())
+    if total <= 0:
+        return
+
+    top = segment_df.head(4).copy()
+    top["share"] = (top["revenue"] / total) * 100.0
+    summary = "  |  ".join(
+        [f"{row.segment}: {format_metric_value(row.revenue)} ({row.share:.1f}%)" for row in top.itertuples(index=False)]
+    )
+    st.markdown("#### Segment Auto Breakdown")
+    st.caption(f"Source: {period_label}")
+    st.markdown(summary)
+
+
+@st.cache_data(show_spinner=False)
+def _load_transcript_highlights_csv() -> pd.DataFrame:
+    repo_root = Path(__file__).resolve().parents[2]
+    csv_path = repo_root / "earningscall_transcripts" / "transcript_highlights.csv"
+    if not csv_path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_csv(csv_path)
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+    out = df.copy()
+    out.columns = [str(c).strip().lower() for c in out.columns]
+    for col in ["company", "year", "quarter", "role_bucket", "speaker", "quote", "score"]:
+        if col not in out.columns:
+            out[col] = np.nan
+    out["company"] = out["company"].astype(str).str.strip().apply(normalize_company)
+    out["year"] = pd.to_numeric(out["year"], errors="coerce")
+    out["quarter_num"] = out["quarter"].apply(_parse_quarter_int)
+    out["score"] = pd.to_numeric(out["score"], errors="coerce")
+    out["quote"] = out["quote"].astype(str).str.strip()
+    out = out.dropna(subset=["year", "quarter_num"])
+    out["year"] = out["year"].astype(int)
+    out["quarter_num"] = out["quarter_num"].astype(int)
+    out = out[out["quote"] != ""].copy()
+    return out
+
+
+def render_transcript_highlights(company_name: str, selected_year: int, selected_quarter: str) -> None:
+    highlights_df = _load_transcript_highlights_csv()
+    if highlights_df.empty:
+        return
+
+    canonical = normalize_company(company_name)
+    qnum = _parse_quarter_int(selected_quarter)
+    scoped = highlights_df[
+        (highlights_df["company"] == canonical)
+        & (highlights_df["year"] == int(selected_year))
+    ].copy()
+    if scoped.empty:
+        return
+    if qnum is None:
+        qnum = int(scoped["quarter_num"].max())
+    scoped = scoped[scoped["quarter_num"] == int(qnum)].copy()
+    if scoped.empty:
+        return
+
+    st.markdown("#### Transcript Highlights")
+    st.caption(f"Source: Q{qnum} {selected_year}")
+    for role in ["CEO", "CFO"]:
+        role_df = scoped[scoped["role_bucket"].astype(str).str.upper() == role].copy()
+        if role_df.empty:
+            continue
+        role_df = role_df.sort_values("score", ascending=False)
+        limit = 3 if role == "CEO" else 2
+        st.markdown(f"**{role} highlights — {company_name} Q{qnum} {selected_year}**")
+        for row in role_df.head(limit).itertuples(index=False):
+            speaker = html.escape(str(getattr(row, "speaker", "") or "Unknown"))
+            quote = html.escape(str(getattr(row, "quote", "") or "").strip())
+            st.markdown(f"> _{quote}_  \n> — {speaker}")
 
 
 def parse_quarter_label(value):
@@ -2517,25 +2825,56 @@ if query_company:
             default_index = idx
             break
 
-company = st.selectbox("Select Company", companies, index=default_index)
+year_col, quarter_col, company_col = st.columns([1, 1, 2])
+with company_col:
+    company = st.selectbox("Select Company", companies, index=default_index)
+
 years = data_processor.get_available_years(company)
 if not years:
     st.error("No years available for this company.")
     st.stop()
-
 years = sorted(years)
-year = st.selectbox("Select Year", years, index=len(years) - 1)
-metrics = data_processor.get_metrics(company, year)
+
+with year_col:
+    year = st.selectbox("Select Year", years, index=len(years) - 1)
+
+quarterly_kpis_df = _load_quarterly_kpis(data_processor.data_path, get_file_mtime(data_processor.data_path))
+available_q = _get_available_quarters_for_earnings(year, company, quarterly_kpis_df)
+quarter_options = ["Annual"] + [f"Q{q}" for q in available_q]
+with quarter_col:
+    selected_quarter = st.selectbox(
+        "Quarter",
+        quarter_options,
+        index=0,
+        key="earnings_selected_quarter",
+    )
+
+annual_metrics = data_processor.get_metrics(company, year) or {}
+quarterly_metrics, kpi_source_label = _get_quarterly_metrics_snapshot(
+    company_name=company,
+    selected_year=year,
+    selected_quarter=selected_quarter,
+    quarterly_kpis_df=quarterly_kpis_df,
+    annual_metrics=annual_metrics,
+)
+metrics = quarterly_metrics if quarterly_metrics is not None else annual_metrics
 if not metrics:
     st.error("No data available for the selected company/year.")
     st.stop()
 
 prev_company = st.session_state.get("kpi_anim_company")
 prev_year = st.session_state.get("kpi_anim_year")
-if prev_company != company or prev_year != year or "kpi_anim_key" not in st.session_state:
+prev_quarter = st.session_state.get("kpi_anim_quarter")
+if (
+    prev_company != company
+    or prev_year != year
+    or prev_quarter != selected_quarter
+    or "kpi_anim_key" not in st.session_state
+):
     st.session_state["kpi_anim_key"] = uuid.uuid4().hex[:8]
     st.session_state["kpi_anim_company"] = company
     st.session_state["kpi_anim_year"] = year
+    st.session_state["kpi_anim_quarter"] = selected_quarter
 kpi_anim_key = st.session_state["kpi_anim_key"]
 kpi_anim_start_delay = 1.0
 kpi_anim_step = 0.2
@@ -2622,7 +2961,7 @@ company_header_html = f"""
         {logo_html}
         <div class="company-header-text">
             <span class="company-name">{company}</span>
-            <span class="company-year">{year}</span>
+            <span class="company-year">{year if selected_quarter == "Annual" else f"{year} · {selected_quarter}"}</span>
         </div>
     </div>
 </div>
@@ -3452,22 +3791,53 @@ else:
     render_plotly(fig, xaxis_is_year=xaxis_is_year)
 
 st.subheader("Insights")
+render_company_kpi_auto_block(metrics, kpi_source_label)
+render_segment_breakdown_auto_block(
+    canonical_company=canonical_company,
+    selected_year=int(year),
+    selected_quarter=selected_quarter,
+    yearly_segments_df=data_processor.df_segments,
+    quarterly_segments_df=segments_quarterly_all,
+)
+render_transcript_highlights(company, int(year), selected_quarter)
+
 company_insights_df = load_company_insights_text(data_processor.data_path)
 
 company_insights_filtered = pd.DataFrame()
+insight_source_label = f"Annual {year}"
 if company_insights_df is not None and not company_insights_df.empty:
-    company_insights_filtered = company_insights_df.copy()
-    company_insights_filtered["company"] = (
-        company_insights_filtered["company"].astype(str).str.strip().apply(normalize_company)
-    )
-    company_insights_filtered["year"] = pd.to_numeric(
-        company_insights_filtered["year"], errors="coerce"
-    )
-    company_insights_filtered = company_insights_filtered[
-        (company_insights_filtered["company"] == canonical_company)
-        & (company_insights_filtered["year"] == int(year))
-        & (company_insights_filtered["insight"].notna())
-    ]
+    all_insights = company_insights_df.copy()
+    all_insights["company"] = all_insights["company"].astype(str).str.strip().apply(normalize_company)
+    all_insights["year"] = pd.to_numeric(all_insights["year"], errors="coerce")
+    all_insights = all_insights[
+        (all_insights["company"] == canonical_company)
+        & (all_insights["year"] == int(year))
+        & (all_insights["insight"].notna())
+    ].copy()
+
+    qnum = _parse_quarter_int(selected_quarter)
+    if "quarter" in all_insights.columns and qnum is not None:
+        all_insights["_quarter_num"] = all_insights["quarter"].apply(_parse_quarter_int)
+        quarter_match = all_insights[all_insights["_quarter_num"] == int(qnum)].copy()
+        if not quarter_match.empty:
+            company_insights_filtered = quarter_match
+            insight_source_label = f"Q{qnum} {year}"
+        else:
+            annual_fallback = all_insights[
+                all_insights["quarter"].isna()
+                | (all_insights["quarter"].astype(str).str.strip() == "")
+            ].copy()
+            company_insights_filtered = annual_fallback
+            insight_source_label = f"Annual {year}"
+    else:
+        if "quarter" in all_insights.columns:
+            all_insights["quarter"] = all_insights["quarter"].fillna("")
+            all_insights = all_insights[
+                all_insights["quarter"].astype(str).str.strip().isin(["", "Annual", "ANNUAL"])
+            ].copy()
+        company_insights_filtered = all_insights
+        insight_source_label = f"Annual {year}"
+
     if "category" in company_insights_filtered.columns:
         company_insights_filtered["category"] = company_insights_filtered["category"].fillna("")
 
@@ -3475,6 +3845,7 @@ if company_insights_filtered.empty:
     st.info("Company insights are not available for the selected company and year.")
 else:
     st.markdown("#### Company insights")
+    st.caption(f"Source: {insight_source_label}")
     company_cards = []
     company_color = (
         COMPANY_COLORS.get(company)
