@@ -395,14 +395,6 @@ st.markdown(
             color: #475569;
         }
 
-        .ov-macro-chart-wrap {
-            border: 1px solid rgba(15, 23, 42, 0.12);
-            border-radius: 14px;
-            background: rgba(248, 250, 252, 0.72);
-            padding: 10px 12px 6px 12px;
-            margin-top: 8px;
-        }
-
         .ov-quote-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -482,11 +474,6 @@ st.markdown(
 
         body.theme-dark .ov-chart-comment-post {
             color: #94A3B8;
-        }
-
-        body.theme-dark .ov-macro-chart-wrap {
-            border-color: rgba(148, 163, 184, 0.22);
-            background: rgba(15, 23, 42, 0.42);
         }
 
         body.theme-dark .ov-quote-card {
@@ -4197,22 +4184,20 @@ def _apply_year_window(df: pd.DataFrame, start_year: int, end_year: int, year_co
 
 
 def _overview_legend_style() -> dict:
-    dark_mode = get_theme_mode() == "dark"
     return dict(
         orientation="h",
-        yanchor="bottom",
-        y=1.02,
+        yanchor="top",
+        y=-0.16,
         x=0.0,
         xanchor="left",
-        bgcolor="rgba(15,23,42,0.70)" if dark_mode else "rgba(248,250,252,0.90)",
-        bordercolor="rgba(148,163,184,0.35)",
-        borderwidth=1,
-        font=dict(size=10),
+        bgcolor="rgba(0,0,0,0)",
+        borderwidth=0,
+        font=dict(size=11),
     )
 
 
 def _overview_chart_margin(left: int = 30, right: int = 20, bottom: int = 88, top: int = 94) -> dict:
-    return dict(l=int(left), r=max(int(right), 64), t=max(int(top), 78), b=max(int(bottom), 72))
+    return dict(l=int(left), r=max(int(right), 34), t=max(int(top), 62), b=max(int(bottom), 108))
 
 
 def _df_has_cols(df: pd.DataFrame | None, cols: list[str]) -> bool:
@@ -4268,7 +4253,6 @@ def _render_macro_bridge_charts(
     )
 
     st.caption(f"Auto-rendered from workbook sheets ({start_year}-{end_year}).")
-    st.markdown("<div class='ov-macro-chart-wrap'>", unsafe_allow_html=True)
 
     # 1) M2 vs Big Tech Aggregate Market Cap
     title = "M2 vs Big Tech Aggregate Market Cap"
@@ -4718,7 +4702,6 @@ def _render_macro_bridge_charts(
             st.caption(f"Year shown: {target_year}")
     render_standard_overview_post_comment(title, selected_year)
 
-    st.markdown("</div>", unsafe_allow_html=True)
     return True
 
 
