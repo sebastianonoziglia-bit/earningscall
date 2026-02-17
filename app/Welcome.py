@@ -3,7 +3,16 @@ import streamlit as st
 st.set_page_config(page_title="Welcome", page_icon="📊", layout="wide")
 
 from utils.global_fonts import apply_global_fonts
+from utils.transcript_startup_sync import sync_local_transcripts_to_workbook
 apply_global_fonts()
+
+# Startup sync: append only new local transcript files into local workbook index.
+if not st.session_state.get("_startup_transcript_sync_done", False):
+    st.session_state["_startup_transcript_sync_done"] = True
+    try:
+        sync_local_transcripts_to_workbook()
+    except Exception:
+        pass
 
 # Handle logo navigation via query params
 query_params = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()

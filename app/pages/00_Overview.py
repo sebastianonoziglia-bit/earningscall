@@ -4392,6 +4392,8 @@ def _render_transcript_topic_growth_chart(
     scoped_df["mention_count"] = scoped_df["mention_count"].fillna(0.0).clip(lower=0.0)
     scoped_df["companies_mentioned"] = scoped_df["companies_mentioned"].fillna(0.0)
     scoped_df["total_companies"] = scoped_df["total_companies"].fillna(0.0)
+    label_cutoff = float(scoped_df["mention_count"].quantile(0.55)) if not scoped_df.empty else 0.0
+    scoped_df["topic_label"] = np.where(scoped_df["mention_count"] >= max(label_cutoff, 1.0), scoped_df["topic"], "")
 
     mid_x = max(float(scoped_df["importance_plot"].median()), 1.0)
     mid_y = 0.0
@@ -4429,12 +4431,13 @@ def _render_transcript_topic_growth_chart(
         size="mention_count",
         color="quadrant",
         color_discrete_map=quadrant_colors,
-        text="topic",
+        text="topic_label",
         custom_data=["topic", "importance_pct", "growth_pct", "mention_count", "companies_mentioned", "total_companies"],
     )
     fig.update_traces(
         marker=dict(line=dict(color="rgba(15,23,42,0.18)", width=1)),
         textposition="top center",
+        textfont=dict(size=12),
         hovertemplate=(
             "<b>%{customdata[0]}</b>"
             "<br>Importance: %{customdata[1]:.1f}% of companies"
@@ -4467,6 +4470,24 @@ def _render_transcript_topic_growth_chart(
     fig.add_vline(x=mid_x, line_dash="dot", line_color="rgba(15,23,42,0.55)")
 
     st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+    ranked = scoped_df.sort_values(["mention_count", "importance_pct"], ascending=[False, False]).copy()
+    ranked = ranked[["topic", "mention_count", "importance_pct", "growth_pct", "companies_mentioned", "total_companies"]]
+    ranked = ranked.rename(
+        columns={
+            "topic": "Topic",
+            "mention_count": "Mentions",
+            "importance_pct": "Importance (%)",
+            "growth_pct": "QoQ Growth (%)",
+            "companies_mentioned": "Companies Mentioning",
+            "total_companies": "Total Companies",
+        }
+    )
+    st.caption("Top topic signals for this selected period")
+    st.dataframe(
+        ranked,
+        use_container_width=True,
+        hide_index=True,
+    )
     render_standard_overview_post_comment("Transcript Topic Growth vs Importance", selected_year)
     return True
 
