@@ -253,18 +253,26 @@ st.markdown(
         }
 
         .ov-insight-category-card {
-            border: 1px solid rgba(15, 23, 42, 0.12);
-            border-radius: 14px;
-            background: rgba(248, 250, 252, 0.85);
-            padding: 12px 14px;
-            margin: 8px 0 14px 0;
+            border: 1px solid rgba(37, 99, 235, 0.28);
+            border-radius: 16px;
+            background: linear-gradient(180deg, rgba(239, 246, 255, 0.92), rgba(248, 250, 252, 0.96));
+            padding: 10px 12px 12px 12px;
+            margin: 12px 0 18px 0;
+            box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
         }
 
         .ov-insight-category-title {
+            display: block;
+            width: 100%;
+            background: linear-gradient(135deg, #1D4ED8 0%, #2563EB 52%, #3B82F6 100%);
+            border-radius: 10px;
+            color: #FFFFFF;
+            padding: 9px 12px;
+            margin-bottom: 10px;
             font-size: 1.02rem;
-            font-weight: 700;
-            color: #0F172A;
-            margin-bottom: 8px;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+            box-shadow: 0 8px 18px rgba(37, 99, 235, 0.26);
         }
 
         .ov-insight-item {
@@ -293,6 +301,21 @@ st.markdown(
             margin-bottom: 4px;
         }
 
+        .ov-insight-chart-link {
+            color: #1D4ED8;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .ov-insight-chart-link:hover {
+            text-decoration: underline;
+        }
+
+        .ov-chart-anchor {
+            position: relative;
+            top: -80px;
+        }
+
         .ov-insight-body {
             font-size: 0.94rem;
             line-height: 1.52;
@@ -310,11 +333,12 @@ st.markdown(
 
         body.theme-dark .ov-insight-category-card {
             border-color: rgba(148, 163, 184, 0.22);
-            background: rgba(15, 23, 42, 0.45);
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.58), rgba(15, 23, 42, 0.42));
         }
 
         body.theme-dark .ov-insight-category-title {
             color: #E2E8F0;
+            box-shadow: 0 8px 18px rgba(37, 99, 235, 0.34);
         }
 
         body.theme-dark .ov-insight-item {
@@ -327,6 +351,10 @@ st.markdown(
 
         body.theme-dark .ov-insight-meta {
             color: #94A3B8;
+        }
+
+        body.theme-dark .ov-insight-chart-link {
+            color: #93C5FD;
         }
 
         body.theme-dark .ov-insight-body {
@@ -899,37 +927,96 @@ def _normalize_quarter_label(value) -> str:
     return f"Q{q}" if q else ""
 
 
+def _chart_anchor_id(chart_key: str) -> str:
+    token = re.sub(r"[^a-z0-9]+", "-", str(chart_key or "").strip().lower()).strip("-")
+    return f"ov-chart-{token or 'unknown'}"
+
+
+def _lookup_chart_row_from_overview_sheet(
+    section_title: str,
+    selected_year: int | None,
+    selected_quarter: str | None,
+    selected_chart_key: str | None = None,
+) -> tuple[pd.Series | None, str]:
+    data_processor = get_data_processor()
+    excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    if not excel_path:
+        return None, ""
+    df = _load_overview_charts_sheet(excel_path, source_stamp)
+    if df.empty:
+        return None, ""
+
+    title_norm = _normalize_overview_colname(section_title)
+    chart_key_norm = _normalize_overview_colname(selected_chart_key or "")
+    if chart_key_norm:
+        chart_rows = df[df["_chart_key_norm"] == chart_key_norm].copy()
+    elif title_norm:
+        chart_rows = df[df["_title_norm"] == title_norm].copy()
+    else:
+        chart_rows = pd.DataFrame()
+    if chart_rows.empty:
+        return None, ""
+
+    scoped, period_label = _pick_rows_for_period(chart_rows, selected_year, selected_quarter)
+    if scoped.empty:
+        return None, ""
+    row = scoped.sort_values(["year", "_quarter_num", "chart_key"], ascending=[False, False, True]).iloc[0]
+    return row, period_label
+
+
 def _lookup_chart_comments_from_overview_sheet(
     section_title: str,
     selected_year: int | None,
     selected_quarter: str | None,
     selected_chart_key: str | None = None,
 ) -> tuple[str, str, str]:
-    data_processor = get_data_processor()
-    excel_path = getattr(data_processor, "data_path", "")
-    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
-    if not excel_path:
+    row, period_label = _lookup_chart_row_from_overview_sheet(
+        section_title=section_title,
+        selected_year=selected_year,
+        selected_quarter=selected_quarter,
+        selected_chart_key=selected_chart_key,
+    )
+    if row is None:
         return "", "", ""
-    df = _load_overview_charts_sheet(excel_path, source_stamp)
-    if df.empty:
-        return "", "", ""
-
-    title_norm = _normalize_overview_colname(section_title)
-    chart_key_norm = _normalize_overview_colname(selected_chart_key or "")
-    chart_rows = df[
-        (df["_title_norm"] == title_norm)
-        | ((chart_key_norm != "") & (df["_chart_key_norm"] == chart_key_norm))
-    ].copy()
-    if chart_rows.empty:
-        return "", "", ""
-
-    scoped, period_label = _pick_rows_for_period(chart_rows, selected_year, selected_quarter)
-    if scoped.empty:
-        return "", "", ""
-    row = scoped.sort_values(["year", "_quarter_num", "chart_key"], ascending=[False, False, True]).iloc[0]
     pre_comment = _clean_overview_text(row.get("pre_comment"))
     post_comment = _clean_overview_text(row.get("post_comment"))
     return pre_comment, post_comment, period_label
+
+
+def _lookup_chart_key_for_title(
+    section_title: str,
+    selected_year: int | None,
+    selected_quarter: str | None,
+) -> str:
+    row, _ = _lookup_chart_row_from_overview_sheet(
+        section_title=section_title,
+        selected_year=selected_year,
+        selected_quarter=selected_quarter,
+        selected_chart_key=None,
+    )
+    if row is None:
+        return ""
+    return _clean_overview_text(row.get("chart_key"))
+
+
+def _lookup_chart_title_for_key(
+    chart_key: str,
+    selected_year: int | None,
+    selected_quarter: str | None,
+) -> str:
+    key = _clean_overview_text(chart_key)
+    if not key:
+        return ""
+    row, _ = _lookup_chart_row_from_overview_sheet(
+        section_title="",
+        selected_year=selected_year,
+        selected_quarter=selected_quarter,
+        selected_chart_key=key,
+    )
+    if row is None:
+        return ""
+    return _clean_overview_text(row.get("title"))
 
 
 def render_standard_overview_comment(
@@ -939,11 +1026,23 @@ def render_standard_overview_comment(
     chart_key: str | None = None,
 ) -> None:
     selected_quarter = st.session_state.get("overview_selected_quarter", "Q4")
+    effective_chart_key = _clean_overview_text(chart_key)
+    if not effective_chart_key:
+        effective_chart_key = _lookup_chart_key_for_title(
+            section_title=section_title,
+            selected_year=selected_period if selected_period is not None else None,
+            selected_quarter=selected_quarter,
+        )
+    if effective_chart_key:
+        st.markdown(
+            f"<div id=\"{_chart_anchor_id(effective_chart_key)}\" class=\"ov-chart-anchor\"></div>",
+            unsafe_allow_html=True,
+        )
     pre_comment, _, _ = _lookup_chart_comments_from_overview_sheet(
         section_title=section_title,
         selected_year=selected_period if selected_period is not None else None,
         selected_quarter=selected_quarter,
-        selected_chart_key=chart_key,
+        selected_chart_key=effective_chart_key or None,
     )
     if pre_comment:
         st.caption(pre_comment)
@@ -955,11 +1054,18 @@ def render_standard_overview_post_comment(
     chart_key: str | None = None,
 ) -> None:
     selected_quarter = st.session_state.get("overview_selected_quarter", "Q4")
+    effective_chart_key = _clean_overview_text(chart_key)
+    if not effective_chart_key:
+        effective_chart_key = _lookup_chart_key_for_title(
+            section_title=section_title,
+            selected_year=selected_period if selected_period is not None else None,
+            selected_quarter=selected_quarter,
+        )
     _, post_comment, _ = _lookup_chart_comments_from_overview_sheet(
         section_title=section_title,
         selected_year=selected_period if selected_period is not None else None,
         selected_quarter=selected_quarter,
-        selected_chart_key=chart_key,
+        selected_chart_key=effective_chart_key or None,
     )
     if post_comment:
         st.caption(post_comment)
@@ -2145,13 +2251,23 @@ def _render_excel_overview_insights(
             title = _clean_overview_text(row.get("title"))
             comment = _clean_insight_comment_text(row.get("comment"))
             chart_key = _clean_overview_text(row.get("chart_key"))
-            meta_text = ""
+            chart_title = _lookup_chart_title_for_key(chart_key, selected_year, selected_quarter)
+            meta_html = ""
+            if chart_key:
+                chart_label = chart_title or chart_key
+                anchor_id = _chart_anchor_id(chart_key)
+                meta_html = (
+                    f"<div class='ov-insight-meta'>"
+                    f"<a class='ov-insight-chart-link' href='#{html.escape(anchor_id)}'>"
+                    f"Linked chart: {html.escape(chart_label)}"
+                    f"</a></div>"
+                )
             st.markdown(
                 _html_block(
                     f"""
                     <div class="ov-insight-item">
                         <div class="ov-insight-head">{html.escape(str(insight_id))} — {html.escape(title)}</div>
-                        {"<div class='ov-insight-meta'>" + html.escape(meta_text) + "</div>" if meta_text else ""}
+                        {meta_html}
                         <p class="ov-insight-body">{html.escape(comment)}</p>
                     </div>
                     """
@@ -2213,6 +2329,25 @@ def _apply_year_window(df: pd.DataFrame, start_year: int, end_year: int, year_co
         return pd.DataFrame()
     out[year_col] = out[year_col].astype(int)
     return out[(out[year_col] >= int(start_year)) & (out[year_col] <= int(end_year))].copy()
+
+
+def _overview_legend_style() -> dict:
+    dark_mode = get_theme_mode() == "dark"
+    return dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.12,
+        x=0.0,
+        xanchor="left",
+        bgcolor="rgba(15,23,42,0.40)" if dark_mode else "rgba(248,250,252,0.92)",
+        bordercolor="rgba(148,163,184,0.35)",
+        borderwidth=1,
+        font=dict(size=12),
+    )
+
+
+def _overview_chart_margin(left: int = 30, right: int = 20, bottom: int = 20, top: int = 94) -> dict:
+    return dict(l=left, r=right, t=top, b=bottom)
 
 
 def _render_macro_bridge_charts(
@@ -2288,12 +2423,12 @@ def _render_macro_bridge_charts(
         fig.add_trace(go.Scatter(x=merged["Year"], y=merged["TechCap_YoY"], mode="lines", name="Tech Cap YoY %", line=dict(color="#F97316", width=1.8, dash="dot"), yaxis="y2"))
         fig.update_layout(
             height=460,
-            margin=dict(l=30, r=34, t=10, b=20),
+            margin=_overview_chart_margin(left=30, right=34, top=104),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             yaxis=dict(title="USD billions"),
             yaxis2=dict(title="YoY %", overlaying="y", side="right", showgrid=False),
-            legend=dict(orientation="h", y=1.12, x=0),
+            legend=_overview_legend_style(),
         )
         fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
         st.plotly_chart(fig, use_container_width=True, config=plotly_config)
@@ -2318,11 +2453,11 @@ def _render_macro_bridge_charts(
         fig.add_trace(go.Scatter(x=merged["Year"], y=merged["Ad_YoY"], mode="lines+markers", name="Global Ad Spend YoY %", line=dict(color="#2563EB", width=3)))
         fig.update_layout(
             height=430,
-            margin=dict(l=30, r=20, t=10, b=20),
+            margin=_overview_chart_margin(),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             yaxis_title="YoY %",
-            legend=dict(orientation="h", y=1.1, x=0),
+            legend=_overview_legend_style(),
         )
         fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
         fig.add_hline(y=0, line_dash="dot", line_color="rgba(15,23,42,0.5)")
@@ -2354,11 +2489,11 @@ def _render_macro_bridge_charts(
             )
             fig.update_layout(
                 height=460,
-                margin=dict(l=30, r=20, t=10, b=20),
+                margin=_overview_chart_margin(),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 yaxis_title="USD billions",
-                legend=dict(orientation="h", y=1.1, x=0),
+                legend=_overview_legend_style(),
             )
             fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
             st.plotly_chart(fig, use_container_width=True, config=plotly_config)
@@ -2386,11 +2521,11 @@ def _render_macro_bridge_charts(
             fig.add_trace(go.Scatter(x=comp["Year"], y=comp["Tech_Debt_to_MCap"], mode="lines+markers", name="Tech debt / market cap", line=dict(color="#2563EB", width=3)))
             fig.update_layout(
                 height=430,
-                margin=dict(l=30, r=20, t=10, b=20),
+                margin=_overview_chart_margin(),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 yaxis_title="Debt / Market Cap",
-                legend=dict(orientation="h", y=1.1, x=0),
+                legend=_overview_legend_style(),
             )
             fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
             st.plotly_chart(fig, use_container_width=True, config=plotly_config)
@@ -2415,11 +2550,11 @@ def _render_macro_bridge_charts(
         fig.add_trace(go.Scatter(x=merged["Year"], y=merged["Real_M2_B"], mode="lines+markers", name="Real M2", line=dict(color="#1D4ED8", width=3)))
         fig.update_layout(
             height=430,
-            margin=dict(l=30, r=20, t=10, b=20),
+            margin=_overview_chart_margin(),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             yaxis_title="USD billions",
-            legend=dict(orientation="h", y=1.1, x=0),
+            legend=_overview_legend_style(),
         )
         fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
         st.plotly_chart(fig, use_container_width=True, config=plotly_config)
@@ -2477,10 +2612,10 @@ def _render_macro_bridge_charts(
             )
             fig.update_layout(
                 height=430,
-                margin=dict(l=30, r=20, t=10, b=20),
+                margin=_overview_chart_margin(),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                legend=dict(orientation="h", y=1.1, x=0),
+                legend=_overview_legend_style(),
             )
             fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
             st.plotly_chart(fig, use_container_width=True, config=plotly_config)
@@ -2508,12 +2643,12 @@ def _render_macro_bridge_charts(
         fig.add_trace(go.Scatter(x=plot_df["Year"], y=plot_df["Inflation_YoY"], mode="lines", name="Inflation YoY %", line=dict(color="#DC2626", width=1.8, dash="dot"), yaxis="y2"))
         fig.update_layout(
             height=450,
-            margin=dict(l=30, r=34, t=10, b=20),
+            margin=_overview_chart_margin(left=30, right=34, top=104),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             yaxis=dict(title="Debt (USD billions)"),
             yaxis2=dict(title="Inflation YoY %", overlaying="y", side="right", showgrid=False),
-            legend=dict(orientation="h", y=1.1, x=0),
+            legend=_overview_legend_style(),
         )
         fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
         st.plotly_chart(fig, use_container_width=True, config=plotly_config)
@@ -2553,11 +2688,11 @@ def _render_macro_bridge_charts(
             )
             fig.update_layout(
                 height=480,
-                margin=dict(l=30, r=20, t=10, b=20),
+                margin=_overview_chart_margin(),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 yaxis_title="Share of total market cap (%)",
-                legend=dict(orientation="h", y=1.12, x=0),
+                legend=_overview_legend_style(),
             )
             fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
             st.plotly_chart(fig, use_container_width=True, config=plotly_config)
@@ -2582,11 +2717,11 @@ def _render_macro_bridge_charts(
         fig.add_trace(go.Scatter(x=merged["Year"], y=merged["Ad_Index100"], mode="lines+markers", name="Global ad spend indexed (base=100)", line=dict(color="#2563EB", width=3)))
         fig.update_layout(
             height=430,
-            margin=dict(l=30, r=20, t=10, b=20),
+            margin=_overview_chart_margin(),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             yaxis_title="Index (base year = 100)",
-            legend=dict(orientation="h", y=1.1, x=0),
+            legend=_overview_legend_style(),
         )
         fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
         st.plotly_chart(fig, use_container_width=True, config=plotly_config)
@@ -2777,10 +2912,10 @@ def _render_transcript_topic_growth_chart(
     )
     fig.update_layout(
         height=560,
-        margin=dict(l=20, r=20, t=12, b=20),
+        margin=_overview_chart_margin(left=20, right=20, top=106),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", y=1.1, x=0.0),
+        legend=_overview_legend_style(),
     )
     fig.update_xaxes(
         type="log",

@@ -641,11 +641,16 @@ st.markdown(
     .segment-insight-card {
         border-radius: 14px;
         padding: 0.9rem 1rem;
-        color: #ffffff;
+        color: #ffffff !important;
         box-shadow: 0 10px 22px rgba(15, 23, 42, 0.18);
         min-height: 120px;
         position: relative;
         overflow: hidden;
+    }
+
+    .segment-insight-card,
+    .segment-insight-card * {
+        color: #ffffff !important;
     }
 
     .segment-insight-title {
@@ -673,6 +678,10 @@ st.markdown(
 
     .segment-insight-list li:last-child {
         margin-bottom: 0;
+    }
+
+    .segment-insight-list li::marker {
+        color: #ffffff !important;
     }
 
     .company-insight-card {
@@ -1140,6 +1149,8 @@ QUARTERLY_COMPANY_MAP = {
 COMPANY_ALIASES = {
     "Google": "Alphabet",
     "Meta Platforms": "Meta",
+    "Amazon.com": "Amazon",
+    "Amazon.com, Inc.": "Amazon",
     "Warner Bros. Discovery": "Warner Bros Discovery",
     "Warner Bros": "Warner Bros Discovery",
     "Paramount Global": "Paramount",
@@ -1730,6 +1741,22 @@ def normalize_segment_label(company, segment):
         if "player" in key or "device" in key:
             # Excel uses "Player" for insights; quarterly sheets often label it as "Devices/Player".
             return "Player"
+
+    if normalized_company == "Amazon":
+        if "aws" in key or "web service" in key:
+            return "AWS"
+        if "online" in key and "store" in key:
+            return "Online Stores"
+        if "physical" in key and "store" in key:
+            return "Physical Stores"
+        if "subscription" in key or "prime" in key:
+            return "Subscription Services"
+        if "advert" in key or "adv service" in key or "ad service" in key:
+            return "Advertising"
+        if ("third" in key and ("party" in key or "seller" in key or "reseller" in key)) or "3p" in key:
+            return "Third-Party Seller Services"
+        if "other" in key:
+            return "Other"
 
     if normalized_company == "Warner Bros Discovery":
         # Quarterly sheets use broad buckets (Distribution / Advertising / Content / Other),
@@ -2923,7 +2950,7 @@ if segment_insights_df is not None and not segment_insights_df.empty:
         segment_insights_filtered["year"], errors="coerce"
     )
     segment_insights_filtered["segment"] = segment_insights_filtered["segment"].apply(
-        lambda s: normalize_segment_label(company, s)
+        lambda s: normalize_segment_label(canonical_company, s)
     )
     segment_insights_filtered["segment"] = segment_insights_filtered["segment"].astype(str).str.strip()
     segment_insights_filtered = segment_insights_filtered[
