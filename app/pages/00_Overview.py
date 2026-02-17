@@ -6637,7 +6637,19 @@ if market_cap_data and nasdaq_market_cap:
             if "frame" in btn["args"][1]:
                 btn["args"][1]["frame"]["redraw"] = True
                 btn["args"][1]["transition"]["duration"] = 600
-        pie_fig.update_layout(updatemenus=pie_buttons, transition=dict(duration=500, easing="cubic-in-out"))
+        pie_steps = [
+            {
+                "label": str(year),
+                "method": "animate",
+                "args": [[str(year)], {"mode": "immediate", "frame": {"duration": 0, "redraw": True}, "transition": {"duration": 0}}],
+            }
+            for year in anim_years
+        ]
+        pie_fig.update_layout(
+            updatemenus=pie_buttons,
+            sliders=[{"active": max(len(pie_steps) - 1, 0), "steps": pie_steps, "visible": False}],
+            transition=dict(duration=500, easing="cubic-in-out"),
+        )
     pie_fig.update_layout(
         height=520,
         margin=dict(l=10, r=10, t=10, b=10),
@@ -6732,7 +6744,19 @@ if market_cap_data:
             if "frame" in btn["args"][1]:
                 btn["args"][1]["frame"]["redraw"] = True
                 btn["args"][1]["transition"]["duration"] = 600
-        treemap_fig.update_layout(updatemenus=treemap_buttons, transition=dict(duration=500, easing="cubic-in-out"))
+        treemap_steps = [
+            {
+                "label": frame.name,
+                "method": "animate",
+                "args": [[frame.name], {"mode": "immediate", "frame": {"duration": 0, "redraw": True}, "transition": {"duration": 0}}],
+            }
+            for frame in treemap_frames
+        ]
+        treemap_fig.update_layout(
+            updatemenus=treemap_buttons,
+            sliders=[{"active": max(len(treemap_steps) - 1, 0), "steps": treemap_steps, "visible": False}],
+            transition=dict(duration=500, easing="cubic-in-out"),
+        )
     treemap_fig.update_layout(
         height=520,
         margin=dict(l=10, r=10, t=10, b=10),
