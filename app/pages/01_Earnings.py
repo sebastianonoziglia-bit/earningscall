@@ -1751,9 +1751,18 @@ def normalize_segment_label(company, segment):
             return "Physical Stores"
         if "subscription" in key or "prime" in key:
             return "Subscription Services"
-        if "advert" in key or "adv service" in key or "ad service" in key:
+        if (
+            "advert" in key
+            or "adv service" in key
+            or "ad service" in key
+            or key in {"adv", "ads", "ad"}
+        ):
             return "Advertising"
-        if ("third" in key and ("party" in key or "seller" in key or "reseller" in key)) or "3p" in key:
+        if (
+            ("third" in key and ("party" in key or "seller" in key or "reseller" in key))
+            or "3p" in key
+            or "third-party seller services" in key
+        ):
             return "Third-Party Seller Services"
         if "other" in key:
             return "Other"
@@ -2964,14 +2973,17 @@ segment_insight_map = {}
 if not segment_insights_filtered.empty:
     desired_insight_year = int(segment_end)
     segment_to_group = {k: v for k, v in segment_insights_filtered.groupby("segment")}
+    segment_to_group_norm = {
+        normalize_segment(k): v for k, v in segment_to_group.items() if str(k).strip()
+    }
     if segment_labels:
-        ordered_segments = [s for s in segment_labels if s in segment_to_group]
+        ordered_segments = [s for s in segment_labels if normalize_segment(s) in segment_to_group_norm]
     else:
         ordered_segments = sorted(segment_to_group.keys())
 
-    for segment_name in ordered_segments:
-        segment_name = str(segment_name).strip()
-        group = segment_to_group.get(segment_name)
+    for raw_segment_name in ordered_segments:
+        segment_name = str(raw_segment_name).strip()
+        group = segment_to_group_norm.get(normalize_segment(segment_name))
         if group is None or group.empty:
             continue
         group = group.copy()
@@ -3007,7 +3019,9 @@ if not segment_insights_filtered.empty:
                     insights.append(html.escape(str(part).strip()))
         if not insights:
             continue
-        insight_items = "".join(f"<li>{item}</li>" for item in insights)
+        insight_items = "".join(
+            f"<li style=\"color:#FFFFFF !important;\">{item}</li>" for item in insights
+        )
         segment_color = segment_colors.get(segment_name)
         if not segment_color:
             segment_color = match_segment_color(canonical_company, segment_name)
@@ -3015,8 +3029,8 @@ if not segment_insights_filtered.empty:
             segment_color = COMPANY_COLORS.get(canonical_company, "#111827")
         segment_insight_map[segment_name] = (
             f"<div class=\"segment-insight-card\" style=\"background: {segment_color}; color: #ffffff; width: 100%;\">"
-            f"<div class=\"segment-insight-title\">{html.escape(segment_name)}</div>"
-            f"<ul class=\"segment-insight-list\">{insight_items}</ul>"
+            f"<div class=\"segment-insight-title\" style=\"color:#FFFFFF !important;\">{html.escape(segment_name)}</div>"
+            f"<ul class=\"segment-insight-list\" style=\"color:#FFFFFF !important;\">{insight_items}</ul>"
             "</div>"
         )
 

@@ -362,6 +362,35 @@ st.markdown(
             margin-top: 8px;
         }
 
+        .ov-quote-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .ov-quote-card {
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 12px;
+            box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+        }
+
+        .ov-quote-meta {
+            font-size: 0.82rem;
+            color: #334155;
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+
+        .ov-quote-body {
+            margin: 0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #0F172A;
+        }
+
         body.theme-dark .ov-insight-category-card {
             border-color: rgba(148, 163, 184, 0.22);
             background: linear-gradient(180deg, rgba(15, 23, 42, 0.58), rgba(15, 23, 42, 0.42));
@@ -404,6 +433,20 @@ st.markdown(
         body.theme-dark .ov-macro-chart-wrap {
             border-color: rgba(148, 163, 184, 0.22);
             background: rgba(15, 23, 42, 0.42);
+        }
+
+        body.theme-dark .ov-quote-card {
+            border-color: rgba(148, 163, 184, 0.24);
+            background: rgba(15, 23, 42, 0.52);
+            box-shadow: 0 8px 16px rgba(2, 6, 23, 0.3);
+        }
+
+        body.theme-dark .ov-quote-meta {
+            color: #93C5FD;
+        }
+
+        body.theme-dark .ov-quote-body {
+            color: #E2E8F0;
         }
 
         </style>
@@ -2618,6 +2661,7 @@ _OVERVIEW_INSIGHTS_COLUMN_ALIASES = {
     "title": ["title", "insight_title"],
     "year": ["year"],
     "quarter": ["quarter", "qtr"],
+    "frequency": ["frequency", "granularity", "period_type"],
     "comment": ["comment", "overview_comment", "insight", "body", "text"],
     "chart_key": ["chart_key", "chart", "chart_id"],
     "is_active": ["is_active", "active", "enabled"],
@@ -2627,6 +2671,7 @@ _OVERVIEW_CHARTS_COLUMN_ALIASES = {
     "chart_key": ["chart_key", "chart", "chart_id"],
     "year": ["year"],
     "quarter": ["quarter", "qtr"],
+    "frequency": ["frequency", "granularity", "period_type"],
     "title": ["title", "section_title", "chart_title"],
     "pre_comment": ["pre_comment", "comment_before", "comment_above", "overview_comment"],
     "post_comment": ["post_comment", "comment_after", "comment_below", "chart_comment"],
@@ -2697,7 +2742,10 @@ def _pick_rows_for_period(df: pd.DataFrame, selected_year: int | None, selected_
     scoped = df.copy()
     scoped["_year_int"] = pd.to_numeric(scoped.get("year"), errors="coerce")
     scoped["_quarter_norm"] = scoped.get("quarter", pd.Series(dtype=str)).apply(_normalize_quarter_label)
+    scoped["_quarter_num"] = scoped["_quarter_norm"].apply(_parse_quarter_number).fillna(0).astype(int)
+    scoped["_frequency_norm"] = scoped.get("frequency", pd.Series(dtype=str)).astype(str).str.strip().str.lower()
     quarter_norm = _normalize_quarter_label(selected_quarter)
+    quarter_num = _parse_quarter_number(quarter_norm) or 0
 
     if selected_year is not None:
         year_exact = scoped[scoped["_year_int"] == int(selected_year)].copy()
@@ -2705,11 +2753,36 @@ def _pick_rows_for_period(df: pd.DataFrame, selected_year: int | None, selected_
             exact = year_exact[year_exact["_quarter_norm"] == quarter_norm].copy()
             if not exact.empty:
                 return exact, f"{int(selected_year)}-{quarter_norm}"
-            year_fallback = year_exact[year_exact["_quarter_norm"] == ""].copy()
+
+            # Allow yearly rows to work regardless of selected quarter.
+            year_fallback = year_exact[
+                (year_exact["_quarter_norm"] == "")
+                | (year_exact["_frequency_norm"].isin({"yearly", "annual", "year"}))
+            ].copy()
             if not year_fallback.empty:
                 return year_fallback, f"{int(selected_year)} (yearly)"
+
+            # Quarter fallback: use the latest available quarter in the selected year up to selected quarter.
+            quarter_le = year_exact[
+                (year_exact["_quarter_num"] > 0) & (year_exact["_quarter_num"] <= int(quarter_num))
+            ].copy()
+            if not quarter_le.empty:
+                best_q = int(quarter_le["_quarter_num"].max())
+                return quarter_le[quarter_le["_quarter_num"] == best_q].copy(), f"{int(selected_year)}-Q{best_q} (fallback)"
+
+            # Final fallback for the year: latest quarter available.
+            any_quarter = year_exact[year_exact["_quarter_num"] > 0].copy()
+            if not any_quarter.empty:
+                best_q = int(any_quarter["_quarter_num"].max())
+                return any_quarter[any_quarter["_quarter_num"] == best_q].copy(), f"{int(selected_year)}-Q{best_q} (latest)"
         else:
             if not year_exact.empty:
+                yearly = year_exact[
+                    (year_exact["_quarter_norm"] == "")
+                    | (year_exact["_frequency_norm"].isin({"yearly", "annual", "year"}))
+                ].copy()
+                if not yearly.empty:
+                    return yearly, str(int(selected_year))
                 return year_exact, str(int(selected_year))
 
     if quarter_norm:
@@ -2869,7 +2942,7 @@ def _load_overview_insights_sheet(excel_path: str, source_stamp: int = 0) -> pd.
         return pd.DataFrame()
     df = _rename_overview_columns(raw, _OVERVIEW_INSIGHTS_COLUMN_ALIASES)
 
-    required = ["insight_id", "sort_order", "category", "title", "year", "quarter", "comment", "chart_key", "is_active"]
+    required = ["insight_id", "sort_order", "category", "title", "year", "quarter", "frequency", "comment", "chart_key", "is_active"]
     for col in required:
         if col not in df.columns:
             df[col] = ""
@@ -2887,6 +2960,7 @@ def _load_overview_insights_sheet(excel_path: str, source_stamp: int = 0) -> pd.
     df["title"] = df["title"].apply(_clean_overview_text)
     df["comment"] = df["comment"].apply(_clean_overview_text)
     df["chart_key"] = df["chart_key"].apply(_clean_overview_text)
+    df["frequency"] = df["frequency"].astype(str).str.strip().str.lower()
     df["year"] = pd.to_numeric(df["year"], errors="coerce")
     df["quarter"] = df["quarter"].apply(_normalize_quarter_label)
     df = df[df["is_active"].apply(_parse_is_active_flag)].copy()
@@ -2905,7 +2979,7 @@ def _load_overview_charts_sheet(excel_path: str, source_stamp: int = 0) -> pd.Da
         return pd.DataFrame()
     df = _rename_overview_columns(raw, _OVERVIEW_CHARTS_COLUMN_ALIASES)
 
-    required = ["chart_key", "year", "quarter", "title", "pre_comment", "post_comment"]
+    required = ["chart_key", "year", "quarter", "frequency", "title", "pre_comment", "post_comment"]
     for col in required:
         if col not in df.columns:
             df[col] = ""
@@ -2914,6 +2988,7 @@ def _load_overview_charts_sheet(excel_path: str, source_stamp: int = 0) -> pd.Da
     df["title"] = df["title"].apply(_clean_overview_text)
     df["pre_comment"] = df["pre_comment"].apply(_clean_overview_text)
     df["post_comment"] = df["post_comment"].apply(_clean_overview_text)
+    df["frequency"] = df["frequency"].astype(str).str.strip().str.lower()
     df["year"] = pd.to_numeric(df["year"], errors="coerce")
     df = df.dropna(subset=["year"]).copy()
     if df.empty:
@@ -3608,6 +3683,146 @@ def _load_transcript_topic_metrics() -> pd.DataFrame:
     return df
 
 
+_OVERVIEW_ICONIC_QUOTES_COLUMN_ALIASES = {
+    "year": ["year"],
+    "quarter": ["quarter", "qtr"],
+    "company": ["company", "ticker", "service"],
+    "speaker": ["speaker", "speaker_name", "executive", "name"],
+    "role_bucket": ["role_bucket", "role", "speaker_role"],
+    "quote": ["quote", "highlight", "comment", "text", "insight"],
+    "score": ["score", "importance", "rank_score"],
+}
+
+
+def _normalize_role_bucket(value: str) -> str:
+    text = str(value or "").strip()
+    low = text.lower()
+    if "ceo" in low or "chief executive" in low:
+        return "CEO"
+    if "cfo" in low or "chief financial" in low:
+        return "CFO"
+    return text.upper() if text else ""
+
+
+def _normalize_iconic_quotes_df(raw: pd.DataFrame) -> pd.DataFrame:
+    if raw is None or raw.empty:
+        return pd.DataFrame()
+    df = raw.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    df = _rename_overview_columns(df, _OVERVIEW_ICONIC_QUOTES_COLUMN_ALIASES)
+    required = ["year", "quarter", "company", "speaker", "role_bucket", "quote", "score"]
+    for col in required:
+        if col not in df.columns:
+            df[col] = "" if col in {"quarter", "company", "speaker", "role_bucket", "quote"} else np.nan
+
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    df["quarter"] = df["quarter"].apply(_normalize_quarter_label)
+    df["company"] = df["company"].apply(_clean_overview_text)
+    df["speaker"] = df["speaker"].apply(_clean_overview_text)
+    df["role_bucket"] = df["role_bucket"].apply(_normalize_role_bucket)
+    df["quote"] = df["quote"].apply(_clean_overview_text)
+    df["score"] = pd.to_numeric(df["score"], errors="coerce")
+    df = df.dropna(subset=["year"]).copy()
+    if df.empty:
+        return pd.DataFrame()
+    df["year"] = df["year"].astype(int)
+    df = df[(df["company"] != "") & (df["quote"] != "")].copy()
+    if df.empty:
+        return pd.DataFrame()
+    return df.sort_values(["year", "quarter", "score"], ascending=[False, False, False]).reset_index(drop=True)
+
+
+@st.cache_data(show_spinner=False)
+def _load_overview_iconic_quotes_sheet(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    raw, _sheet_used = _read_excel_sheet_flexible(
+        excel_path=excel_path,
+        source_stamp=source_stamp,
+        preferred="Overview_Iconic_Quotes",
+        aliases=[
+            "Overview Iconic Quotes",
+            "Earnings_Call_Highlights",
+            "Overview_CEO_Highlights",
+            "CEO_CFO_Highlights",
+        ],
+        contains_any=["iconic", "highlight", "ceo", "cfo", "quote"],
+    )
+    if raw.empty:
+        return pd.DataFrame()
+    return _normalize_iconic_quotes_df(raw)
+
+
+@st.cache_data(show_spinner=False)
+def _load_overview_iconic_quotes_csv() -> pd.DataFrame:
+    repo_root = Path(__file__).resolve().parents[2]
+    candidates = [
+        repo_root / "earningscall_transcripts" / "overview_iconic_quotes.csv",
+        repo_root / "earningscall_transcripts" / "transcript_highlights.csv",
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            raw = pd.read_csv(path)
+        except Exception:
+            continue
+        df = _normalize_iconic_quotes_df(raw)
+        if not df.empty:
+            return df
+    return pd.DataFrame()
+
+
+def _render_iconic_quote_section(
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    selected_quarter: str,
+) -> bool:
+    excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    sheet_df = _load_overview_iconic_quotes_sheet(excel_path, source_stamp) if excel_path else pd.DataFrame()
+    csv_df = _load_overview_iconic_quotes_csv()
+    quotes_df = sheet_df if not sheet_df.empty else csv_df
+    if quotes_df.empty:
+        return False
+
+    scoped_df, selected_period = _pick_rows_for_period(quotes_df, selected_year, selected_quarter)
+    if scoped_df.empty:
+        return False
+    scoped_df = scoped_df.sort_values(["score", "company", "speaker"], ascending=[False, True, True]).head(12)
+    if scoped_df.empty:
+        return False
+
+    st.markdown("#### Iconic CEO/CFO Commentary")
+    source_label = "Overview_Iconic_Quotes (sheet)" if not sheet_df.empty else "earningscall_transcripts/overview_iconic_quotes.csv"
+    st.caption(f"Source: {source_label} · Period: {selected_period}")
+
+    cards = []
+    for row in scoped_df.itertuples(index=False):
+        company = html.escape(str(getattr(row, "company", "") or "").strip())
+        speaker = html.escape(str(getattr(row, "speaker", "") or "").strip() or "Unknown")
+        role = html.escape(str(getattr(row, "role_bucket", "") or "").strip())
+        quote = html.escape(str(getattr(row, "quote", "") or "").strip())
+        score = getattr(row, "score", None)
+        score_text = ""
+        try:
+            if score is not None and pd.notna(score):
+                score_text = f" · Score {float(score):.2f}"
+        except Exception:
+            score_text = ""
+        meta = f"{company} · {role} · {speaker}{score_text}" if role else f"{company} · {speaker}{score_text}"
+        cards.append(
+            f"""
+            <div class="ov-quote-card">
+                <div class="ov-quote-meta">{meta}</div>
+                <p class="ov-quote-body">"{quote}"</p>
+            </div>
+            """
+        )
+    st.markdown(_html_block(f"<div class='ov-quote-grid'>{''.join(cards)}</div>"), unsafe_allow_html=True)
+    return True
+
+
 def _apply_year_window(df: pd.DataFrame, start_year: int, end_year: int, year_col: str = "Year") -> pd.DataFrame:
     if df is None:
         return pd.DataFrame(columns=[year_col])
@@ -4288,6 +4503,13 @@ def _render_excel_overview_layers(
         st.info(
             "No transcript topic metrics found. Run `python3 scripts/extract_transcript_topics.py` "
             "after adding new quarter transcript files."
+        )
+    iconic_quotes_rendered = _render_iconic_quote_section(data_processor, selected_year, selected_quarter)
+    if not iconic_quotes_rendered:
+        st.caption(
+            "No iconic CEO/CFO quote rows found for this period. Run "
+            "`python3 scripts/extract_transcript_highlights_from_sheet.py` "
+            "or populate `Overview_Iconic_Quotes` in the workbook."
         )
 
 

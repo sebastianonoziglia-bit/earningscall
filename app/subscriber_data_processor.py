@@ -1,15 +1,21 @@
 import os
 import re
+import logging
 from functools import lru_cache
 
 import pandas as pd
 from utils.workbook_source import resolve_financial_data_xlsx
 
+logger = logging.getLogger(__name__)
+
 
 @lru_cache(maxsize=4)
 def _read_subscriber_sheet(path, source_stamp):
     # source_stamp is part of the cache key so Excel updates are picked up automatically.
-    return pd.read_excel(path, sheet_name="Company_subscribers_values")
+    try:
+        return pd.read_excel(path, sheet_name="Company_subscribers_values")
+    except Exception:
+        return pd.DataFrame()
 
 
 def _normalize_service_name(service: str) -> str:
@@ -154,6 +160,22 @@ class SubscriberDataProcessor:
             return self._empty_df()
         source_stamp = self.source_stamp if self.source_stamp is not None else 0
         df = _read_subscriber_sheet(self.data_path, source_stamp).copy()
+        if df is None or df.empty:
+            # Retry once with a refreshed workbook path when Google export cache was corrupt/incomplete.
+            try:
+                fresh_path = self._resolve_excel_path()
+                fresh_stamp = self._get_source_stamp(fresh_path)
+                if fresh_path and fresh_path != self.data_path:
+                    self.data_path = fresh_path
+                    self.source_stamp = fresh_stamp
+                _read_subscriber_sheet.cache_clear()
+                retry_stamp = self.source_stamp if self.source_stamp is not None else 0
+                df = _read_subscriber_sheet(self.data_path, retry_stamp).copy() if self.data_path else pd.DataFrame()
+            except Exception as exc:
+                logger.warning("Subscriber sheet retry failed: %s", exc)
+                df = pd.DataFrame()
+        if df is None or df.empty:
+            return self._empty_df()
         raw_cols = [str(col).strip() for col in df.columns]
         norm_cols = [_normalize_column_name(col) for col in raw_cols]
         df.columns = norm_cols
