@@ -106,15 +106,36 @@ def _download_google_sheet_xlsx(sheet_id: str, refresh_seconds: int = 60) -> Opt
         return str(cache_file) if _is_valid_xlsx_file(cache_file) else None
 
 
+def _resolve_local_xlsx(local_candidates: Iterable[str] | None = None) -> Optional[str]:
+    env_xlsx = os.getenv("FINANCIAL_DATA_XLSX")
+    if env_xlsx and os.path.exists(env_xlsx):
+        return os.path.abspath(env_xlsx)
+
+    for path in list(local_candidates or []):
+        if path and os.path.exists(path):
+            return os.path.abspath(path)
+
+    return None
+
+
 def resolve_financial_data_xlsx(local_candidates: Iterable[str] | None = None) -> Optional[str]:
     """Resolve the primary workbook path.
 
     Priority:
-    1) Google Sheet export (default behavior).
-    2) Local file only when explicitly requested (`FINANCIAL_DATA_SOURCE=local`).
+    1) Local file when `FINANCIAL_DATA_SOURCE` is `local`/`file`/`xlsx` (default).
+    2) Google Sheet export when explicitly requested (`FINANCIAL_DATA_SOURCE=google`).
+    3) Safe local fallback if Google export is unavailable.
     """
-    source_pref = str(os.getenv("FINANCIAL_DATA_SOURCE", "google")).strip().lower()
-    if source_pref not in {"local", "file", "xlsx"}:
+    source_pref = str(os.getenv("FINANCIAL_DATA_SOURCE", "local")).strip().lower()
+    if source_pref in {"local", "file", "xlsx"}:
+        return _resolve_local_xlsx(local_candidates)
+
+    if source_pref not in {"google", "gsheet", "sheet"}:
+        # Auto mode: prefer local, then try Google, then local again.
+        local = _resolve_local_xlsx(local_candidates)
+        if local:
+            return local
+
         sheet_ref = (
             os.getenv("FINANCIAL_DATA_GSHEET_URL")
             or os.getenv("FINANCIAL_DATA_GSHEET_ID")
@@ -126,17 +147,22 @@ def resolve_financial_data_xlsx(local_candidates: Iterable[str] | None = None) -
             downloaded = _download_google_sheet_xlsx(sheet_id, refresh_seconds=refresh_seconds)
             if downloaded and os.path.exists(downloaded):
                 return os.path.abspath(downloaded)
-        return None
+        return _resolve_local_xlsx(local_candidates)
 
-    env_xlsx = os.getenv("FINANCIAL_DATA_XLSX")
-    if env_xlsx and os.path.exists(env_xlsx):
-        return os.path.abspath(env_xlsx)
+    sheet_ref = (
+        os.getenv("FINANCIAL_DATA_GSHEET_URL")
+        or os.getenv("FINANCIAL_DATA_GSHEET_ID")
+        or DEFAULT_GOOGLE_SHEET_URL
+    )
+    sheet_id = extract_google_sheet_id(sheet_ref)
+    if sheet_id:
+        refresh_seconds = int(os.getenv("FINANCIAL_DATA_GSHEET_REFRESH_SECONDS", "60"))
+        downloaded = _download_google_sheet_xlsx(sheet_id, refresh_seconds=refresh_seconds)
+        if downloaded and os.path.exists(downloaded):
+            return os.path.abspath(downloaded)
 
-    for path in list(local_candidates or []):
-        if path and os.path.exists(path):
-            return os.path.abspath(path)
-
-    return None
+    # Critical fallback for private/unavailable sheets: keep app functional from local workbook.
+    return _resolve_local_xlsx(local_candidates)
 
 
 def get_workbook_source_stamp(path: str | None) -> int:
