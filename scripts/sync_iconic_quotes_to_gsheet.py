@@ -217,20 +217,62 @@ def run_transcript_upload(repo_root: Path, sheet_id: str, transcript_root: str, 
         "--tab",
         transcript_tab,
     ]
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "Transcript upload to Google Sheets failed. Ensure "
+            "`secrets/google-service-account.json` exists (or set `GOOGLE_SERVICE_ACCOUNT_FILE`) "
+            "and that the sheet is shared with that service-account email."
+        ) from exc
 
 
-def run_highlight_extract(repo_root: Path, sheet_id: str) -> None:
-    env = os.environ.copy()
-    env["FINANCIAL_DATA_SOURCE"] = "google"
-    env["FINANCIAL_DATA_GSHEET_ID"] = sheet_id
-    # Force a fresh export read after writes so extraction sees latest tabs/rows.
-    env["FINANCIAL_DATA_GSHEET_REFRESH_SECONDS"] = "0"
-    cmd = [
-        "python3",
-        str(repo_root / "scripts" / "extract_transcript_highlights_from_sheet.py"),
-    ]
-    subprocess.run(cmd, check=True, env=env)
+def extract_highlights_from_sheet(
+    repo_root: Path,
+    sheet_id: str,
+    preferred_transcript_tab: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, str]:
+    scripts_dir = repo_root / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    from extract_transcript_highlights_from_sheet import (  # noqa: WPS433
+        build_highlights,
+        build_iconic_quotes,
+        find_transcript_sheet,
+        load_transcript_rows,
+        resolve_workbook_path,
+    )
+
+    env_updates = {
+        "FINANCIAL_DATA_SOURCE": "google",
+        "FINANCIAL_DATA_GSHEET_ID": sheet_id,
+        # Force refresh so extraction sees newly uploaded transcript rows.
+        "FINANCIAL_DATA_GSHEET_REFRESH_SECONDS": "0",
+    }
+    previous = {key: os.environ.get(key) for key in env_updates}
+    try:
+        os.environ.update(env_updates)
+        workbook_path = resolve_workbook_path(repo_root)
+        if not workbook_path:
+            raise RuntimeError("Unable to resolve workbook from Google Sheets.")
+        sheet_name = find_transcript_sheet(workbook_path, preferred_transcript_tab.strip() or None)
+        if not sheet_name:
+            raise RuntimeError(
+                "No transcript sheet found in workbook. Expected something like `Earnings_Call_Transcripts`."
+            )
+        rows_df = load_transcript_rows(workbook_path, sheet_name)
+        if rows_df.empty:
+            raise RuntimeError(f"Transcript sheet `{sheet_name}` has no usable transcript rows.")
+        highlights_df = build_highlights(rows_df)
+        iconic_df = build_iconic_quotes(highlights_df)
+        return iconic_df, highlights_df, sheet_name
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def main() -> None:
@@ -243,24 +285,32 @@ def main() -> None:
 
     if args.extract_first:
         try:
-            run_highlight_extract(repo_root, sheet_id)
-        except subprocess.CalledProcessError:
+            iconic_df, highlights_df, transcript_sheet = extract_highlights_from_sheet(
+                repo_root,
+                sheet_id,
+                args.transcript_tab,
+            )
+        except Exception:
             if args.upload_transcripts_first:
                 raise
-            # Recovery path: missing transcript sheet rows.
+            # Recovery path: if transcript rows are not in the sheet yet, upload then retry.
             run_transcript_upload(repo_root, sheet_id, args.transcript_root, args.transcript_tab)
-            run_highlight_extract(repo_root, sheet_id)
+            iconic_df, highlights_df, transcript_sheet = extract_highlights_from_sheet(
+                repo_root,
+                sheet_id,
+                args.transcript_tab,
+            )
+        print(f"Extracted from transcript tab: {transcript_sheet}")
+    else:
+        iconic_path = (repo_root / args.iconic_csv).resolve()
+        highlights_path = (repo_root / args.highlights_csv).resolve()
+        if not iconic_path.exists():
+            raise SystemExit(f"Iconic quotes CSV not found: {iconic_path}")
+        if not highlights_path.exists():
+            raise SystemExit(f"Highlights CSV not found: {highlights_path}")
+        iconic_df = pd.read_csv(iconic_path)
+        highlights_df = pd.read_csv(highlights_path)
 
-    iconic_path = (repo_root / args.iconic_csv).resolve()
-    highlights_path = (repo_root / args.highlights_csv).resolve()
-
-    if not iconic_path.exists():
-        raise SystemExit(f"Iconic quotes CSV not found: {iconic_path}")
-    if not highlights_path.exists():
-        raise SystemExit(f"Highlights CSV not found: {highlights_path}")
-
-    iconic_df = pd.read_csv(iconic_path)
-    highlights_df = pd.read_csv(highlights_path)
     iconic_rows = to_iconic_rows(iconic_df)
     highlights_rows = to_highlight_rows(highlights_df)
 
@@ -294,4 +344,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        raise SystemExit(str(exc))
