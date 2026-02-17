@@ -57,6 +57,20 @@ st.markdown(
             color: #E2E8F0 !important;
         }
 
+        div[data-testid="stCaptionContainer"],
+        div[data-testid="stCaptionContainer"] p,
+        .stCaption {
+            color: #475569 !important;
+            opacity: 1 !important;
+        }
+
+        body.theme-dark div[data-testid="stCaptionContainer"],
+        body.theme-dark div[data-testid="stCaptionContainer"] p,
+        body.theme-dark .stCaption {
+            color: #CBD5E1 !important;
+            opacity: 1 !important;
+        }
+
         body.theme-dark h1,
         body.theme-dark h2,
         body.theme-dark h3,
@@ -354,6 +368,33 @@ st.markdown(
             margin: 0;
         }
 
+        .ov-insight-stat {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #1D4ED8;
+            background: rgba(59, 130, 246, 0.12);
+            padding: 2px 8px;
+            border-radius: 6px;
+            margin-left: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .ov-chart-comment {
+            margin: 0 0 10px 0;
+            font-size: 0.95rem;
+            line-height: 1.62;
+            color: #334155;
+        }
+
+        .ov-chart-comment-post {
+            margin: 10px 0 0 0;
+            font-size: 0.92rem;
+            line-height: 1.58;
+            color: #475569;
+        }
+
         .ov-macro-chart-wrap {
             border: 1px solid rgba(15, 23, 42, 0.12);
             border-radius: 14px;
@@ -428,6 +469,19 @@ st.markdown(
 
         body.theme-dark .ov-insight-body {
             color: #CBD5E1;
+        }
+
+        body.theme-dark .ov-insight-stat {
+            color: #BFDBFE;
+            background: rgba(59, 130, 246, 0.24);
+        }
+
+        body.theme-dark .ov-chart-comment {
+            color: #CBD5E1;
+        }
+
+        body.theme-dark .ov-chart-comment-post {
+            color: #94A3B8;
         }
 
         body.theme-dark .ov-macro-chart-wrap {
@@ -1128,7 +1182,8 @@ def render_standard_overview_comment(
         selected_chart_key=effective_chart_key or None,
     )
     if pre_comment:
-        st.caption(pre_comment)
+        pre_html = html.escape(pre_comment).replace("\n", "<br>")
+        st.markdown(f"<p class='ov-chart-comment'>{pre_html}</p>", unsafe_allow_html=True)
 
 
 def render_standard_overview_post_comment(
@@ -1151,7 +1206,8 @@ def render_standard_overview_post_comment(
         selected_chart_key=effective_chart_key or None,
     )
     if post_comment:
-        st.caption(post_comment)
+        post_html = html.escape(post_comment).replace("\n", "<br>")
+        st.markdown(f"<p class='ov-chart-comment-post'>{post_html}</p>", unsafe_allow_html=True)
 
 
 # Helper functions
@@ -3880,6 +3936,7 @@ def _render_excel_overview_insights(
 
     st.markdown("### Insights by Category")
     st.caption(f"Source: Overview_Insights · Period: {selected_period} · {len(scoped_df)} insights")
+    company_logos = load_company_logos()
 
     categories_present = scoped_df["category"].dropna().astype(str).str.strip().unique().tolist()
     ordered_categories = [
@@ -3899,32 +3956,34 @@ def _render_excel_overview_insights(
             stat = _clean_overview_text(row.get("stat"))
             stat_label = _clean_overview_text(row.get("stat_label"))
             comment = _clean_insight_comment_text(row.get("overview_comment") or row.get("comment"))
+            companies = _extract_insight_companies(title, comment)
+            logos_html = _inline_insight_company_logos_html(companies, company_logos, size_px=20)
 
             stat_badge = ""
             if stat:
                 label_text = f" · {html.escape(stat_label)}" if stat_label else ""
-                stat_badge = (
-                    "<span style='font-size:0.8rem;font-weight:700;color:#3B82F6;"
-                    "background:rgba(59,130,246,0.12);padding:2px 8px;border-radius:6px;margin-left:8px'>"
-                    f"{html.escape(stat)}{label_text}</span>"
-                )
+                stat_badge = f"<span class='ov-insight-stat'>{html.escape(stat)}{label_text}</span>"
+            comment_html = html.escape(comment).replace("\n", "<br>")
 
             bullets_html += (
-                "<div style='margin-bottom:18px;'>"
-                "<div style='font-size:0.85rem;font-weight:700;color:#F8FAFC;margin-bottom:5px;line-height:1.4;'>"
-                f"{html.escape(code)} — {html.escape(title)}{stat_badge}</div>"
-                "<div style='font-size:0.875rem;color:#CBD5E1;line-height:1.65;'>"
-                f"{html.escape(comment)}</div>"
+                "<div class='ov-insight-item'>"
+                "<div class='ov-insight-head-row'>"
+                "<div class='ov-insight-head'>"
+                f"{html.escape(code)} — {html.escape(title)}{stat_badge}"
+                "</div>"
+                f"{logos_html}"
+                "</div>"
+                "<p class='ov-insight-body'>"
+                f"{comment_html}"
+                "</p>"
                 "</div>"
             )
 
         html_parts.append(
-            "<div style='margin-bottom:28px;'>"
-            "<div style='font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;"
-            "color:#94A3B8;border-bottom:1px solid rgba(148,163,184,0.2);"
-            "padding-bottom:6px;margin-bottom:14px;'>"
-            f"{html.escape(category)}</div>"
-            f"{bullets_html}</div>"
+            "<div class='ov-insight-category-card'>"
+            f"<div class='ov-insight-category-title'>{html.escape(category)}</div>"
+            f"{bullets_html}"
+            "</div>"
         )
 
     if html_parts:
@@ -4142,22 +4201,18 @@ def _overview_legend_style() -> dict:
     return dict(
         orientation="h",
         yanchor="bottom",
-        y=1.03,
+        y=1.02,
         x=0.0,
         xanchor="left",
-        bgcolor="rgba(15,23,42,0.86)" if dark_mode else "rgba(248,250,252,0.96)",
+        bgcolor="rgba(15,23,42,0.70)" if dark_mode else "rgba(248,250,252,0.90)",
         bordercolor="rgba(148,163,184,0.35)",
         borderwidth=1,
-        font=dict(size=11),
+        font=dict(size=10),
     )
 
 
 def _overview_chart_margin(left: int = 30, right: int = 20, bottom: int = 88, top: int = 94) -> dict:
-    # Charts using legends reserve extra top margin so legend rows never overlap the data area.
-    top_value = int(top)
-    if top_value >= 80:
-        top_value = max(top_value, 128)
-    return dict(l=left, r=right, t=top_value, b=max(int(bottom), 88))
+    return dict(l=int(left), r=max(int(right), 64), t=max(int(top), 78), b=max(int(bottom), 72))
 
 
 def _df_has_cols(df: pd.DataFrame | None, cols: list[str]) -> bool:
@@ -4172,7 +4227,9 @@ def _render_macro_bridge_charts(
 ) -> bool:
     excel_path = getattr(data_processor, "data_path", "")
     source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    st.markdown("### Macro Regime Bridge Charts")
     if not excel_path:
+        st.info("Workbook source is not available, so macro regime charts cannot load yet.")
         return False
 
     m2_df = _load_m2_yearly_df(excel_path, source_stamp)
@@ -4191,6 +4248,8 @@ def _render_macro_bridge_charts(
                 vals = pd.to_numeric(df[col], errors="coerce").dropna().astype(int).tolist()
                 year_candidates.extend(vals)
     if not year_candidates:
+        st.caption("Auto-rendered from workbook sheets.")
+        st.info("No compatible yearly data was detected for Macro Regime Bridge Charts.")
         return False
 
     min_year = int(min(year_candidates))
@@ -4208,7 +4267,6 @@ def _render_macro_bridge_charts(
         else pd.DataFrame()
     )
 
-    st.markdown("### Macro Regime Bridge Charts")
     st.caption(f"Auto-rendered from workbook sheets ({start_year}-{end_year}).")
     st.markdown("<div class='ov-macro-chart-wrap'>", unsafe_allow_html=True)
 
@@ -4810,9 +4868,7 @@ def _render_excel_overview_layers(
             "Expanded macro cross-sheet charts will auto-populate when matching rate/GDP/labor/currency fields "
             "exist in your Google Sheets tabs (name does not need to follow `Macro_*`)."
         )
-    macro_chart_rendered = _render_macro_bridge_charts(data_processor, selected_year, selected_quarter, plotly_config)
-    if not macro_chart_rendered:
-        st.info("Macro bridge charts are unavailable because required source sheets are missing.")
+    _render_macro_bridge_charts(data_processor, selected_year, selected_quarter, plotly_config)
     topic_chart_rendered = _render_transcript_topic_growth_chart(selected_year, selected_quarter, plotly_config)
     if not topic_chart_rendered:
         st.info(
@@ -4826,6 +4882,108 @@ def _render_excel_overview_layers(
             "`python3 scripts/sync_iconic_quotes_to_gsheet.py --upload-transcripts-first --extract-first` "
             "or populate `Overview_Iconic_Quotes` in the workbook."
         )
+
+
+def _build_overview_export_payload(
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    selected_quarter: str,
+) -> dict:
+    excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    payload: dict = {
+        "generated_at_utc": datetime.utcnow().isoformat() + "Z",
+        "selected_year": int(selected_year),
+        "selected_quarter": str(selected_quarter),
+        "source_path": str(excel_path or ""),
+    }
+    if not excel_path:
+        return payload
+
+    macro_df = _load_overview_macro_sheet(excel_path, source_stamp)
+    insights_df = _load_overview_insights_sheet(excel_path, source_stamp)
+    charts_df = _load_overview_charts_sheet(excel_path, source_stamp)
+
+    macro_scoped, macro_period = _pick_rows_for_period(macro_df, selected_year, selected_quarter)
+    insights_scoped, insights_period = _pick_rows_for_period(insights_df, selected_year, selected_quarter)
+    charts_scoped, charts_period = _pick_rows_for_period(charts_df, selected_year, selected_quarter)
+
+    if not insights_scoped.empty and "is_active" in insights_scoped.columns:
+        insights_scoped = insights_scoped[insights_scoped["is_active"].fillna(0).astype(int) == 1].copy()
+
+    payload["overview_macro_period"] = macro_period
+    payload["overview_macro_rows"] = macro_scoped.fillna("").to_dict(orient="records") if not macro_scoped.empty else []
+    payload["overview_insights_period"] = insights_period
+    payload["overview_insights_rows"] = (
+        insights_scoped.fillna("").to_dict(orient="records") if not insights_scoped.empty else []
+    )
+    payload["overview_charts_period"] = charts_period
+    payload["overview_chart_comment_rows"] = (
+        charts_scoped.fillna("").to_dict(orient="records") if not charts_scoped.empty else []
+    )
+    return payload
+
+
+def _render_overview_download_section(
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    selected_quarter: str,
+) -> None:
+    st.markdown("### Export Overview")
+    st.caption("Download the currently filtered overview as a full-page HTML snapshot or as structured JSON data.")
+
+    payload = _build_overview_export_payload(data_processor, selected_year, selected_quarter)
+    payload_bytes = json.dumps(payload, ensure_ascii=False, indent=2, default=str).encode("utf-8")
+    st.download_button(
+        "Download Current View Data (JSON)",
+        data=payload_bytes,
+        file_name=f"overview_snapshot_{int(selected_year)}_{str(selected_quarter).lower()}.json",
+        mime="application/json",
+        key=f"overview_export_json_{int(selected_year)}_{str(selected_quarter)}",
+    )
+
+    button_id = f"ov-download-html-{int(selected_year)}-{str(selected_quarter).lower()}".replace(" ", "-")
+    components.html(
+        _html_block(
+            f"""
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button id="{button_id}" style="
+                background:#1D4ED8;color:#fff;border:none;border-radius:8px;
+                padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;">
+                Download Current Page (HTML Snapshot)
+              </button>
+              <span style="font-size:12px;color:#64748B;">
+                Includes all content currently rendered for Year {int(selected_year)} · {html.escape(str(selected_quarter))}
+              </span>
+            </div>
+            <script>
+            (function() {{
+              const btn = document.getElementById("{button_id}");
+              if (!btn || btn.dataset.bound === "1") return;
+              btn.dataset.bound = "1";
+              btn.addEventListener("click", function() {{
+                try {{
+                  const parentDoc = window.parent.document;
+                  const htmlText = "<!doctype html>\\n" + parentDoc.documentElement.outerHTML;
+                  const blob = new Blob([htmlText], {{ type: "text/html;charset=utf-8" }});
+                  const url = URL.createObjectURL(blob);
+                  const a = parentDoc.createElement("a");
+                  a.href = url;
+                  a.download = "overview_snapshot_{int(selected_year)}_{str(selected_quarter).lower()}.html";
+                  parentDoc.body.appendChild(a);
+                  a.click();
+                  parentDoc.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                }} catch (err) {{
+                  console.error("Overview HTML export failed", err);
+                }}
+              }});
+            }})();
+            </script>
+            """
+        ),
+        height=64,
+    )
 
 
 def _render_quarterly_intelligence_briefing(
@@ -5109,13 +5267,18 @@ def _render_quarterly_intelligence_briefing(
 
 # Configure Plotly
 plotly_config = {
-    'displayModeBar': True,
+    'displayModeBar': 'hover',
     'modeBarButtonsToRemove': [
-        'zoom', 'pan', 'select', 'lasso2d', 'zoomIn', 'zoomOut',
-        'autoScale', 'resetScale'
+        'zoom2d', 'pan2d', 'select2d', 'lasso2d', 'zoomIn2d', 'zoomOut2d',
+        'autoScale2d', 'resetScale2d', 'hoverClosestCartesian', 'hoverCompareCartesian',
+        'toggleSpikelines', 'resetGeo', 'zoomInGeo', 'zoomOutGeo'
     ],
-    'modeBarButtonsToAdd': ['fullscreen'],
-    'displaylogo': False
+    'displaylogo': False,
+    'toImageButtonOptions': {
+        'format': 'png',
+        'filename': 'overview_chart',
+        'scale': 4
+    }
 }
 
 begin_snap_section("overview_summary")
@@ -5709,10 +5872,22 @@ if not country_ad_df.empty:
                     )
         map_config = {
             **plotly_config,
-            "displayModeBar": False,
+            "displayModeBar": "hover",
             "scrollZoom": False,
             "doubleClick": False,
-            "modeBarButtonsToRemove": ["zoomInGeo", "zoomOutGeo", "resetGeo"],
+            "modeBarButtonsToRemove": [
+                "zoomInGeo",
+                "zoomOutGeo",
+                "resetGeo",
+                "select2d",
+                "lasso2d",
+                "pan2d",
+            ],
+            "toImageButtonOptions": {
+                "format": "png",
+                "filename": "overview_map",
+                "scale": 4,
+            },
         }
         map_html = pio.to_html(
             map_fig,
@@ -8190,6 +8365,9 @@ st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
 begin_snap_section("executive_summary")
 render_executive_summary_section()
 end_snap_section()
+
+st.markdown("<div style='height: 18px;'></div>", unsafe_allow_html=True)
+_render_overview_download_section(data_processor, selected_year, selected_quarter)
 
 # Add spacing before footer
 st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
