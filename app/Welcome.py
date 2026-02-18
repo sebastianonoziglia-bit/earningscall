@@ -1,18 +1,23 @@
 # Set page config must be the first Streamlit command
 import streamlit as st
+import os
+from datetime import datetime
 st.set_page_config(page_title="Welcome", page_icon="📊", layout="wide")
 
 from utils.global_fonts import apply_global_fonts
 from utils.transcript_startup_sync import sync_local_transcripts_to_workbook
 apply_global_fonts()
 
-# Startup sync: append only new local transcript files into local workbook index.
-if not st.session_state.get("_startup_transcript_sync_done", False):
-    st.session_state["_startup_transcript_sync_done"] = True
+# One-time sync per container startup (not per session)
+SYNC_FLAG_FILE = "/tmp/transcript_sync_done"
+
+if not os.path.exists(SYNC_FLAG_FILE):
     try:
         sync_local_transcripts_to_workbook()
-    except Exception:
-        pass
+        with open(SYNC_FLAG_FILE, "w") as f:
+            f.write(str(datetime.now()))
+    except Exception as e:
+        st.warning(f"Transcript sync failed: {e}")
 
 # Handle logo navigation via query params
 query_params = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
@@ -90,12 +95,10 @@ section[data-testid="stSidebar"] a[href*="Genie"]::after {
 
 # Import other modules after setting page config
 import logging
-import os
 import base64
 import textwrap
 import io
 import mimetypes
-from datetime import datetime
 from urllib.parse import quote
 from urllib import request as urllib_request
 from PIL import Image
@@ -106,6 +109,20 @@ from utils.logos import load_company_logos
 
 # Global header (language + theme toggle)
 display_header(enable_dom_patch=False)
+
+with st.sidebar:
+    st.markdown("---")
+    if st.button("🔄 Sync Transcripts", help="Manually sync transcript data"):
+        if os.path.exists(SYNC_FLAG_FILE):
+            os.remove(SYNC_FLAG_FILE)
+        with st.spinner("Syncing transcripts..."):
+            try:
+                sync_local_transcripts_to_workbook()
+                with open(SYNC_FLAG_FILE, "w") as f:
+                    f.write(str(datetime.now()))
+                st.success("Sync complete!")
+            except Exception as e:
+                st.error(f"Sync failed: {e}")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -583,10 +600,8 @@ render_hero(logos_html=logos_html, show_spinner=False)
 # Dashboard Pages Section (directly under hero)
 st.markdown("""
 <style>
-/* Hide sidebar nav on Welcome */
-section[data-testid="stSidebar"],
-[data-testid="stSidebarNav"],
-[data-testid="stSidebarCollapsedControl"] {
+/* Hide sidebar navigation links on Welcome, but keep sidebar for transcript sync */
+[data-testid="stSidebarNav"] {
     display: none !important;
 }
 
