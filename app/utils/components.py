@@ -173,30 +173,60 @@ def render_ai_assistant(location="sidebar", width=None, height=None, current_pag
         current_page: Current page name for context
     """
     try:
-        # Use container based on location
-        if location == "sidebar":
-            container = st.sidebar
-        else:
-            # For main content area, create a container
-            container = st
-        
-        # Add separator and header
+        container = st.sidebar if location == "sidebar" else st
+        page_name = str(current_page or st.session_state.get("current_page", "Overview")).strip() or "Overview"
+        section_name = str(
+            st.session_state.get("overview_current_section")
+            or st.session_state.get("global_time_context", {}).get("page")
+            or page_name
+        ).strip()
+        year_value = int(st.session_state.get("selected_year", st.session_state.get("earnings_selected_year", 2024)))
+        quarter_value = str(
+            st.session_state.get("selected_quarter", st.session_state.get("earnings_selected_quarter", "Q4"))
+        ).strip()
+
+        repo_root = Path(__file__).resolve().parents[2]
+        db_path = repo_root / "earningscall_intelligence.db"
+
         container.markdown("---")
-        container.header("AI Assistant (OpenAI)")
-        
-        # Display the beta preview message with design
-        container.markdown("""
-        <div style="background-color: #e8f0fe; padding: 15px; border-radius: 5px; border-left: 4px solid #4285F4; margin-bottom: 15px;">
-            <h4 style="margin-top: 0; color: #1A73E8;">🔍 Disabled in Beta</h4>
-            <p>This is just a preview of the AI Assistant feature.</p>
-            <p>Please check back later when this feature is re-enabled.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Clear any existing chat history
-        if 'chat_history' in st.session_state:
-            st.session_state.chat_history = []
-    
+        with container.expander("🤖 Earningscall Intelligence Assistant", expanded=False):
+            container.caption(f"Context: {section_name} · {year_value} {quarter_value}")
+            if not db_path.exists():
+                container.info(
+                    "Intelligence DB not found. Run `python3 scripts/sync_all_intelligence.py` "
+                    "to build the transcript/topic/KPI SQL layer."
+                )
+                return
+
+            from utils.ai_assistant import EarningscallAI  # noqa: WPS433
+
+            assistant = EarningscallAI(
+                db_path=str(db_path),
+                current_section=section_name,
+                current_year=year_value,
+                current_quarter=quarter_value,
+            )
+
+            state_key = f"ai_assistant_answer_{location}_{page_name}".replace(" ", "_").lower()
+            question_key = f"ai_assistant_question_{location}_{page_name}".replace(" ", "_").lower()
+            ask_key = f"ai_assistant_ask_{location}_{page_name}".replace(" ", "_").lower()
+
+            container.markdown("**Suggested questions**")
+            for idx, suggestion in enumerate(assistant.get_suggested_questions(section_name)[:4]):
+                if container.button(suggestion, key=f"{state_key}_suggested_{idx}"):
+                    st.session_state[state_key] = assistant.answer(suggestion)
+
+            user_question = container.text_input("Ask your own question", key=question_key)
+            if container.button("Ask", key=ask_key):
+                if user_question.strip():
+                    st.session_state[state_key] = assistant.answer(user_question.strip())
+                else:
+                    st.session_state[state_key] = "Please enter a question first."
+
+            answer = st.session_state.get(state_key, "")
+            if answer:
+                container.markdown(answer)
+
     except Exception as e:
         logger.error(f"Error rendering AI Assistant: {str(e)}")
         if location == "sidebar":

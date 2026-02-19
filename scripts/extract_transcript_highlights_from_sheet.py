@@ -10,6 +10,32 @@ from typing import Iterable
 import pandas as pd
 
 
+HIGHLIGHT_TYPES = {
+    "CEO_Quote": {
+        "speakers": ["CEO", "Chief Executive"],
+        "min_words": 20,
+        "max_words": 100,
+        "topics": ["strategy", "vision", "outlook", "priority"],
+    },
+    "CFO_Financial_Detail": {
+        "speakers": ["CFO", "Chief Financial"],
+        "min_words": 15,
+        "max_words": 80,
+        "contains_numbers": True,
+        "topics": ["revenue", "margin", "guidance", "cost"],
+    },
+    "Strategic_Announcement": {
+        "speakers": ["ANY"],
+        "keywords": ["announce", "launch", "introduce", "partnership", "acquisition"],
+        "min_words": 20,
+        "max_words": 100,
+    },
+}
+
+NUMBER_RE = re.compile(r"\b\d[\d,.]*(?:\.?\d+)?\b|\$\s*\d|\d\s*%", re.IGNORECASE)
+TRANSCRIPT_FILE_RE = re.compile(r"^Q([1-4])\.txt$", re.IGNORECASE)
+
+
 def _norm_col(name: str) -> str:
     return re.sub(r"[^a-z0-9_]+", "_", str(name or "").strip().lower())
 
@@ -77,6 +103,9 @@ def sentence_score(sentence: str) -> float:
         "pricing",
         "macro",
         "inflation",
+        "strategy",
+        "launch",
+        "partnership",
     ]
     for kw in keywords:
         if kw in s:
@@ -87,6 +116,78 @@ def sentence_score(sentence: str) -> float:
         score += 0.6
     score += min(len(sentence) / 220.0, 0.7)
     return round(score, 4)
+
+
+def _contains_numbers(text: str) -> bool:
+    return bool(NUMBER_RE.search(str(text or "")))
+
+
+def _word_count(text: str) -> int:
+    return len(str(text or "").split())
+
+
+def _contains_any_keywords(text: str, keywords: list[str]) -> bool:
+    s = str(text or "").lower()
+    return any(str(k).lower() in s for k in (keywords or []))
+
+
+def _matches_word_bounds(text: str, min_words: int, max_words: int) -> bool:
+    wc = _word_count(text)
+    return int(min_words) <= wc <= int(max_words)
+
+
+def _highlight_score(base_score: float, sentence: str, kind: str) -> float:
+    score = float(base_score)
+    s = sentence.lower()
+
+    if kind == "CEO_Quote":
+        if any(k in s for k in ["strategy", "priority", "outlook", "vision"]):
+            score += 1.2
+    elif kind == "CFO_Financial_Detail":
+        if _contains_numbers(sentence):
+            score += 1.4
+        if any(k in s for k in ["revenue", "margin", "guidance", "cost", "cash flow"]):
+            score += 1.0
+    elif kind == "Strategic_Announcement":
+        if any(k in s for k in ["announce", "launch", "introduce", "partnership", "acquisition"]):
+            score += 1.3
+
+    return round(min(score, 9.99), 4)
+
+
+def _matches_highlight_type(
+    *,
+    highlight_type: str,
+    sentence: str,
+    role_bucket: str | None,
+) -> bool:
+    cfg = HIGHLIGHT_TYPES[highlight_type]
+    min_words = int(cfg.get("min_words", 1))
+    max_words = int(cfg.get("max_words", 999))
+    if not _matches_word_bounds(sentence, min_words, max_words):
+        return False
+
+    speakers = cfg.get("speakers", ["ANY"])
+    if "ANY" not in speakers:
+        if role_bucket == "CEO" and not any("ceo" in str(s).lower() or "chief executive" in str(s).lower() for s in speakers):
+            return False
+        if role_bucket == "CFO" and not any("cfo" in str(s).lower() or "chief financial" in str(s).lower() for s in speakers):
+            return False
+        if role_bucket not in {"CEO", "CFO"}:
+            return False
+
+    if cfg.get("contains_numbers") and not _contains_numbers(sentence):
+        return False
+
+    topic_words = list(cfg.get("topics") or [])
+    if topic_words and not _contains_any_keywords(sentence, topic_words):
+        return False
+
+    required_keywords = list(cfg.get("keywords") or [])
+    if required_keywords and not _contains_any_keywords(sentence, required_keywords):
+        return False
+
+    return True
 
 
 def resolve_workbook_path(repo_root: Path) -> str | None:
@@ -115,7 +216,6 @@ def find_transcript_sheet(path: str, preferred: str | None) -> str | None:
     if not candidates:
         return None
 
-    # pick first candidate that has a text-like column
     for sheet in candidates:
         try:
             df = pd.read_excel(path, sheet_name=sheet, nrows=5)
@@ -161,46 +261,172 @@ def load_transcript_rows(path: str, sheet_name: str) -> pd.DataFrame:
     return out.reset_index(drop=True)
 
 
+def _infer_role_from_text(text: str) -> str:
+    low = str(text or "").lower()
+    if "chief executive" in low or "(ceo" in low or " ceo " in f" {low} ":
+        return "CEO"
+    if "chief financial" in low or "(cfo" in low or " cfo " in f" {low} ":
+        return "CFO"
+    return ""
+
+
+def _load_transcript_rows_from_local_files(repo_root: Path, transcript_root: str = "earningscall_transcripts") -> pd.DataFrame:
+    root = (repo_root / transcript_root).resolve()
+    if not root.exists():
+        return pd.DataFrame()
+
+    rows: list[dict] = []
+    for company_dir in sorted([p for p in root.iterdir() if p.is_dir()]):
+        company = str(company_dir.name).replace("_", " ").strip()
+        for year_dir in sorted([p for p in company_dir.iterdir() if p.is_dir() and p.name.isdigit()]):
+            year = int(year_dir.name)
+            for file_path in sorted([p for p in year_dir.iterdir() if p.is_file() and p.suffix.lower() == ".txt"]):
+                match = TRANSCRIPT_FILE_RE.match(file_path.name)
+                if not match:
+                    continue
+                quarter = int(match.group(1))
+                text = file_path.read_text(encoding="utf-8", errors="ignore")
+                if "---" in text:
+                    _, text = text.split("---", 1)
+                for raw_block in re.split(r"\n\s*\n+", text):
+                    lines = [ln.strip() for ln in raw_block.splitlines() if ln.strip()]
+                    if not lines:
+                        continue
+
+                    first_line = lines[0]
+                    speaker = "Unknown"
+                    role = ""
+                    body_lines = lines
+
+                    m_dash = re.match(r"^([A-Z][A-Za-z.'\- ]{1,80})\s*[-–—]{1,2}\s*(.+)$", first_line)
+                    if m_dash:
+                        speaker = str(m_dash.group(1)).strip()
+                        role = str(m_dash.group(2)).strip()
+                        body_lines = lines[1:]
+                    else:
+                        m_comma = re.match(r"^([A-Z][A-Za-z.'\- ]{1,80}),\s*(.+)$", first_line)
+                        if m_comma:
+                            speaker = str(m_comma.group(1)).strip()
+                            role = str(m_comma.group(2)).strip()
+                            body_lines = lines[1:]
+
+                    body_text = " ".join(body_lines).strip()
+                    if len(body_text) < 32:
+                        continue
+                    if not role:
+                        role = _infer_role_from_text(f"{first_line} {body_text[:180]}")
+
+                    rows.append(
+                        {
+                            "company": company,
+                            "year": int(year),
+                            "quarter": int(quarter),
+                            "speaker": speaker,
+                            "role": role,
+                            "text": body_text,
+                        }
+                    )
+
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows)
+
+
 def build_highlights(rows_df: pd.DataFrame, per_bucket_limit: int = 8) -> pd.DataFrame:
     highlights = []
     if rows_df.empty:
         return pd.DataFrame(
-            columns=["company", "year", "quarter", "role_bucket", "speaker", "role", "quote", "score"]
+            columns=[
+                "company",
+                "year",
+                "quarter",
+                "highlight_type",
+                "speaker",
+                "text",
+                "relevance_score",
+                "role_bucket",
+                "role",
+                "quote",
+                "score",
+            ]
         )
 
     for row in rows_df.itertuples(index=False):
         role_bucket = speaker_bucket(row.speaker, row.role)
-        if role_bucket not in {"CEO", "CFO"}:
-            continue
-        for sent in split_sentences(row.text):
-            highlights.append(
-                {
-                    "company": str(row.company).strip(),
-                    "year": int(row.year),
-                    "quarter": int(row.quarter),
-                    "role_bucket": role_bucket,
-                    "speaker": str(row.speaker).strip() or "Unknown",
-                    "role": str(row.role).strip(),
-                    "quote": sent[:420],
-                    "score": sentence_score(sent),
-                }
-            )
+
+        for sentence in split_sentences(row.text):
+            base = sentence_score(sentence)
+            quote = sentence[:420]
+            for highlight_type in HIGHLIGHT_TYPES:
+                if not _matches_highlight_type(
+                    highlight_type=highlight_type,
+                    sentence=sentence,
+                    role_bucket=role_bucket,
+                ):
+                    continue
+
+                score = _highlight_score(base, sentence, highlight_type)
+                normalized_role = role_bucket or "OTHER"
+                highlights.append(
+                    {
+                        "company": str(row.company).strip(),
+                        "year": int(row.year),
+                        "quarter": int(row.quarter),
+                        "highlight_type": highlight_type,
+                        "speaker": str(row.speaker).strip() or "Unknown",
+                        "text": quote,
+                        "relevance_score": score,
+                        # Backward-compatible columns consumed by current app views/scripts:
+                        "role_bucket": normalized_role,
+                        "role": str(row.role).strip(),
+                        "quote": quote,
+                        "score": score,
+                    }
+                )
 
     if not highlights:
         return pd.DataFrame(
-            columns=["company", "year", "quarter", "role_bucket", "speaker", "role", "quote", "score"]
+            columns=[
+                "company",
+                "year",
+                "quarter",
+                "highlight_type",
+                "speaker",
+                "text",
+                "relevance_score",
+                "role_bucket",
+                "role",
+                "quote",
+                "score",
+            ]
         )
 
-    df = pd.DataFrame(highlights).sort_values(
-        ["company", "year", "quarter", "role_bucket", "score"],
+    df = pd.DataFrame(highlights)
+
+    # Remove duplicates within the same transcript context.
+    df = df.drop_duplicates(subset=["company", "year", "quarter", "highlight_type", "speaker", "quote"]).copy()
+
+    # Keep a controlled number of rows per transcript + type.
+    df = df.sort_values(
+        ["company", "year", "quarter", "highlight_type", "relevance_score"],
         ascending=[True, True, True, True, False],
     )
     df = (
-        df.groupby(["company", "year", "quarter", "role_bucket"], as_index=False)
-        .head(per_bucket_limit)
+        df.groupby(["company", "year", "quarter", "highlight_type"], as_index=False)
+        .head(max(1, int(per_bucket_limit)))
         .reset_index(drop=True)
     )
-    return df
+
+    # Additional cap for CEO/CFO legacy displays.
+    ceo_cfo = df[df["role_bucket"].isin(["CEO", "CFO"])].copy()
+    ceo_cfo = (
+        ceo_cfo.sort_values(["company", "year", "quarter", "role_bucket", "score"], ascending=[True, True, True, True, False])
+        .groupby(["company", "year", "quarter", "role_bucket"], as_index=False)
+        .head(max(1, int(per_bucket_limit)))
+    )
+    strategic_other = df[~df.index.isin(ceo_cfo.index)].copy()
+    combined = pd.concat([ceo_cfo, strategic_other], ignore_index=True)
+    return combined.sort_values(["company", "year", "quarter", "score"], ascending=[True, True, True, False]).reset_index(drop=True)
 
 
 def build_iconic_quotes(highlights_df: pd.DataFrame, per_period_limit: int = 8) -> pd.DataFrame:
@@ -208,17 +434,28 @@ def build_iconic_quotes(highlights_df: pd.DataFrame, per_period_limit: int = 8) 
         return pd.DataFrame(
             columns=["year", "quarter", "company", "role_bucket", "speaker", "quote", "score"]
         )
+
+    base = highlights_df.copy()
+    base["score"] = pd.to_numeric(base["score"], errors="coerce")
+    base = base.dropna(subset=["score"]).copy()
+    if base.empty:
+        return pd.DataFrame(
+            columns=["year", "quarter", "company", "role_bucket", "speaker", "quote", "score"]
+        )
+
+    # Prioritize CEO/CFO rows, then strategic announcements.
+    base["priority"] = base["role_bucket"].map({"CEO": 0, "CFO": 1}).fillna(2)
     iconic = (
-        highlights_df.sort_values(["year", "quarter", "score"], ascending=[True, True, False])
+        base.sort_values(["year", "quarter", "priority", "score"], ascending=[True, True, True, False])
         .groupby(["year", "quarter"], as_index=False)
-        .head(per_period_limit)
+        .head(max(1, int(per_period_limit)))
         .reset_index(drop=True)
     )
     return iconic[["year", "quarter", "company", "role_bucket", "speaker", "quote", "score"]]
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Extract CEO/CFO highlights from transcript rows in the workbook")
+    parser = argparse.ArgumentParser(description="Extract transcript highlights from workbook transcript rows")
     parser.add_argument("--sheet", default="", help="Transcript sheet name (default: auto-detect transcript-like sheet)")
     parser.add_argument("--out-dir", default="earningscall_transcripts", help="Output folder")
     args = parser.parse_args()
@@ -229,15 +466,19 @@ def main() -> None:
         raise SystemExit("Workbook not found. Check Google Sheet access or local fallback file.")
 
     sheet_name = find_transcript_sheet(workbook_path, args.sheet.strip() or None)
-    if not sheet_name:
-        raise SystemExit(
-            "No transcript sheet found. Add a sheet like `Earnings_Call_Transcripts` "
-            "with columns: company, year, quarter, speaker, role, text."
-        )
-
-    rows_df = load_transcript_rows(workbook_path, sheet_name)
+    rows_df = pd.DataFrame()
+    source_label = ""
+    if sheet_name:
+        rows_df = load_transcript_rows(workbook_path, sheet_name)
+        source_label = f"sheet `{sheet_name}`"
     if rows_df.empty:
-        raise SystemExit(f"No transcript rows found in sheet `{sheet_name}`.")
+        rows_df = _load_transcript_rows_from_local_files(repo_root)
+        source_label = "local transcripts folder"
+    if rows_df.empty:
+        raise SystemExit(
+            "No transcript rows were found in workbook sheets or local transcript files. "
+            "Populate `Transcripts` / `Earnings_Call_Transcripts` sheet or keep local .txt transcripts."
+        )
 
     highlights_df = build_highlights(rows_df)
     iconic_df = build_iconic_quotes(highlights_df)
@@ -250,11 +491,10 @@ def main() -> None:
     iconic_df.to_csv(iconic_path, index=False)
 
     print(f"Workbook: {workbook_path}")
-    print(f"Transcript sheet: {sheet_name}")
+    print(f"Transcript source: {source_label}")
     print(f"Wrote: {highlights_path} ({len(highlights_df)} rows)")
     print(f"Wrote: {iconic_path} ({len(iconic_df)} rows)")
 
 
 if __name__ == "__main__":
     main()
-

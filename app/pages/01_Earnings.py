@@ -24,6 +24,7 @@ from utils.styles import get_page_style
 from utils.header import display_header
 from utils.theme import get_theme_mode
 from utils.data_availability import get_available_quarters
+from utils.components import render_ai_assistant
 
 # Page config must be the first Streamlit command
 st.set_page_config(page_title="Earnings", page_icon="E", layout="wide")
@@ -2848,6 +2849,11 @@ with quarter_col:
         index=0,
         key="earnings_selected_quarter",
     )
+
+st.session_state["earnings_selected_year"] = int(year)
+st.session_state["selected_year"] = int(year)
+st.session_state["selected_quarter"] = str(selected_quarter)
+render_ai_assistant(location="sidebar", current_page="Earnings")
 
 annual_metrics = data_processor.get_metrics(company, year) or {}
 quarterly_metrics, _ = _get_quarterly_metrics_snapshot(

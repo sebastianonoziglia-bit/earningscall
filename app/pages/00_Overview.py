@@ -24,7 +24,7 @@ from subscriber_data_processor import SubscriberDataProcessor
 from utils.state_management import get_data_processor, initialize_session_state
 from utils.animation_helper import update_chart_layout, create_consistent_frame, get_dynamic_tick_values, create_animation_buttons
 from utils.styles import get_page_style
-from utils.components import load_company_logos
+from utils.components import load_company_logos, render_ai_assistant
 from utils.header import display_header
 from utils.data_loader import CONTINENT_MAPPINGS, AD_MACRO_CATEGORIES
 from utils.theme import get_theme_mode
@@ -2986,6 +2986,23 @@ _OVERVIEW_INSIGHTS_COLUMN_ALIASES = {
     "is_active": ["is_active", "active", "enabled"],
 }
 
+_OVERVIEW_AUTO_INSIGHTS_COLUMN_ALIASES = {
+    "insight_id": ["insight_id", "id", "insight_code"],
+    "sort_order": ["sort_order", "order", "rank"],
+    "category": ["category", "cat", "section"],
+    "title": ["title", "insight_title"],
+    "year": ["year"],
+    "quarter": ["quarter", "qtr"],
+    "frequency": ["frequency", "granularity", "period_type"],
+    "comment": ["comment", "overview_comment", "insight", "body", "text"],
+    "text": ["text", "comment", "insight", "body"],
+    "priority": ["priority", "importance"],
+    "companies": ["companies", "company_list", "company"],
+    "kpis": ["kpis", "metrics", "kpi_list"],
+    "graph_type": ["graph_type", "chart_type", "graph", "chart_key"],
+    "is_active": ["is_active", "active", "enabled"],
+}
+
 _OVERVIEW_CHARTS_COLUMN_ALIASES = {
     "chart_key": ["chart_key", "chart", "chart_id"],
     "year": ["year"],
@@ -4234,6 +4251,7 @@ def _render_company_financial_deep_dives(
             "Debt Metrics",
             "Operating Margins",
             "R&D Intensity",
+            "Employees & Productivity",
             "Market Structure",
         ]
     )
@@ -4469,6 +4487,90 @@ def _render_company_financial_deep_dives(
             st.plotly_chart(fig, use_container_width=True, config=plotly_config)
 
     with tabs[4]:
+        emp_df = _apply_year_window(employees_df, year_min, year_max)
+        merged_emp = plot_df.merge(emp_df, on=["Company", "Year"], how="left") if not emp_df.empty else pd.DataFrame()
+        if merged_emp.empty or "Employees" not in merged_emp.columns:
+            st.info("Employee comparison is unavailable because `Company_Employees` rows are missing for the selected companies.")
+        else:
+            merged_emp["Employees"] = pd.to_numeric(merged_emp["Employees"], errors="coerce")
+            merged_emp = merged_emp.dropna(subset=["Employees"]).copy()
+            if merged_emp.empty:
+                st.info("No employee-count overlap found for these companies.")
+            else:
+                merged_emp["Revenue_per_Employee_MUSD"] = np.where(
+                    (merged_emp["Employees"] > 0) & merged_emp["Revenue"].notna(),
+                    merged_emp["Revenue"] / merged_emp["Employees"],
+                    np.nan,
+                )
+
+                st.markdown("#### Employee Count Trend")
+                fig_emp = px.line(
+                    merged_emp,
+                    x="Year",
+                    y="Employees",
+                    color="Company",
+                    markers=True,
+                    labels={"Employees": "Employees", "Year": ""},
+                )
+                fig_emp.update_layout(
+                    height=400,
+                    margin=_overview_chart_margin(),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    legend=_overview_legend_style(),
+                )
+                fig_emp.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+                st.plotly_chart(fig_emp, use_container_width=True, config=plotly_config)
+
+                st.markdown("#### Revenue per Employee")
+                rpe = merged_emp.dropna(subset=["Revenue_per_Employee_MUSD"]).copy()
+                if rpe.empty:
+                    st.info("Revenue-per-employee requires both revenue and employee rows for the selected companies.")
+                else:
+                    fig_rpe = px.line(
+                        rpe,
+                        x="Year",
+                        y="Revenue_per_Employee_MUSD",
+                        color="Company",
+                        markers=True,
+                        labels={"Revenue_per_Employee_MUSD": "Revenue per Employee (M USD)", "Year": ""},
+                    )
+                    fig_rpe.update_layout(
+                        height=400,
+                        margin=_overview_chart_margin(),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        legend=_overview_legend_style(),
+                    )
+                    fig_rpe.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+                    st.plotly_chart(fig_rpe, use_container_width=True, config=plotly_config)
+
+                    rank = rpe[rpe["Year"] == int(selected_year)].copy()
+                    if rank.empty:
+                        rank = rpe[rpe["Year"] <= int(selected_year)].copy()
+                        if not rank.empty:
+                            rank = rank[rank["Year"] == int(rank["Year"].max())].copy()
+                    if not rank.empty:
+                        rank = rank.sort_values("Revenue_per_Employee_MUSD", ascending=True)
+                        fig_rank = px.bar(
+                            rank,
+                            x="Revenue_per_Employee_MUSD",
+                            y="Company",
+                            orientation="h",
+                            color="Company",
+                            labels={"Revenue_per_Employee_MUSD": "Revenue per Employee (M USD)", "Company": ""},
+                        )
+                        fig_rank.update_layout(
+                            height=360,
+                            margin=_overview_chart_margin(left=20, right=20, top=84, bottom=96),
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            plot_bgcolor="rgba(0,0,0,0)",
+                            showlegend=False,
+                        )
+                        fig_rank.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
+                        st.plotly_chart(fig_rank, use_container_width=True, config=plotly_config)
+
+    with tabs[5]:
         if market_structure_df.empty:
             st.info("Duopoly/Triopoly concentration history is not available in current ad sheets.")
         else:
@@ -4971,6 +5073,658 @@ def _render_excel_overview_insights(
 
     if html_parts:
         st.markdown("".join(html_parts), unsafe_allow_html=True)
+    return True
+
+
+@st.cache_data(show_spinner=False)
+def _normalize_generated_auto_insights_df(raw: pd.DataFrame) -> pd.DataFrame:
+    if raw is None or raw.empty:
+        return pd.DataFrame()
+
+    df = raw.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    df = _rename_overview_columns(df, _OVERVIEW_AUTO_INSIGHTS_COLUMN_ALIASES)
+
+    required = [
+        "insight_id",
+        "sort_order",
+        "category",
+        "title",
+        "year",
+        "quarter",
+        "frequency",
+        "comment",
+        "text",
+        "priority",
+        "companies",
+        "kpis",
+        "graph_type",
+        "is_active",
+    ]
+    for col in required:
+        if col not in df.columns:
+            df[col] = ""
+
+    if "text" in df.columns and "comment" in df.columns:
+        df["comment"] = df["comment"].where(df["comment"].astype(str).str.strip() != "", df["text"])
+    if "comment" in df.columns and "text" in df.columns:
+        df["text"] = df["text"].where(df["text"].astype(str).str.strip() != "", df["comment"])
+
+    out = df.copy()
+    out["insight_id"] = out["insight_id"].astype(str).str.strip()
+    out["sort_order"] = pd.to_numeric(out["sort_order"], errors="coerce")
+    missing_sort = out["sort_order"].isna()
+    if missing_sort.any():
+        out.loc[missing_sort, "sort_order"] = pd.to_numeric(
+            out.loc[missing_sort, "insight_id"].str.extract(r"(\d+)", expand=False),
+            errors="coerce",
+        )
+    out["sort_order"] = out["sort_order"].fillna(9_999).astype(int)
+    out["year"] = pd.to_numeric(out["year"], errors="coerce")
+    out["quarter"] = out["quarter"].apply(_normalize_quarter_label)
+    out["category"] = out["category"].astype(str).str.strip().replace("", "Auto")
+    out["title"] = out["title"].astype(str).str.strip()
+    out["comment"] = out["comment"].astype(str).str.strip()
+    out["text"] = out["text"].astype(str).str.strip()
+    out["graph_type"] = out.get("graph_type", "").astype(str).str.strip()
+    out["companies"] = out.get("companies", "").astype(str).str.strip()
+    out["priority"] = out.get("priority", "").astype(str).str.strip()
+    out["kpis"] = out.get("kpis", "").astype(str).str.strip()
+    out["is_active"] = out.get("is_active", 1).apply(_parse_is_active_flag).astype(int)
+    out = out[out["title"] != ""].copy()
+    if out.empty:
+        return pd.DataFrame()
+
+    return out.sort_values(["sort_order", "insight_id", "title"]).reset_index(drop=True)
+
+
+@st.cache_data(show_spinner=False)
+def _load_generated_auto_insights_sheet(excel_path: str, source_stamp: int = 0) -> tuple[pd.DataFrame, str]:
+    if not excel_path:
+        return pd.DataFrame(), ""
+
+    raw, sheet_name = _read_excel_sheet_flexible(
+        excel_path=excel_path,
+        source_stamp=source_stamp,
+        preferred="Overview_Auto_Insights",
+        aliases=[
+            "Overview Auto Insights",
+            "Auto_Insights",
+            "Generated_Insights",
+            "Auto Insights",
+        ],
+        contains_all=["insight"],
+        contains_any=["auto", "generated"],
+    )
+    if raw.empty:
+        return pd.DataFrame(), ""
+
+    out = _normalize_generated_auto_insights_df(raw)
+    if out.empty:
+        return pd.DataFrame(), ""
+    return out, sheet_name
+
+
+@st.cache_data(show_spinner=False)
+def _load_generated_auto_insights_csv() -> pd.DataFrame:
+    repo_root = Path(__file__).resolve().parents[2]
+    path = repo_root / "earningscall_transcripts" / "generated_insights_latest.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_csv(path)
+    except Exception:
+        return pd.DataFrame()
+    return _normalize_generated_auto_insights_df(df)
+
+
+def _parse_pipe_list(value: str) -> list[str]:
+    text = str(value or "").strip()
+    if not text:
+        return []
+    items = re.split(r"[|,;/]+", text)
+    return [it.strip() for it in items if str(it).strip()]
+
+
+@st.cache_data(show_spinner=False)
+def _load_transcript_kpis_csv() -> pd.DataFrame:
+    repo_root = Path(__file__).resolve().parents[2]
+    path = repo_root / "earningscall_transcripts" / "transcript_kpis.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_csv(path)
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+    out = df.copy()
+    out.columns = [str(c).strip() for c in out.columns]
+    for col in ["company", "year", "quarter", "kpi_type", "value_text"]:
+        if col not in out.columns:
+            out[col] = ""
+    out["year"] = pd.to_numeric(out["year"], errors="coerce")
+    out["quarter"] = out["quarter"].apply(_normalize_quarter_label)
+    out["company"] = out["company"].astype(str).str.strip()
+    out["kpi_type"] = out["kpi_type"].astype(str).str.strip()
+    out = out.dropna(subset=["year"]).copy()
+    if out.empty:
+        return pd.DataFrame()
+    out["year"] = out["year"].astype(int)
+    return out
+
+
+def _render_auto_insight_graph(
+    graph_type: str,
+    companies: list[str],
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    selected_quarter: str,
+    plotly_config: dict,
+) -> None:
+    graph = str(graph_type or "").strip().lower()
+    excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    if not excel_path:
+        st.caption("Workbook source not available.")
+        return
+
+    metrics_df = _load_company_metrics_yearly_df(excel_path, source_stamp)
+    employees_df = _load_employee_yearly_df(excel_path, source_stamp)
+
+    if graph == "duopoly_share_trend":
+        series = _compute_duopoly_triopoly_share_series(data_processor, excel_path, source_stamp)
+        if series.empty:
+            st.info("Duopoly/Triopoly series is unavailable.")
+            return
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=series["Year"], y=series["Duopoly_Share_Pct"], mode="lines+markers", name="Duopoly share (%)", line=dict(color="#1D4ED8", width=3)))
+        fig.add_trace(go.Scatter(x=series["Year"], y=series["Triopoly_Share_Pct"], mode="lines+markers", name="Triopoly share (%)", line=dict(color="#0EA5E9", width=3)))
+        fig.update_layout(
+            height=360,
+            margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            yaxis_title="Share (%)",
+            legend=_overview_legend_style(),
+        )
+        fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+        st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        return
+
+    if graph == "ad_revenue_growth_comparison":
+        try:
+            if getattr(data_processor, "df_ad_revenue", None) is None or data_processor.df_ad_revenue.empty:
+                data_processor._load_ad_revenue()
+        except Exception:
+            pass
+        ad_df = getattr(data_processor, "df_ad_revenue", None)
+        if ad_df is None or ad_df.empty:
+            st.info("Ad revenue sheet is unavailable.")
+            return
+        ad = ad_df.copy()
+        ad.columns = [str(c).strip() for c in ad.columns]
+        if "year" in ad.columns and "Year" not in ad.columns:
+            ad = ad.rename(columns={"year": "Year"})
+        if "Year" not in ad.columns:
+            st.info("Ad revenue sheet has no year column.")
+            return
+        ad["Year"] = pd.to_numeric(ad["Year"], errors="coerce")
+        ad = ad.dropna(subset=["Year"]).copy()
+        ad["Year"] = ad["Year"].astype(int)
+        map_cols = {
+            "Google_Ads": "Alphabet",
+            "Meta_Ads": "Meta Platforms",
+            "Amazon_Ads": "Amazon",
+            "Spotify_Ads": "Spotify",
+            "Comcast": "Comcast",
+            "Netflix": "Netflix",
+            "Disney": "Disney",
+            "Paramount": "Paramount Global",
+            "WBD_Ads": "Warner Bros. Discovery",
+            "Microsoft_Ads": "Microsoft",
+        }
+        rows = []
+        for col, cname in map_cols.items():
+            for c in [col, f"*{col}"]:
+                if c in ad.columns:
+                    tmp = ad[["Year", c]].copy().rename(columns={c: "AdRevenue"})
+                    tmp["Company"] = cname
+                    rows.append(tmp)
+                    break
+        if not rows:
+            st.info("No ad-revenue company columns available.")
+            return
+        long = pd.concat(rows, ignore_index=True)
+        long["AdRevenue"] = pd.to_numeric(long["AdRevenue"], errors="coerce")
+        long = long.dropna(subset=["AdRevenue"]).copy()
+        long = long.sort_values(["Company", "Year"])
+        long["YoY"] = long.groupby("Company")["AdRevenue"].pct_change() * 100.0
+        scope = long[long["Year"] == int(selected_year)].dropna(subset=["YoY"]).copy()
+        if scope.empty:
+            st.info("No YoY ad-growth values for the selected year.")
+            return
+        if companies:
+            scope = scope[scope["Company"].isin(companies)].copy() if not scope.empty else scope
+        scope = scope.sort_values("YoY", ascending=True)
+        fig = px.bar(
+            scope,
+            x="YoY",
+            y="Company",
+            orientation="h",
+            color="Company",
+            labels={"YoY": "Ad Revenue YoY (%)", "Company": ""},
+        )
+        fig.update_layout(
+            height=360,
+            margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            showlegend=False,
+        )
+        fig.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
+        st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        return
+
+    if graph in {"revenue_per_employee_comparison", "employee_count_comparison", "market_cap_vs_headcount_growth"}:
+        if metrics_df.empty or employees_df.empty:
+            st.info("Employee/productivity charts need both Company_metrics_earnings_values and Company_Employees.")
+            return
+        merged = metrics_df.merge(employees_df, on=["Company", "Year"], how="inner")
+        if merged.empty:
+            st.info("No overlap between employee and metric rows.")
+            return
+        if companies:
+            merged = merged[merged["Company"].isin(companies)].copy()
+        if merged.empty:
+            st.info("No matching company rows for this insight graph.")
+            return
+
+        if graph == "employee_count_comparison":
+            scope = merged[merged["Year"] == int(selected_year)].copy()
+            if scope.empty:
+                scope = merged[merged["Year"] <= int(selected_year)]
+                if not scope.empty:
+                    scope = scope[scope["Year"] == int(scope["Year"].max())].copy()
+            scope = scope.sort_values("Employees", ascending=True)
+            fig = px.bar(
+                scope,
+                x="Employees",
+                y="Company",
+                orientation="h",
+                color="Company",
+                labels={"Employees": "Employees", "Company": ""},
+            )
+            fig.update_layout(
+                height=360,
+                margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                showlegend=False,
+            )
+            fig.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+            return
+
+        if graph == "revenue_per_employee_comparison":
+            merged["RevPerEmpM"] = np.where(merged["Employees"] > 0, merged["Revenue"] / merged["Employees"], np.nan)
+            scope = merged[merged["Year"] == int(selected_year)].dropna(subset=["RevPerEmpM"]).copy()
+            if scope.empty:
+                scope = merged[merged["Year"] <= int(selected_year)].dropna(subset=["RevPerEmpM"]).copy()
+                if not scope.empty:
+                    scope = scope[scope["Year"] == int(scope["Year"].max())].copy()
+            scope = scope.sort_values("RevPerEmpM", ascending=True)
+            fig = px.bar(
+                scope,
+                x="RevPerEmpM",
+                y="Company",
+                orientation="h",
+                color="Company",
+                labels={"RevPerEmpM": "Revenue per Employee (M USD)", "Company": ""},
+            )
+            fig.update_layout(
+                height=360,
+                margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                showlegend=False,
+            )
+            fig.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+            return
+
+        base_year = int(selected_year) - 5
+        merged["CapPerEmp"] = np.where(merged["Employees"] > 0, merged["MarketCap"] / merged["Employees"], np.nan)
+        curr = merged[merged["Year"] == int(selected_year)][["Company", "CapPerEmp"]]
+        base = merged[merged["Year"] == int(base_year)][["Company", "CapPerEmp"]].rename(columns={"CapPerEmp": "BaseCapPerEmp"})
+        growth = curr.merge(base, on="Company", how="inner")
+        growth = growth[(growth["BaseCapPerEmp"] > 0) & growth["CapPerEmp"].notna()].copy()
+        if growth.empty:
+            st.info("Insufficient 5-year overlap for cap-per-employee growth chart.")
+            return
+        growth["GrowthMultiple"] = growth["CapPerEmp"] / growth["BaseCapPerEmp"]
+        growth = growth.sort_values("GrowthMultiple", ascending=True)
+        fig = px.bar(
+            growth,
+            x="GrowthMultiple",
+            y="Company",
+            orientation="h",
+            color="Company",
+            labels={"GrowthMultiple": f"Market Cap per Employee Growth ({base_year}→{selected_year})", "Company": ""},
+        )
+        fig.update_layout(
+            height=360,
+            margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            showlegend=False,
+        )
+        fig.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
+        st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        return
+
+    if graph in {"debt_to_revenue_trend", "rd_intensity_comparison", "operating_margin_comparison", "market_cap_concentration_trend", "streaming_capex_intensity"}:
+        if metrics_df.empty:
+            st.info("Company metrics are unavailable for this chart.")
+            return
+
+        data = metrics_df.copy()
+        if companies:
+            filtered = data[data["Company"].isin(companies)].copy()
+            if not filtered.empty:
+                data = filtered
+
+        if graph == "debt_to_revenue_trend":
+            data = data[(data["Revenue"] > 0) & data["Debt"].notna()].copy()
+            data["DebtToRevenue"] = data["Debt"] / data["Revenue"]
+            if data.empty:
+                st.info("No debt/revenue overlap available.")
+                return
+            fig = px.line(
+                data,
+                x="Year",
+                y="DebtToRevenue",
+                color="Company",
+                markers=True,
+                labels={"DebtToRevenue": "Debt / Revenue", "Year": ""},
+            )
+            fig.update_layout(
+                height=360,
+                margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=_overview_legend_style(),
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+            return
+
+        if graph == "rd_intensity_comparison":
+            data = data[(data["Revenue"] > 0) & data["RD"].notna()].copy()
+            data["RDIntensity"] = (data["RD"] / data["Revenue"]) * 100.0
+            scope = data[data["Year"] == int(selected_year)].copy()
+            if scope.empty:
+                scope = data[data["Year"] <= int(selected_year)]
+                if not scope.empty:
+                    scope = scope[scope["Year"] == int(scope["Year"].max())].copy()
+            scope = scope.sort_values("RDIntensity", ascending=True)
+            fig = px.bar(
+                scope,
+                x="RDIntensity",
+                y="Company",
+                orientation="h",
+                color="Company",
+                labels={"RDIntensity": "R&D Intensity (% of Revenue)", "Company": ""},
+            )
+            fig.update_layout(
+                height=360,
+                margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                showlegend=False,
+            )
+            fig.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+            return
+
+        if graph == "operating_margin_comparison":
+            data = data[(data["Revenue"] > 0) & data["OperatingIncome"].notna()].copy()
+            data["OpMargin"] = (data["OperatingIncome"] / data["Revenue"]) * 100.0
+            scope = data[data["Year"] == int(selected_year)].copy()
+            if scope.empty:
+                scope = data[data["Year"] <= int(selected_year)]
+                if not scope.empty:
+                    scope = scope[scope["Year"] == int(scope["Year"].max())].copy()
+            scope = scope.sort_values("OpMargin", ascending=True)
+            fig = px.bar(
+                scope,
+                x="OpMargin",
+                y="Company",
+                orientation="h",
+                color="Company",
+                labels={"OpMargin": "Operating Margin (%)", "Company": ""},
+            )
+            fig.update_layout(
+                height=360,
+                margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                showlegend=False,
+            )
+            fig.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+            return
+
+        if graph == "market_cap_concentration_trend":
+            mc = data.dropna(subset=["MarketCap"]).copy()
+            if mc.empty:
+                st.info("Market-cap series unavailable.")
+                return
+            yearly = (
+                mc.groupby(["Year", "Company"], as_index=False)["MarketCap"].sum(min_count=1)
+                .sort_values(["Year", "MarketCap"], ascending=[True, False])
+            )
+            top3 = yearly.groupby("Year", as_index=False).head(3).groupby("Year", as_index=False)["MarketCap"].sum()
+            total = yearly.groupby("Year", as_index=False)["MarketCap"].sum().rename(columns={"MarketCap": "TotalMC"})
+            trend = top3.merge(total, on="Year", how="inner")
+            trend["Top3Share"] = np.where(trend["TotalMC"] > 0, (trend["MarketCap"] / trend["TotalMC"]) * 100.0, np.nan)
+            fig = px.line(
+                trend,
+                x="Year",
+                y="Top3Share",
+                markers=True,
+                labels={"Top3Share": "Top-3 Market Cap Share (%)", "Year": ""},
+            )
+            fig.update_layout(
+                height=360,
+                margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                showlegend=False,
+            )
+            fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+            return
+
+        if graph == "streaming_capex_intensity":
+            streamers = {"Netflix", "Disney", "Warner Bros. Discovery", "Paramount Global", "Roku"}
+            scope = data[
+                (data["Company"].isin(streamers))
+                & (data["Year"] == int(selected_year))
+                & (data["Revenue"] > 0)
+                & data["Capex"].notna()
+            ].copy()
+            if scope.empty:
+                st.info("No streamer capex-intensity rows for this year.")
+                return
+            scope["CapexIntensity"] = (scope["Capex"] / scope["Revenue"]) * 100.0
+            scope = scope.sort_values("CapexIntensity", ascending=True)
+            fig = px.bar(
+                scope,
+                x="CapexIntensity",
+                y="Company",
+                orientation="h",
+                color="Company",
+                labels={"CapexIntensity": "CapEx Intensity (% of Revenue)", "Company": ""},
+            )
+            fig.update_layout(
+                height=360,
+                margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                showlegend=False,
+            )
+            fig.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+            return
+
+    if graph in {"topic_mentions_bar", "transcript_kpi_mix", "subscriber_signal_company"}:
+        if graph == "topic_mentions_bar":
+            topic_df = _load_transcript_topic_metrics()
+            if topic_df.empty:
+                st.info("Topic metrics are unavailable. Run transcript topic extraction first.")
+                return
+            scoped, _ = _pick_rows_for_period(topic_df, int(selected_year), selected_quarter)
+            if scoped.empty:
+                st.info("No topic rows for selected period.")
+                return
+            scope = scoped.sort_values("mention_count", ascending=False).head(12).copy()
+            fig = px.bar(
+                scope.sort_values("mention_count", ascending=True),
+                x="mention_count",
+                y="topic",
+                orientation="h",
+                color="mention_count",
+                color_continuous_scale="Blues",
+                labels={"mention_count": "Mentions", "topic": ""},
+            )
+            fig.update_layout(
+                height=360,
+                margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                coloraxis_showscale=False,
+            )
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+            return
+
+        kpi_df = _load_transcript_kpis_csv()
+        if kpi_df.empty:
+            st.info("Transcript KPI rows are unavailable.")
+            return
+        scoped, _ = _pick_rows_for_period(kpi_df, int(selected_year), selected_quarter)
+        if scoped.empty:
+            st.info("No transcript KPI rows for selected period.")
+            return
+
+        if graph == "subscriber_signal_company":
+            scope = scoped[scoped["kpi_type"].astype(str).str.lower() == "subscribers"].copy()
+            if scope.empty:
+                st.info("No subscriber KPI mentions for this period.")
+                return
+            agg = scope.groupby("company", as_index=False).size().rename(columns={"size": "mentions"})
+            agg = agg.sort_values("mentions", ascending=True).tail(12)
+            fig = px.bar(
+                agg,
+                x="mentions",
+                y="company",
+                orientation="h",
+                color="mentions",
+                color_continuous_scale="Tealgrn",
+                labels={"mentions": "Subscriber KPI Mentions", "company": ""},
+            )
+            fig.update_layout(
+                height=360,
+                margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                coloraxis_showscale=False,
+            )
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+            return
+
+        agg = scoped.groupby("kpi_type", as_index=False).size().rename(columns={"size": "mentions"})
+        agg = agg.sort_values("mentions", ascending=True).tail(12)
+        fig = px.bar(
+            agg,
+            x="mentions",
+            y="kpi_type",
+            orientation="h",
+            color="mentions",
+            color_continuous_scale="Purp",
+            labels={"mentions": "Mentions", "kpi_type": ""},
+        )
+        fig.update_layout(
+            height=360,
+            margin=_overview_chart_margin(left=24, right=24, top=84, bottom=96),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            coloraxis_showscale=False,
+        )
+        st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+        return
+
+    st.caption("No graph renderer mapped for this insight type yet.")
+
+
+def _render_generated_auto_insights(
+    data_processor: FinancialDataProcessor,
+    selected_year: int,
+    selected_quarter: str,
+    plotly_config: dict,
+) -> bool:
+    excel_path = getattr(data_processor, "data_path", "")
+    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+    auto_df, sheet_name = _load_generated_auto_insights_sheet(excel_path, source_stamp) if excel_path else (pd.DataFrame(), "")
+    source_label = f"Workbook/{sheet_name}" if sheet_name else ""
+    if auto_df.empty:
+        auto_df = _load_generated_auto_insights_csv()
+        source_label = "earningscall_transcripts/generated_insights_latest.csv"
+    if auto_df.empty:
+        return False
+
+    auto_df = auto_df[auto_df["is_active"].apply(_parse_is_active_flag)].copy()
+    if auto_df.empty:
+        return False
+    scoped_df, selected_period = _pick_rows_for_period(auto_df, selected_year, selected_quarter)
+    if scoped_df.empty:
+        return False
+
+    company_logos = load_company_logos()
+    st.markdown("### Auto-Generated Insights")
+    st.caption(f"Source: {source_label} · Period: {selected_period}")
+
+    categories_present = scoped_df["category"].dropna().astype(str).str.strip().unique().tolist()
+    ordered_categories = [
+        *[c for c in _OVERVIEW_INSIGHT_CATEGORY_ORDER if c in categories_present],
+        *[c for c in categories_present if c not in _OVERVIEW_INSIGHT_CATEGORY_ORDER],
+    ]
+
+    for category in ordered_categories:
+        cat_df = scoped_df[scoped_df["category"] == category].copy()
+        if cat_df.empty:
+            continue
+        st.markdown(f"#### {category}")
+        cat_df = cat_df.sort_values(["sort_order", "insight_id", "title"])
+        for _, row in cat_df.iterrows():
+            title = _clean_overview_text(row.get("title"))
+            text = _clean_overview_text(row.get("comment") or row.get("text"))
+            companies = _parse_pipe_list(row.get("companies"))
+            logos_html = _inline_insight_company_logos_html(companies, company_logos, size_px=96)
+            if logos_html:
+                st.markdown(logos_html, unsafe_allow_html=True)
+            st.markdown(f"**{title}**")
+            st.markdown(text)
+            with st.expander("Show Graph"):
+                _render_auto_insight_graph(
+                    graph_type=row.get("graph_type"),
+                    companies=companies,
+                    data_processor=data_processor,
+                    selected_year=selected_year,
+                    selected_quarter=selected_quarter,
+                    plotly_config=plotly_config,
+                )
+            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
     return True
 
 
@@ -5838,6 +6592,18 @@ def _render_excel_overview_layers(
     insights_rendered = _render_excel_overview_insights(data_processor, selected_year, selected_quarter)
     if not insights_rendered:
         st.info("No active `Overview_Insights` rows found for the selected period.")
+    auto_insights_rendered = _render_generated_auto_insights(
+        data_processor,
+        selected_year,
+        selected_quarter,
+        plotly_config,
+    )
+    if not auto_insights_rendered:
+        st.caption(
+            "Auto-generated insights are unavailable. Run "
+            "`python3 scripts/generate_insights.py --db earningscall_intelligence.db` "
+            "after syncing transcript intelligence."
+        )
 
     with st.expander("Expanded Macro Cross-Sheet Charts", expanded=True):
         macro_expansion_rendered = _render_macro_expansion_sections(
@@ -6269,6 +7035,79 @@ def _render_quarterly_intelligence_briefing(
 
     return
 
+
+_OVERVIEW_AREA_CONFIG = [
+    {
+        "key": "macro_snapshot",
+        "title": "Macro Snapshot",
+        "description": "Top macro KPIs, liquidity, and regime context.",
+    },
+    {
+        "key": "global_media_map",
+        "title": "Global Media Economy",
+        "description": "Interactive world map and country-level ad structure.",
+    },
+    {
+        "key": "insights",
+        "title": "Insights by Category",
+        "description": "Quarterly overview commentary from workbook + auto insights.",
+    },
+    {
+        "key": "macro_regime",
+        "title": "Macro Regime Charts",
+        "description": "Cross-sheet macro bridge and regime diagnostics.",
+    },
+    {
+        "key": "deep_dives",
+        "title": "Company Deep Dives",
+        "description": "P/E, debt, margins, R&D, efficiency and concentration.",
+    },
+    {
+        "key": "device_platform",
+        "title": "Device & Platform",
+        "description": "Smartphone share and device-linked ad migration.",
+    },
+    {
+        "key": "topic_signal",
+        "title": "Topic Signal & Quotes",
+        "description": "Transcript topic map plus iconic CEO/CFO commentary.",
+    },
+    {
+        "key": "export",
+        "title": "Export",
+        "description": "Download current filtered overview payload and HTML snapshot.",
+    },
+]
+
+
+def _render_overview_area_selector() -> str:
+    st.markdown("### Overview Navigator")
+    st.caption("Single-view mode: choose one area at a time (8 sections inside one Overview page).")
+
+    valid_keys = {item["key"] for item in _OVERVIEW_AREA_CONFIG}
+    active_key = st.session_state.get("overview_active_area", "macro_snapshot")
+    if active_key not in valid_keys:
+        active_key = "macro_snapshot"
+
+    for row_start in (0, 4):
+        row_items = _OVERVIEW_AREA_CONFIG[row_start: row_start + 4]
+        row_cols = st.columns(4)
+        for col, item in zip(row_cols, row_items):
+            with col:
+                if st.button(
+                    item["title"],
+                    key=f"overview_area_btn_{item['key']}",
+                    use_container_width=True,
+                    type="primary" if active_key == item["key"] else "secondary",
+                ):
+                    active_key = item["key"]
+                    st.session_state["overview_active_area"] = active_key
+                st.caption(item["description"])
+
+    st.session_state["overview_active_area"] = active_key
+    return active_key
+
+
 # Configure Plotly
 plotly_config = {
     'displayModeBar': 'hover',
@@ -6322,6 +7161,8 @@ with quarter_col:
         key="overview_selected_quarter",
         help="Used by Excel-backed overview comments (quarterly/yearly).",
     )
+st.session_state["selected_year"] = int(selected_year)
+st.session_state["selected_quarter"] = str(selected_quarter)
 with gran_col:
     granularity_options = _get_overview_granularity_options(data_processor)
     current_granularity = st.session_state.get("overview_selected_granularity", "Auto")
@@ -6345,15 +7186,9 @@ with ux_col1:
         help="Controls Plotly per-chart download format from the modebar.",
     )
 with ux_col2:
-    st.markdown(
-        "**Jump to section:** "
-        "[Global Map](#section-global-media-economy) · "
-        "[Insights](#section-overview-insights) · "
-        "[Deep Dives](#section-company-deep-dives) · "
-        "[Macro Bridge](#section-macro-bridge) · "
-        "[Device](#section-device-platform) · "
-        "[Topic Signal](#section-topic-signal)"
-    )
+    st.markdown("Use the navigator buttons below to open one overview section at a time.")
+
+selected_overview_area = _render_overview_area_selector()
 
 selected_month = None
 selected_day = None
@@ -6434,22 +7269,109 @@ with st.sidebar:
         else:
             st.caption("No active Overview insights found for this period.")
 
+render_ai_assistant(location="sidebar", current_page="Overview")
+
 st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
 
-# NEW SECTION — MACRO KPI PANEL
-macro_kpi_rendered = render_macro_kpi_panel(data_processor, selected_year, selected_quarter, plotly_config)
-if not macro_kpi_rendered:
-    st.caption(
-        "Macro KPI panel is ready and will auto-populate when M2, GroupM, ad-revenue, and company-metrics inputs are available."
-    )
+if selected_overview_area == "macro_snapshot":
+    macro_kpi_rendered = render_macro_kpi_panel(data_processor, selected_year, selected_quarter, plotly_config)
+    if not macro_kpi_rendered:
+        st.caption(
+            "Macro KPI panel is ready and will auto-populate when M2, GroupM, ad-revenue, and company-metrics inputs are available."
+        )
 
-# NEW SECTION — MACRO CONTEXT DASHBOARD
-macro_context_rendered = _render_macro_context_dashboard(data_processor, selected_year, selected_quarter)
-if not macro_context_rendered:
-    st.caption(
-        "Macro context dashboard is ready and connected. It auto-reads whichever tabs contain "
-        "matching rate/labor/currency/valuation fields (no strict sheet naming required)."
+    macro_context_rendered = _render_macro_context_dashboard(data_processor, selected_year, selected_quarter)
+    if not macro_context_rendered:
+        st.caption(
+            "Macro context dashboard is ready and connected. It auto-reads whichever tabs contain "
+            "matching rate/labor/currency/valuation fields (no strict sheet naming required)."
+        )
+
+    if not _render_excel_macro_section(data_processor, selected_year, selected_quarter):
+        st.info("No `Overview_Macro` row found for the selected period.")
+    _render_overview_download_section(data_processor, selected_year, selected_quarter)
+    end_snap_section()
+    st.stop()
+
+if selected_overview_area == "insights":
+    insights_rendered = _render_excel_overview_insights(data_processor, selected_year, selected_quarter)
+    auto_rendered = _render_generated_auto_insights(
+        data_processor,
+        selected_year,
+        selected_quarter,
+        plotly_config,
     )
+    if not insights_rendered:
+        st.info("No active `Overview_Insights` rows found for the selected period.")
+    if not auto_rendered:
+        st.caption(
+            "Auto-generated insights are unavailable. Run "
+            "`python3 scripts/generate_insights.py --db earningscall_intelligence.db`."
+        )
+    _render_overview_download_section(data_processor, selected_year, selected_quarter)
+    end_snap_section()
+    st.stop()
+
+if selected_overview_area == "macro_regime":
+    macro_expansion_rendered = _render_macro_expansion_sections(
+        data_processor,
+        selected_year,
+        selected_quarter,
+        plotly_config,
+    )
+    if not macro_expansion_rendered:
+        st.caption(
+            "Expanded macro cross-sheet charts will auto-populate when matching macro fields exist in your workbook."
+        )
+    macro_bridge_rendered = _render_macro_bridge_charts(data_processor, selected_year, selected_quarter, plotly_config)
+    if not macro_bridge_rendered:
+        st.info("Macro bridge charts are unavailable because required source sheets are missing.")
+    _render_overview_download_section(data_processor, selected_year, selected_quarter)
+    end_snap_section()
+    st.stop()
+
+if selected_overview_area == "deep_dives":
+    deep_dive_rendered = _render_company_financial_deep_dives(
+        data_processor,
+        selected_year,
+        selected_quarter,
+        plotly_config,
+    )
+    if not deep_dive_rendered:
+        st.info("Company deep-dive charts need annual company metrics (Revenue, Net Income, Debt, CapEx, R&D).")
+    _render_overview_download_section(data_processor, selected_year, selected_quarter)
+    end_snap_section()
+    st.stop()
+
+if selected_overview_area == "device_platform":
+    device_rendered = _render_device_platform_market_share(data_processor, selected_year, plotly_config)
+    if not device_rendered:
+        st.info(
+            "Device/platform section auto-loads when `Hardware_Smartphone_Shipments` or "
+            "`Country_Advertising_Data_FullVi` contains device-class fields."
+        )
+    _render_overview_download_section(data_processor, selected_year, selected_quarter)
+    end_snap_section()
+    st.stop()
+
+if selected_overview_area == "topic_signal":
+    topic_chart_rendered = _render_transcript_topic_growth_chart(selected_year, selected_quarter, plotly_config)
+    if not topic_chart_rendered:
+        st.info(
+            "No transcript topic metrics found. Run `python3 scripts/extract_transcript_topics.py` "
+            "after adding new quarter transcript files."
+        )
+    iconic_quotes_rendered = _render_iconic_quote_section(data_processor, selected_year, selected_quarter)
+    if not iconic_quotes_rendered:
+        st.caption("No iconic CEO/CFO quote rows found for this period.")
+    _render_overview_download_section(data_processor, selected_year, selected_quarter)
+    end_snap_section()
+    st.stop()
+
+if selected_overview_area == "export":
+    _render_overview_download_section(data_processor, selected_year, selected_quarter)
+    end_snap_section()
+    st.stop()
 
 # SECTION 1 — GLOBAL CONTEXT (WORLD MAP)
 st.markdown("<div id='section-global-media-economy'></div>", unsafe_allow_html=True)
@@ -7391,6 +8313,11 @@ if not country_ad_df.empty:
 else:
     st.info("Country advertising dataset not found. Expected `Country_Advertising_Data_FullVi` sheet in the workbook source.")
 
+
+if selected_overview_area == "global_media_map":
+    _render_overview_download_section(data_processor, selected_year, selected_quarter)
+    end_snap_section()
+    st.stop()
 
 
 end_snap_section()
