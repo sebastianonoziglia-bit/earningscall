@@ -1349,6 +1349,10 @@ def load_company_segment_insights(excel_path):
         required = {"company", "year", "segment", "insight"}
         if not required.issubset(df.columns):
             raise ValueError(f"Missing columns in segment insights: {sorted(required - set(df.columns))}")
+        if "category" not in df.columns:
+            df["category"] = ""
+        if "quarter" not in df.columns:
+            df["quarter"] = ""
         return df
     except Exception as exc:
         logger.warning("Segment insights load failed: %s", exc)
@@ -1381,7 +1385,7 @@ def _parse_quarter_int(value) -> int | None:
     text = str(value).strip().upper()
     if not text:
         return None
-    if text == "ANNUAL":
+    if text in {"ANNUAL", "FY", "YEARLY", "YEAR"}:
         return None
     if text.startswith("Q") and len(text) > 1 and text[1].isdigit():
         q = int(text[1])
@@ -3307,6 +3311,12 @@ if segment_insights_df is not None and not segment_insights_df.empty:
         lambda s: normalize_segment_label(canonical_company, s)
     )
     segment_insights_filtered["segment"] = segment_insights_filtered["segment"].astype(str).str.strip()
+    if "quarter" not in segment_insights_filtered.columns:
+        segment_insights_filtered["quarter"] = ""
+    segment_insights_filtered["_quarter_text"] = (
+        segment_insights_filtered["quarter"].fillna("").astype(str).str.strip().str.upper()
+    )
+    segment_insights_filtered["_quarter_num"] = segment_insights_filtered["quarter"].apply(_parse_quarter_int)
     segment_insights_filtered = segment_insights_filtered[
         (segment_insights_filtered["company"] == canonical_company)
         & (segment_insights_filtered["segment"].notna())
@@ -3316,7 +3326,8 @@ if segment_insights_df is not None and not segment_insights_df.empty:
 
 segment_insight_map = {}
 if not segment_insights_filtered.empty:
-    desired_insight_year = int(segment_end)
+    selected_insight_qnum = _parse_quarter_int(selected_quarter)
+    desired_insight_year = int(year) if selected_insight_qnum is not None else int(segment_end)
     segment_to_group = {k: v for k, v in segment_insights_filtered.groupby("segment")}
     segment_to_group_norm = {
         normalize_segment(k): v for k, v in segment_to_group.items() if str(k).strip()
@@ -3339,23 +3350,49 @@ if not segment_insights_filtered.empty:
             & (group["year"] <= int(segment_end))
         ]
 
-        group_year = group_in_range[group_in_range["year"] == desired_insight_year]
-        if group_year.empty:
-            if not group_in_range.empty:
-                best_year = int(group_in_range["year"].max())
-                group_year = group_in_range[group_in_range["year"] == best_year]
-            else:
-                group_le = group[group["year"].notna() & (group["year"] <= desired_insight_year)]
-                if not group_le.empty:
-                    best_year = int(group_le["year"].max())
-                    group_year = group_le[group_le["year"] == best_year]
+        group_year = pd.DataFrame()
+        if selected_insight_qnum is not None:
+            year_focus = group[group["year"] == int(desired_insight_year)].copy()
+            if not year_focus.empty:
+                exact_quarter = year_focus[year_focus["_quarter_num"] == int(selected_insight_qnum)].copy()
+                if not exact_quarter.empty:
+                    group_year = exact_quarter
                 else:
-                    year_values = group["year"].dropna()
-                    if not year_values.empty:
-                        best_year = int(year_values.max())
-                        group_year = group[group["year"] == best_year]
+                    annual_same_year = year_focus[
+                        year_focus["_quarter_num"].isna()
+                        | year_focus["_quarter_text"].isin(["", "ANNUAL", "FY", "YEARLY", "YEAR"])
+                    ].copy()
+                    if not annual_same_year.empty:
+                        group_year = annual_same_year
                     else:
-                        group_year = group
+                        quarter_rows = year_focus[year_focus["_quarter_num"].notna()].copy()
+                        if not quarter_rows.empty:
+                            quarter_le = quarter_rows[quarter_rows["_quarter_num"] <= int(selected_insight_qnum)].copy()
+                            if not quarter_le.empty:
+                                best_q = int(quarter_le["_quarter_num"].max())
+                                group_year = quarter_le[quarter_le["_quarter_num"] == best_q].copy()
+                            else:
+                                best_q = int(quarter_rows["_quarter_num"].max())
+                                group_year = quarter_rows[quarter_rows["_quarter_num"] == best_q].copy()
+
+        if group_year.empty:
+            group_year = group_in_range[group_in_range["year"] == desired_insight_year]
+            if group_year.empty:
+                if not group_in_range.empty:
+                    best_year = int(group_in_range["year"].max())
+                    group_year = group_in_range[group_in_range["year"] == best_year]
+                else:
+                    group_le = group[group["year"].notna() & (group["year"] <= desired_insight_year)]
+                    if not group_le.empty:
+                        best_year = int(group_le["year"].max())
+                        group_year = group_le[group_le["year"] == best_year]
+                    else:
+                        year_values = group["year"].dropna()
+                        if not year_values.empty:
+                            best_year = int(year_values.max())
+                            group_year = group[group["year"] == best_year]
+                        else:
+                            group_year = group
 
         insights = []
         for item in group_year["insight"].tolist():
@@ -3831,7 +3868,9 @@ if company_insights_df is not None and not company_insights_df.empty:
         if "quarter" in all_insights.columns:
             all_insights["quarter"] = all_insights["quarter"].fillna("")
             all_insights = all_insights[
-                all_insights["quarter"].astype(str).str.strip().isin(["", "Annual", "ANNUAL"])
+                all_insights["quarter"].astype(str).str.strip().str.upper().isin(
+                    ["", "ANNUAL", "FY", "YEARLY", "YEAR"]
+                )
             ].copy()
         company_insights_filtered = all_insights
         insight_source_label = f"Annual {year}"
@@ -3921,8 +3960,12 @@ components.html(
 
 st.divider()
 
-# Default to the last 5 years where possible.
-default_start = max(int(min_year), int(max_year) - 4)
+# Default to the last 5 years where possible, but keep explorer floor at 2010.
+metrics_floor_year = 2010
+metrics_ceiling_year = max(int(max_year), int(max(years)))
+if metrics_ceiling_year < metrics_floor_year:
+    metrics_floor_year = metrics_ceiling_year
+default_start = max(int(metrics_floor_year), int(metrics_ceiling_year) - 4)
 
 # Company metrics explorer
 st.markdown("<div class='metrics-section-spacer'></div>", unsafe_allow_html=True)
@@ -3946,9 +3989,9 @@ with metric_cols[2]:
 
 metric_year_range = st.slider(
     "Metrics year range",
-    min_value=int(min_year),
-    max_value=int(max_year),
-    value=(int(default_start), int(max_year)),
+    min_value=int(metrics_floor_year),
+    max_value=int(metrics_ceiling_year),
+    value=(int(default_start), int(metrics_ceiling_year)),
     key="metrics_year_range",
 )
 
