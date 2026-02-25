@@ -59,45 +59,79 @@ class FinancialDataProcessor:
         self.data_path = excel_path
         self.source_stamp = get_workbook_source_stamp(excel_path)
 
-        try:
-            metrics_cols = (
-                "Company",
-                "Year",
-                "Operating Income",
-                "Debt",
-                "Revenue",
-                "Net Income",
-                "Cost Of Revenue",
-                "R&D",
-                "Capex",
-                "Total Assets",
-                "Market Cap.",
-                "Cash Balance",
-            )
-            employees_cols = ("Company", "Year", "Employee Count")
-            segments_cols = ("Company", "year", "segments", "Yearly Segment Revenue")
+        metrics_cols = (
+            "Company",
+            "Year",
+            "Operating Income",
+            "Debt",
+            "Revenue",
+            "Net Income",
+            "Cost Of Revenue",
+            "R&D",
+            "Capex",
+            "Total Assets",
+            "Market Cap.",
+            "Cash Balance",
+        )
+        employees_cols = ("Company", "Year", "Employee Count")
+        segments_cols = ("Company", "year", "segments", "Yearly Segment Revenue")
 
-            self.df_metrics = _read_excel_sheet(excel_path, self.source_stamp, "Company_metrics_earnings_values", metrics_cols).copy()
-            self.df_employees = _read_excel_sheet(excel_path, self.source_stamp, "Company_Employees", employees_cols).copy()
-            self.df_segments = _read_excel_sheet(excel_path, self.source_stamp, "Company_yearly_segments_values", segments_cols).copy()
-            # Load these lazily when needed
-            self.df_ad_revenue = None
-            self.df_revenue_by_region = None
-            self.df_subscribers = None
-            self.df_nasdaq_market_cap = None
-        except Exception as e:
-            print(f"Error loading Excel data: {e}")
-            self.df_metrics = pd.DataFrame(columns=['company', 'year'])
-            self.df_segments = pd.DataFrame(columns=['company', 'year', 'segment', 'revenue'])
-            self.df_employees = pd.DataFrame(columns=['company', 'year', 'employees'])
-            self.df_ad_revenue = None
-            self.df_revenue_by_region = None
-            self.df_subscribers = None
-            self.df_nasdaq_market_cap = None
-            return
+        self.df_metrics = self._read_sheet_relaxed(
+            excel_path, self.source_stamp, "Company_metrics_earnings_values", metrics_cols
+        )
+        self.df_employees = self._read_sheet_relaxed(
+            excel_path, self.source_stamp, "Company_Employees", employees_cols
+        )
+        self.df_segments = self._read_sheet_relaxed(
+            excel_path, self.source_stamp, "Company_yearly_segments_values", segments_cols
+        )
+
+        # Load these lazily when needed
+        self.df_ad_revenue = None
+        self.df_revenue_by_region = None
+        self.df_subscribers = None
+        self.df_nasdaq_market_cap = None
 
         self.process_data()
         return
+
+    def _read_sheet_relaxed(self, path, source_stamp, sheet_name, expected_cols):
+        """Read a sheet robustly.
+
+        If strict `usecols` lookup fails (common with Google-export header drift),
+        reload the full sheet, normalize header whitespace/case, and rebuild the
+        expected schema with missing columns filled as NaN.
+        """
+        expected_cols = list(expected_cols or [])
+        try:
+            return _read_excel_sheet(path, source_stamp, sheet_name, tuple(expected_cols)).copy()
+        except Exception as strict_exc:
+            print(f"Warning: strict read failed for '{sheet_name}': {strict_exc}")
+        try:
+            raw = _read_excel_sheet(path, source_stamp, sheet_name, None).copy()
+        except Exception as fallback_exc:
+            print(f"Warning: fallback read failed for '{sheet_name}': {fallback_exc}")
+            return pd.DataFrame(columns=expected_cols)
+
+        if raw is None or raw.empty:
+            return pd.DataFrame(columns=expected_cols)
+
+        raw.columns = [str(c).strip() for c in raw.columns]
+        lower_map = {str(c).strip().lower(): c for c in raw.columns}
+        out = pd.DataFrame(index=raw.index)
+
+        for col in expected_cols:
+            source_col = None
+            if col in raw.columns:
+                source_col = col
+            else:
+                source_col = lower_map.get(str(col).strip().lower())
+            if source_col is None:
+                out[col] = pd.NA
+            else:
+                out[col] = raw[source_col]
+
+        return out
 
     def _resolve_excel_path(self):
         """Locate the primary Excel data file."""

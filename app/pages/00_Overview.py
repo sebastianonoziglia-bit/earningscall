@@ -1623,7 +1623,26 @@ def get_available_years(data_processor):
     df_metrics = getattr(data_processor, "df_metrics", None)
     if df_metrics is not None and not df_metrics.empty:
         years = df_metrics["year"].dropna().unique().tolist()
-        return sorted([int(y) for y in years])
+        normalized = sorted({int(y) for y in years if pd.notna(y)})
+        if normalized:
+            return normalized
+
+    # Fallback: read metrics years directly from workbook when processor index is empty.
+    excel_path = getattr(data_processor, "data_path", "")
+    if excel_path and Path(excel_path).exists():
+        try:
+            workbook_years = pd.read_excel(
+                excel_path,
+                sheet_name="Company_metrics_earnings_values",
+                usecols=["Year"],
+            )
+            if workbook_years is not None and not workbook_years.empty:
+                vals = pd.to_numeric(workbook_years["Year"], errors="coerce").dropna().astype(int).tolist()
+                vals = sorted(set(vals))
+                if vals:
+                    return vals
+        except Exception:
+            pass
 
     common_years = list(range(2010, 2025))
     available_years = []
@@ -7136,7 +7155,8 @@ data_processor = get_data_processor()
 companies = get_available_companies(data_processor)
 available_years = get_available_years(data_processor)
 if not available_years:
-    available_years = [datetime.now().year]
+    # Avoid showing an empty/future-only selector when data source fails to hydrate.
+    available_years = [max(2010, int(datetime.now().year) - 1)]
 excel_path = getattr(data_processor, "data_path", "")
 
 # Year + quarter + granularity selectors
@@ -7236,9 +7256,8 @@ st.session_state["overview_time_context"] = update_global_time_context(
 
 plotly_config["toImageButtonOptions"]["format"] = chart_export_format
 
-# Sticky summary sidebar (period-aware, updates with filters).
-with st.sidebar:
-    st.markdown("### Key Insights Summary")
+# Sticky summary (period-aware, updates with filters).
+with st.expander("Key Insights Summary", expanded=False):
     st.caption(f"Period: {int(selected_year)} · {selected_quarter}")
     excel_source = getattr(data_processor, "data_path", "")
     source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)

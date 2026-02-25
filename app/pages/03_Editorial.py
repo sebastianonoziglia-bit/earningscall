@@ -35,7 +35,8 @@ render_header()
 
 # Add SQL Assistant in the sidebar
 from utils.sql_assistant_sidebar import render_sql_assistant_sidebar
-render_sql_assistant_sidebar()
+if not st.session_state.get("hide_sidebar_nav", False):
+    render_sql_assistant_sidebar()
 
 # Check if user is logged in, redirect to Welcome page if not
 # Always authenticated - no password check needed

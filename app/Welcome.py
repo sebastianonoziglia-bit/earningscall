@@ -82,9 +82,9 @@ if target_param:
 
 display_header(enable_dom_patch=False)
 
-with st.sidebar:
-    st.markdown("---")
-    if st.button("🔄 Sync Transcripts", help="Manually sync transcript data"):
+sync_col_left, sync_col_right = st.columns([6, 2])
+with sync_col_right:
+    if st.button("🔄 Sync Transcripts", help="Manually sync transcript data", use_container_width=True):
         if os.path.exists(SYNC_FLAG_FILE):
             os.remove(SYNC_FLAG_FILE)
         with st.spinner("Syncing transcripts..."):

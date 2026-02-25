@@ -173,7 +173,11 @@ def render_ai_assistant(location="sidebar", width=None, height=None, current_pag
         current_page: Current page name for context
     """
     try:
-        container = st.sidebar if location == "sidebar" else st
+        hide_sidebar = bool(st.session_state.get("hide_sidebar_nav", False))
+        if location == "sidebar" and hide_sidebar:
+            container = st
+        else:
+            container = st.sidebar if location == "sidebar" else st
         page_name = str(current_page or st.session_state.get("current_page", "Overview")).strip() or "Overview"
         section_name = str(
             st.session_state.get("overview_current_section")
@@ -229,7 +233,8 @@ def render_ai_assistant(location="sidebar", width=None, height=None, current_pag
 
     except Exception as e:
         logger.error(f"Error rendering AI Assistant: {str(e)}")
-        if location == "sidebar":
+        hide_sidebar = bool(st.session_state.get("hide_sidebar_nav", False))
+        if location == "sidebar" and not hide_sidebar:
             st.sidebar.error("Error displaying AI Assistant.")
         else:
             st.error("Error displaying AI Assistant.")

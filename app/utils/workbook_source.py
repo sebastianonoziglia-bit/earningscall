@@ -9,6 +9,7 @@ import zipfile
 from pathlib import Path
 from typing import Iterable, Optional
 
+import pandas as pd
 import requests
 
 
@@ -109,13 +110,61 @@ def _download_google_sheet_xlsx(sheet_id: str, refresh_seconds: int = 60) -> Opt
 def _resolve_local_xlsx(local_candidates: Iterable[str] | None = None) -> Optional[str]:
     env_xlsx = os.getenv("FINANCIAL_DATA_XLSX")
     if env_xlsx and os.path.exists(env_xlsx):
-        return os.path.abspath(env_xlsx)
+        env_path = Path(env_xlsx)
+        if _is_valid_xlsx_file(env_path):
+            return str(env_path.resolve())
 
     for path in list(local_candidates or []):
-        if path and os.path.exists(path):
-            return os.path.abspath(path)
+        if not path:
+            continue
+        candidate = Path(path)
+        if candidate.exists() and _is_valid_xlsx_file(candidate):
+            return str(candidate.resolve())
 
     return None
+
+
+def _has_core_financial_coverage(path: str | Path | None) -> bool:
+    """Validate that a workbook contains a usable yearly metrics backbone.
+
+    This protects the app from selecting a downloadable-but-incomplete Google export
+    that would otherwise collapse selectors to a single fallback year.
+    """
+    if not path:
+        return False
+    p = Path(path)
+    if not p.exists() or not _is_valid_xlsx_file(p):
+        return False
+    try:
+        df = pd.read_excel(
+            p,
+            sheet_name="Company_metrics_earnings_values",
+            usecols=["Company", "Year"],
+        )
+    except Exception:
+        return False
+    if df is None or df.empty:
+        return False
+    cols = {str(c).strip().lower() for c in df.columns}
+    if "company" not in cols or "year" not in cols:
+        return False
+    df = df.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    company_col = next((c for c in df.columns if str(c).strip().lower() == "company"), None)
+    year_col = next((c for c in df.columns if str(c).strip().lower() == "year"), None)
+    if not company_col or not year_col:
+        return False
+    df[company_col] = df[company_col].astype(str).str.strip()
+    df[year_col] = pd.to_numeric(df[year_col], errors="coerce")
+    df = df.dropna(subset=[company_col, year_col])
+    if df.empty:
+        return False
+    unique_companies = df[company_col].nunique()
+    unique_years = df[year_col].astype(int).nunique()
+    if unique_companies < 5 or unique_years < 8:
+        return False
+    year_min = int(df[year_col].min())
+    return year_min <= 2015
 
 
 def resolve_financial_data_xlsx(local_candidates: Iterable[str] | None = None) -> Optional[str]:
@@ -145,7 +194,7 @@ def resolve_financial_data_xlsx(local_candidates: Iterable[str] | None = None) -
         if sheet_id:
             refresh_seconds = int(os.getenv("FINANCIAL_DATA_GSHEET_REFRESH_SECONDS", "60"))
             downloaded = _download_google_sheet_xlsx(sheet_id, refresh_seconds=refresh_seconds)
-            if downloaded and os.path.exists(downloaded):
+            if downloaded and os.path.exists(downloaded) and _has_core_financial_coverage(downloaded):
                 return os.path.abspath(downloaded)
         return _resolve_local_xlsx(local_candidates)
 
@@ -158,7 +207,7 @@ def resolve_financial_data_xlsx(local_candidates: Iterable[str] | None = None) -
     if sheet_id:
         refresh_seconds = int(os.getenv("FINANCIAL_DATA_GSHEET_REFRESH_SECONDS", "60"))
         downloaded = _download_google_sheet_xlsx(sheet_id, refresh_seconds=refresh_seconds)
-        if downloaded and os.path.exists(downloaded):
+        if downloaded and os.path.exists(downloaded) and _has_core_financial_coverage(downloaded):
             return os.path.abspath(downloaded)
 
     # Critical fallback for private/unavailable sheets: keep app functional from local workbook.

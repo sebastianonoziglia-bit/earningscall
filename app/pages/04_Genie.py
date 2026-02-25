@@ -60,7 +60,8 @@ render_header()
 
 # Add SQL Assistant in the sidebar
 from utils.sql_assistant_sidebar import render_sql_assistant_sidebar
-render_sql_assistant_sidebar()
+if not st.session_state.get("hide_sidebar_nav", False):
+    render_sql_assistant_sidebar()
 
 # Company brand color mapping function
 def get_company_color(company_name):

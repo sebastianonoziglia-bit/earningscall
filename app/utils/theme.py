@@ -201,6 +201,25 @@ def apply_theme(enable_dom_patch: bool = True):
             color: var(--app-text) !important;
         }
 
+        /* Full-screen mode: hide Streamlit sidebar/page-nav for all pages. */
+        section[data-testid="stSidebar"] {
+            display: none !important;
+            width: 0 !important;
+            min-width: 0 !important;
+            max-width: 0 !important;
+        }
+        [data-testid="collapsedControl"] {
+            display: none !important;
+        }
+        [data-testid="stAppViewContainer"] > .main {
+            margin-left: 0 !important;
+        }
+        [data-testid="stAppViewContainer"] > .main .block-container {
+            max-width: none !important;
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+        }
+
         /* Inputs / selects */
         div[data-baseweb="select"] > div,
         div[data-baseweb="select"] > div > div,

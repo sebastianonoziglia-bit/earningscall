@@ -2806,6 +2806,48 @@ def split_insight_text(raw_text):
     return cleaned if cleaned else [text]
 
 
+def _resolve_company_years(data_processor, company_name):
+    """Return robust year options for selector, prioritizing annual metrics coverage."""
+    years = []
+    try:
+        years = data_processor.get_available_years(company_name) or []
+    except Exception:
+        years = []
+    years = sorted({int(y) for y in years if pd.notna(y)})
+
+    df_metrics = getattr(data_processor, "df_metrics", None)
+    if df_metrics is not None and not df_metrics.empty:
+        scoped = df_metrics[df_metrics["company"].astype(str).str.strip() == str(company_name).strip()].copy()
+        if not scoped.empty and "year" in scoped.columns:
+            metric_years = pd.to_numeric(scoped["year"], errors="coerce").dropna().astype(int).tolist()
+            metric_years = sorted(set(metric_years))
+            if metric_years:
+                return metric_years
+
+    if years:
+        return years
+
+    excel_path = getattr(data_processor, "data_path", "")
+    if excel_path and Path(excel_path).exists():
+        try:
+            raw = pd.read_excel(
+                excel_path,
+                sheet_name="Company_metrics_earnings_values",
+                usecols=["Company", "Year"],
+            )
+            raw.columns = [str(c).strip() for c in raw.columns]
+            if {"Company", "Year"}.issubset(set(raw.columns)):
+                raw = raw[raw["Company"].astype(str).str.strip() == str(company_name).strip()]
+                fallback_years = pd.to_numeric(raw["Year"], errors="coerce").dropna().astype(int).tolist()
+                fallback_years = sorted(set(fallback_years))
+                if fallback_years:
+                    return fallback_years
+        except Exception:
+            pass
+
+    return []
+
+
 st.title("Earnings")
 data_processor = get_data_processor()
 
@@ -2834,7 +2876,7 @@ year_col, quarter_col, company_col = st.columns([1, 1, 2])
 with company_col:
     company = st.selectbox("Select Company", companies, index=default_index)
 
-years = data_processor.get_available_years(company)
+years = _resolve_company_years(data_processor, company)
 if not years:
     st.error("No years available for this company.")
     st.stop()
