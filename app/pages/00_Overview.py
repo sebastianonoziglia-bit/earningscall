@@ -16,6 +16,7 @@ import textwrap
 import html
 import json
 import re
+import base64
 import requests
 import streamlit.components.v1 as components
 from pathlib import Path
@@ -3719,15 +3720,17 @@ def _render_macro_context_dashboard(
         ("10Y-2Y Spread", _format_compact_metric(rate_row.get("YieldCurveSpread") if rate_row is not None else np.nan, "%", 2)),
         ("Tech P/E", _format_compact_metric(tech_row.get("Tech_Aggregate_PE") if tech_row is not None else np.nan, "x", 1)),
     ]
+    visible_cards = [(label, value) for (label, value) in card_data if str(value).strip().upper() != "N/A"]
+    if not visible_cards:
+        return False
 
-    top_cols = st.columns(4)
-    for col, (label, value) in zip(top_cols, card_data[:4]):
-        with col:
-            st.metric(label, value)
-    bottom_cols = st.columns(4)
-    for col, (label, value) in zip(bottom_cols, card_data[4:]):
-        with col:
-            st.metric(label, value)
+    cols_per_row = 4
+    for start in range(0, len(visible_cards), cols_per_row):
+        row = visible_cards[start: start + cols_per_row]
+        row_cols = st.columns(len(row))
+        for col, (label, value) in zip(row_cols, row):
+            with col:
+                st.metric(label, value)
 
     notes = []
     if rate_row is not None:
@@ -3744,6 +3747,163 @@ def _render_macro_context_dashboard(
     if notes:
         st.caption(" | ".join(notes[:3]))
     return True
+
+
+def _render_overview_hero_banner() -> None:
+    """Top hero with MFE image, logo blur-bar, and quick page links."""
+    hero_image_path = Path("attached_assets/FAQ MFE.png")
+    logos = load_company_logos()
+    logo_order = [
+        "Alphabet",
+        "Meta Platforms",
+        "Amazon",
+        "Apple",
+        "Microsoft",
+        "Netflix",
+        "Disney",
+        "Comcast",
+        "Paramount Global",
+        "Warner Bros. Discovery",
+        "Spotify",
+        "Roku",
+    ]
+    logo_html = ""
+    for company in logo_order:
+        img = logos.get(company)
+        if not img:
+            continue
+        logo_html += (
+            "<span class='ov-hero-logo-wrap'>"
+            f"<img class='ov-hero-logo' src='data:image/png;base64,{img}' alt='{html.escape(company)} logo'/>"
+            "</span>"
+        )
+
+    hero_background = "background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);"
+    if hero_image_path.exists():
+        hero_b64 = base64.b64encode(hero_image_path.read_bytes()).decode()
+        hero_background = f"background-image:url('data:image/png;base64,{hero_b64}');"
+
+    st.markdown(
+        _html_block(
+            f"""
+            <style>
+            .ov-hero {{
+                position: relative;
+                border-radius: 20px;
+                overflow: hidden;
+                min-height: 280px;
+                margin: 8px 0 26px 0;
+                {hero_background}
+                background-size: cover;
+                background-position: center;
+                box-shadow: 0 20px 48px rgba(2, 6, 23, 0.28);
+            }}
+            .ov-hero::before {{
+                content: '';
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(180deg, rgba(2,6,23,0.35) 0%, rgba(2,6,23,0.6) 100%);
+            }}
+            .ov-hero-copy {{
+                position: relative;
+                z-index: 2;
+                padding: 28px 30px 98px;
+                color: #F8FAFC;
+            }}
+            .ov-hero-title {{
+                font-size: clamp(1.6rem, 2.8vw, 2.5rem);
+                font-weight: 900;
+                line-height: 1.1;
+                margin: 0 0 10px 0;
+                color: #F8FAFC;
+            }}
+            .ov-hero-sub {{
+                font-size: 0.98rem;
+                line-height: 1.55;
+                max-width: 900px;
+                color: rgba(248,250,252,0.92);
+            }}
+            .ov-hero-logo-bar {{
+                position: absolute;
+                left: 22px;
+                right: 22px;
+                bottom: 16px;
+                z-index: 3;
+                border-radius: 16px;
+                padding: 10px 14px;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+                overflow-x: auto;
+                background: rgba(255,255,255,0.14);
+                border: 1px solid rgba(255,255,255,0.30);
+                backdrop-filter: blur(10px);
+            }}
+            .ov-hero-logo-wrap {{
+                width: 42px;
+                height: 42px;
+                min-width: 42px;
+                border-radius: 50%;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                background: rgba(255,255,255,0.12);
+                border: 1px solid rgba(255,255,255,0.35);
+            }}
+            .ov-hero-logo {{
+                width: 26px;
+                height: 26px;
+                object-fit: contain;
+            }}
+            .ov-quick-nav-wrap {{
+                margin-top: -36px;
+                position: relative;
+                z-index: 4;
+            }}
+            .ov-quick-nav-wrap [data-testid="stPageLink"] a {{
+                border-radius: 12px !important;
+                border: 1px solid rgba(148,163,184,0.28) !important;
+                background: rgba(15,23,42,0.74) !important;
+                color: #E2E8F0 !important;
+                font-weight: 700 !important;
+                min-height: 44px !important;
+            }}
+            .ov-quick-nav-wrap [data-testid="stPageLink"] a:hover {{
+                border-color: rgba(59,130,246,0.52) !important;
+                background: rgba(30,64,175,0.42) !important;
+            }}
+            </style>
+            <div class='ov-hero'>
+                <div class='ov-hero-copy'>
+                    <div class='ov-hero-title'>Overview Intelligence Hub</div>
+                    <div class='ov-hero-sub'>
+                        Macro regime, concentration, and company signal layers in one control surface.
+                        Use the navigator below to focus one analysis block at a time.
+                    </div>
+                </div>
+                <div class='ov-hero-logo-bar'>{logo_html}</div>
+            </div>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<div class='ov-quick-nav-wrap'>", unsafe_allow_html=True)
+    nav_cols = st.columns(5)
+    nav_items = [
+        ("Welcome.py", "Home", "🏠"),
+        ("pages/00_Overview.py", "Overview", "📊"),
+        ("pages/01_Earnings.py", "Earnings", "💰"),
+        ("pages/02_Stocks.py", "Stocks", "📈"),
+        ("pages/04_Genie.py", "Genie", "🧞"),
+    ]
+    for col, (target, label, icon) in zip(nav_cols, nav_items):
+        with col:
+            try:
+                st.page_link(target, label=label, icon=icon, use_container_width=True)
+            except Exception:
+                st.markdown(f"[{icon} {label}]({target})")
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _add_rate_regime_bands(fig: go.Figure, rates_df: pd.DataFrame) -> None:
@@ -7100,28 +7260,82 @@ _OVERVIEW_AREA_CONFIG = [
 
 
 def _render_overview_area_selector() -> str:
+    st.markdown(
+        _html_block(
+            """
+            <style>
+            .ov-nav-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                gap: 12px;
+                margin: 6px 0 12px 0;
+            }
+            .ov-nav-desc {
+                font-size: 0.78rem;
+                line-height: 1.35;
+                color: rgba(148,163,184,0.95);
+                min-height: 30px;
+                margin-top: 4px;
+            }
+            .ov-nav-card-active {
+                border-radius: 12px;
+                border: 1px solid rgba(37,99,235,0.42);
+                background: rgba(37,99,235,0.12);
+                padding: 8px 10px;
+            }
+            .ov-nav-card {
+                border-radius: 12px;
+                border: 1px solid rgba(148,163,184,0.24);
+                background: rgba(148,163,184,0.08);
+                padding: 8px 10px;
+            }
+            </style>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
     st.markdown("### Overview Navigator")
-    st.caption("Single-view mode: choose one area at a time (8 sections inside one Overview page).")
+    st.caption("Choose one of the 8 sections below. Only that section is rendered to keep focus and reduce lag.")
 
     valid_keys = {item["key"] for item in _OVERVIEW_AREA_CONFIG}
     active_key = st.session_state.get("overview_active_area", "macro_snapshot")
     if active_key not in valid_keys:
         active_key = "macro_snapshot"
 
-    for row_start in (0, 4):
-        row_items = _OVERVIEW_AREA_CONFIG[row_start: row_start + 4]
-        row_cols = st.columns(4)
+    icon_map = {
+        "global_media_map": "🌍",
+        "macro_snapshot": "📉",
+        "insights": "🧠",
+        "macro_regime": "🧭",
+        "deep_dives": "🏢",
+        "device_platform": "📱",
+        "topic_signal": "🗣️",
+        "export": "📦",
+    }
+    per_row = 4
+    for row_start in range(0, len(_OVERVIEW_AREA_CONFIG), per_row):
+        row_items = _OVERVIEW_AREA_CONFIG[row_start: row_start + per_row]
+        row_cols = st.columns(len(row_items))
         for col, item in zip(row_cols, row_items):
             with col:
+                is_active = active_key == item["key"]
+                st.markdown(
+                    f"<div class='{'ov-nav-card-active' if is_active else 'ov-nav-card'}'>",
+                    unsafe_allow_html=True,
+                )
                 if st.button(
-                    item["title"],
+                    f"{icon_map.get(item['key'], '•')} {item['title']}",
                     key=f"overview_area_btn_{item['key']}",
                     use_container_width=True,
-                    type="primary" if active_key == item["key"] else "secondary",
+                    type="primary" if is_active else "secondary",
                 ):
                     active_key = item["key"]
                     st.session_state["overview_active_area"] = active_key
-                st.caption(item["description"])
+                st.markdown(
+                    f"<div class='ov-nav-desc'>{html.escape(item['description'])}</div>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown("</div>", unsafe_allow_html=True)
 
     st.session_state["overview_active_area"] = active_key
     return active_key
@@ -7147,6 +7361,7 @@ begin_snap_section("overview_summary")
 
 # Main app content
 st.title("Overview - Financial Market Intelligence")
+_render_overview_hero_banner()
 
 # Initialize data processor
 data_processor = get_data_processor()
@@ -7305,9 +7520,7 @@ if selected_overview_area == "macro_snapshot":
             "Macro context dashboard is ready and connected. It auto-reads whichever tabs contain "
             "matching rate/labor/currency/valuation fields (no strict sheet naming required)."
         )
-
-    if not _render_excel_macro_section(data_processor, selected_year, selected_quarter):
-        st.info("No `Overview_Macro` row found for the selected period.")
+    # Avoid duplicating KPI blocks: macro baseline table remains available under Export.
     _render_overview_download_section(data_processor, selected_year, selected_quarter)
     end_snap_section()
     st.stop()

@@ -18,6 +18,7 @@ from utils.auth import check_password
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
+import re
 from datetime import datetime
 from data_processor import FinancialDataProcessor
 from utils.data_loader import load_advertising_data, get_available_filters, read_excel_data
@@ -197,6 +198,91 @@ def get_fed_funds_years():
         return sorted(set(years))
     except Exception:
         return []
+
+
+_GENIE_COMPANY_TICKERS = {
+    "Alphabet": "GOOGL",
+    "Amazon": "AMZN",
+    "Apple": "AAPL",
+    "Comcast": "CMCSA",
+    "Disney": "DIS",
+    "Meta Platforms": "META",
+    "Meta": "META",
+    "Microsoft": "MSFT",
+    "Netflix": "NFLX",
+    "Paramount": "PARA",
+    "Paramount Global": "PARA",
+    "Roku": "ROKU",
+    "Spotify": "SPOT",
+    "Warner Bros. Discovery": "WBD",
+    "Warner Bros Discovery": "WBD",
+}
+
+
+def _company_to_ticker(company: str) -> str:
+    return _GENIE_COMPANY_TICKERS.get(str(company).strip(), "")
+
+
+def _canon_col(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(name).lower())
+
+
+def _quarter_focus_to_number(label: str):
+    if not label or str(label).strip().lower() == "all quarters":
+        return None
+    match = re.search(r"([1-4])", str(label))
+    return int(match.group(1)) if match else None
+
+
+@st.cache_data(ttl=3600 * 6)
+def _load_quarterly_company_metrics_sheet(excel_path: str) -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    try:
+        q_df = pd.read_excel(excel_path, sheet_name="Company_Quarterly_segments_valu")
+    except Exception:
+        return pd.DataFrame()
+
+    if q_df is None or q_df.empty:
+        return pd.DataFrame()
+
+    q_df = q_df.copy()
+    q_df.columns = [str(col).strip() for col in q_df.columns]
+    rename_map = {col: re.sub(r"[^a-z0-9]+", "_", str(col).strip().lower()).strip("_") for col in q_df.columns}
+    q_df = q_df.rename(columns=rename_map)
+
+    if "ticker" not in q_df.columns or "year" not in q_df.columns:
+        return pd.DataFrame()
+
+    q_df["ticker"] = q_df["ticker"].astype(str).str.strip().str.upper()
+    q_df["year"] = pd.to_numeric(q_df["year"], errors="coerce")
+    q_df = q_df.dropna(subset=["ticker", "year"]).copy()
+    if q_df.empty:
+        return pd.DataFrame()
+    q_df["year"] = q_df["year"].astype(int)
+
+    q_df = q_df.sort_index().copy()
+    q_df["quarter"] = q_df.groupby(["ticker", "year"]).cumcount() + 1
+
+    return q_df
+
+
+@st.cache_data(ttl=3600 * 6)
+def _get_quarterly_years_for_companies(excel_path: str, companies: tuple) -> list:
+    q_df = _load_quarterly_company_metrics_sheet(excel_path)
+    if q_df.empty or not companies:
+        return []
+    tickers = {t for t in (_company_to_ticker(c) for c in companies) if t}
+    if not tickers:
+        return []
+    years = (
+        q_df[q_df["ticker"].isin(tickers)]["year"]
+        .dropna()
+        .astype(int)
+        .unique()
+        .tolist()
+    )
+    return sorted(set(years))
 
 # Update the mapping of macro categories to their detailed metrics
 MACRO_CATEGORY_MAPPING = {
@@ -850,11 +936,13 @@ with st.expander("Activate Macro Economics Indicators", expanded=False):
                 )
 
 # Year range selector positioned right below the options row
+excel_path = getattr(data_processor, "data_path", "")
 year_candidates = set()
 
 # Company years
 if selected_companies:
     year_candidates.update(get_available_years(tuple(selected_companies), id(data_processor)))
+    year_candidates.update(_get_quarterly_years_for_companies(excel_path, tuple(selected_companies)))
 
 # Country advertising years
 if selected_metrics or show_global:
@@ -888,7 +976,6 @@ year_range = st.slider(
 )
 
 # Cross-page temporal context (shared with Overview and future SQL assistant/widget).
-excel_path = getattr(data_processor, "data_path", "")
 granularity_options = get_available_granularity_options(excel_path, include_auto=True)
 current_granularity = st.session_state.get("genie_selected_granularity", "Auto")
 if current_granularity not in granularity_options:
@@ -1117,10 +1204,77 @@ if (
                                 country_max_values.append(processed_data['values'][i])
 
 
+    quarterly_company_metrics_df = _load_quarterly_company_metrics_sheet(excel_path)
+    prefer_quarterly_metrics = (
+        selected_granularity in {"Auto", "Quarterly"} and not quarterly_company_metrics_df.empty
+    )
+    quarter_focus_num = _quarter_focus_to_number(selected_quarter_focus)
+
+    def _resolve_quarterly_metric_column(metric_key: str):
+        if quarterly_company_metrics_df.empty:
+            return None
+        canonical = {_canon_col(col): col for col in quarterly_company_metrics_df.columns}
+        candidate_tokens = [
+            metric_key,
+            metric_key.replace("_", ""),
+            metric_key.replace("_", " "),
+        ]
+        if metric_key == "rd":
+            candidate_tokens.extend(["r&d", "r_and_d"])
+        if metric_key == "cash_balance":
+            candidate_tokens.extend(["cash", "cash balance"])
+        for token in candidate_tokens:
+            match = canonical.get(_canon_col(token))
+            if match:
+                return match
+        return None
+
+    def _get_quarterly_metric_point(company: str, year: int, metric_key: str):
+        if not prefer_quarterly_metrics:
+            return None
+        ticker = _company_to_ticker(company)
+        if not ticker:
+            return None
+        metric_col = _resolve_quarterly_metric_column(metric_key)
+        if not metric_col:
+            return None
+
+        scoped = quarterly_company_metrics_df[
+            (quarterly_company_metrics_df["ticker"] == ticker) &
+            (quarterly_company_metrics_df["year"] == int(year))
+        ].copy()
+        if scoped.empty:
+            return None
+        if quarter_focus_num is not None:
+            scoped = scoped[scoped["quarter"] == quarter_focus_num].copy()
+            if scoped.empty:
+                return None
+
+        scoped = scoped.sort_values("quarter")
+        row = scoped.iloc[-1]
+        value = pd.to_numeric(row.get(metric_col), errors="coerce")
+        if pd.isna(value):
+            return None
+        quarter_value = pd.to_numeric(row.get("quarter"), errors="coerce")
+        period_label = f"{int(year)} Q{int(quarter_value)}" if not pd.isna(quarter_value) else f"{int(year)}"
+        return {"value": float(value), "period_label": period_label}
+
     # Helper function to get and log company metric data
     @lru_cache(maxsize=32)
     def get_cached_company_years(company):
-        return data_processor.get_available_years(company)
+        annual_years = set(data_processor.get_available_years(company))
+        if prefer_quarterly_metrics:
+            ticker = _company_to_ticker(company)
+            if ticker:
+                q_years = (
+                    quarterly_company_metrics_df[quarterly_company_metrics_df["ticker"] == ticker]["year"]
+                    .dropna()
+                    .astype(int)
+                    .unique()
+                    .tolist()
+                )
+                annual_years.update(q_years)
+        return sorted(int(y) for y in annual_years)
 
     @lru_cache(maxsize=32)
     def get_cached_metrics(company, year):
@@ -1134,13 +1288,32 @@ if (
         metric_data = []
         try:
             for year in filtered_years:
+                quarterly_point = _get_quarterly_metric_point(company, int(year), metric_key)
+                if quarterly_point:
+                    value = quarterly_point["value"]
+                    metric_data.append({
+                        'year': int(year),
+                        'value': value,
+                        'period_label': quarterly_point["period_label"],
+                    })
+                    company_max_values.append(value)
+                    logging.info(
+                        "Loaded %s for %s in %s from quarterly sheet: %s",
+                        metric_name,
+                        company,
+                        quarterly_point["period_label"],
+                        value,
+                    )
+                    continue
+
                 metrics = get_cached_metrics(company, year)
                 if metrics and metric_key in metrics:
                     value = metrics[metric_key]
                     if value is not None:
                         metric_data.append({
-                            'year': year,
-                            'value': value
+                            'year': int(year),
+                            'value': value,
+                            'period_label': f"{int(year)} FY",
                         })
                         company_max_values.append(value)
                         logging.info(f"Loaded {metric_name} for {company} in {year}: {value}")
@@ -1203,6 +1376,11 @@ if (
                         yoy_changes.append(yoy_change)
 
                     hover_values = [format_large_number(val) for val in df_metric['value']]
+                    period_labels = (
+                        df_metric["period_label"].astype(str).tolist()
+                        if "period_label" in df_metric.columns
+                        else [str(int(y)) for y in df_metric["year"].tolist()]
+                    )
 
                     # Determine a color index for this metric
                     color_index = len(fig.data) % len(color_sequence)
@@ -1223,24 +1401,26 @@ if (
                         hover_template = (
                             f"<b>{company} - {metric_name}</b><br>" +
                             "Year: %{x}<br>" +
+                            "Period Source: %{customdata[2]}<br>" +
                             "YoY Growth: %{customdata[0]}<br>" +
                             "Actual Value: %{customdata[1]}<br>" +
                             "<b>Type: Financial Metric</b><br>" +
                             "<extra></extra>"
                         )
-                        custom_data = list(zip(formatted_growth, hover_values))  # Both formatted growth and values
+                        custom_data = list(zip(formatted_growth, hover_values, period_labels))
                     else:
                         # When showing actual values, customdata contains the YoY changes with % formatting
                         formatted_yoy = [f"{yoy:.1f}%" for yoy in yoy_changes]
                         hover_template = (
                             f"<b>{company} - {metric_name}</b><br>" +
                             "Year: %{x}<br>" +
+                            "Period Source: %{customdata[2]}<br>" +
                             "Value: %{customdata[1]}<br>" +
                             "YoY Change: %{customdata[0]}<br>" +
                             "<b>Type: Financial Metric</b><br>" +
                             "<extra></extra>"
                         )
-                        custom_data = list(zip(formatted_yoy, hover_values))
+                        custom_data = list(zip(formatted_yoy, hover_values, period_labels))
                         
                     fig.add_trace(go.Scatter(
                         x=df_metric['year'],

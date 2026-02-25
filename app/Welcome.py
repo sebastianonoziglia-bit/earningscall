@@ -187,6 +187,46 @@ def _render_company_logos(companies_raw: str, logos: Dict[str, str]) -> str:
     return f"<div class='wm-insight-logos'>{''.join(chips)}</div>"
 
 
+def _render_leaderboard_strip(title: str, subtitle: str, cards: List[dict]) -> None:
+    if not cards:
+        return
+    header_html = (
+        "<div class='wm-strip-header'>"
+        f"<div class='wm-strip-title'>{escape(str(title))}</div>"
+        f"<div class='wm-strip-subtitle'>{escape(str(subtitle))}</div>"
+        "</div>"
+    )
+
+    card_blocks = []
+    for card in cards:
+        company_name = str(card.get("company", "Unknown")).strip()
+        company_color = str(card.get("color") or _company_color(company_name))
+        rank = card.get("rank")
+        rank_badge = f"<span class='wm-rank'>{int(rank)}</span>" if isinstance(rank, (int, float)) else ""
+        logo_b64 = str(card.get("logo", "") or "").strip()
+        logo_html = (
+            f"<img class='wm-company-logo' src='data:image/png;base64,{logo_b64}' alt='{escape(company_name)} logo'/>"
+            if logo_b64
+            else ""
+        )
+        value_text = escape(str(card.get("value", "N/A")))
+        card_blocks.append(
+            f"<div class='wm-company-card wm-strip-card' style='--wm-color:{company_color};'>"
+            f"{rank_badge}"
+            "<div class='wm-company-head'>"
+            f"{logo_html}<span class='wm-company-name'>{escape(company_name)}</span>"
+            "</div>"
+            f"<div class='wm-company-value'>{value_text}</div>"
+            f"<div class='wm-company-caption'>{escape(title)}</div>"
+            "</div>"
+        )
+
+    st.markdown(
+        f"{header_html}<div class='wm-hscroll'>{''.join(card_blocks)}</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def _resolve_workbook_path(data_processor) -> Optional[Path]:
     candidates = []
     if data_processor is not None and getattr(data_processor, "data_path", None):
@@ -251,6 +291,8 @@ try:
 except Exception as exc:
     st.warning(f"Data initialization warning: {exc}")
 
+workbook_path = _resolve_workbook_path(data_processor)
+
 if not metrics_df.empty:
     metrics_df.columns = [str(col).strip().lower() for col in metrics_df.columns]
 
@@ -302,7 +344,150 @@ if not df_latest.empty and not df_prev.empty:
     )
     growth_df = growth_df.dropna(subset=["growth_pct"]).nlargest(3, "growth_pct")
 
-workbook_path = _resolve_workbook_path(data_processor)
+# Build per-company KPI leaderboard payloads (all companies, horizontal scroll rows).
+leaderboard_sections = []
+growth_sections = []
+
+if not df_latest.empty:
+    metric_sections = [
+        ("Revenue", "revenue", "Annual revenue leaders"),
+        ("Net Income", "net_income", "Bottom-line leaders"),
+        ("Operating Income", "operating_income", "Core profitability leaders"),
+        ("Market Cap", "market_cap", "Market value concentration"),
+        ("Debt", "debt", "Highest leverage by absolute debt"),
+        ("Cash Balance", "cash_balance", "Liquidity leaders"),
+        ("R&D", "rd", "Innovation spend leaders"),
+        ("Capex", "capex", "Infrastructure investment leaders"),
+    ]
+    for title, key, subtitle in metric_sections:
+        if key not in df_latest.columns:
+            continue
+        block = df_latest[["company", key]].dropna(subset=[key]).copy()
+        if block.empty:
+            continue
+        block = block.sort_values(key, ascending=False)
+        cards = []
+        for rank, (_, row) in enumerate(block.iterrows(), start=1):
+            company_name = str(row["company"])
+            value = row[key]
+            cards.append(
+                {
+                    "rank": rank,
+                    "company": company_name,
+                    "value": _format_money_musd(value, 1),
+                    "color": _company_color(company_name),
+                    "logo": _resolve_logo(company_name, logos),
+                }
+            )
+        leaderboard_sections.append({"title": title, "subtitle": subtitle, "cards": cards})
+
+        yoy_col = f"{key}_yoy"
+        if yoy_col in df_latest.columns:
+            growth_block = (
+                df_latest[["company", yoy_col]]
+                .rename(columns={yoy_col: "growth"})
+                .dropna(subset=["growth"])
+                .sort_values("growth", ascending=False)
+            )
+        else:
+            growth_block = pd.DataFrame()
+            if not df_prev.empty and key in df_prev.columns:
+                prev_block = (
+                    df_prev[["company", key]]
+                    .dropna(subset=[key])
+                    .rename(columns={key: "prev_value"})
+                )
+                growth_block = (
+                    df_latest[["company", key]]
+                    .dropna(subset=[key])
+                    .merge(prev_block, on="company", how="left")
+                )
+                growth_block["growth"] = growth_block.apply(
+                    lambda r: _safe_pct(r[key] - r["prev_value"], r["prev_value"]),
+                    axis=1,
+                )
+                growth_block = growth_block.dropna(subset=["growth"]).sort_values("growth", ascending=False)
+
+        if not growth_block.empty:
+            g_cards = []
+            for rank, (_, row) in enumerate(growth_block.iterrows(), start=1):
+                company_name = str(row["company"])
+                g_cards.append(
+                    {
+                        "rank": rank,
+                        "company": company_name,
+                        "value": f"{float(row['growth']):+.1f}%",
+                        "color": _company_color(company_name),
+                        "logo": _resolve_logo(company_name, logos),
+                    }
+                )
+            growth_sections.append(
+                {
+                    "title": f"{title} Growth",
+                    "subtitle": "YoY leaderboard",
+                    "cards": g_cards,
+                }
+            )
+
+# Advertising revenue leaderboard from annual ad sheet (if available).
+if workbook_path and workbook_path.exists():
+    try:
+        ad_df = pd.read_excel(workbook_path, sheet_name="Company_advertising_revenue")
+        ad_df.columns = [str(c).strip() for c in ad_df.columns]
+        if "Year" in ad_df.columns:
+            ad_df["Year"] = pd.to_numeric(ad_df["Year"], errors="coerce")
+            ad_row = ad_df[ad_df["Year"] == int(latest_year)].copy()
+            if not ad_row.empty:
+                ad_row = ad_row.iloc[0]
+                ad_map = {
+                    "Google_Ads": "Alphabet",
+                    "Meta_Ads": "Meta Platforms",
+                    "Amazon_Ads": "Amazon",
+                    "Spotify_Ads": "Spotify",
+                    "*WBD_Ads": "Warner Bros. Discovery",
+                    "*Microsoft_Ads": "Microsoft",
+                    "Paramount": "Paramount Global",
+                    "*Apple": "Apple",
+                    "*Disney": "Disney",
+                    "Comcast": "Comcast",
+                    "Netflix": "Netflix",
+                    "Twitter/X": "Twitter/X",
+                    "TikTok": "TikTok",
+                    "Snapchat": "Snapchat",
+                }
+                cards = []
+                for col, company_name in ad_map.items():
+                    if col not in ad_df.columns:
+                        continue
+                    value = pd.to_numeric(ad_row.get(col), errors="coerce")
+                    if pd.isna(value):
+                        continue
+                    # Sheet values are USD billions.
+                    value_musd = float(value) * 1000.0
+                    cards.append(
+                        {
+                            "company": company_name,
+                            "raw": value_musd,
+                            "value": _format_money_musd(value_musd, 1),
+                            "color": _company_color(company_name),
+                            "logo": _resolve_logo(company_name, logos),
+                        }
+                    )
+                cards = sorted(cards, key=lambda x: x["raw"], reverse=True)
+                for idx, card in enumerate(cards, start=1):
+                    card["rank"] = idx
+                if cards:
+                    leaderboard_sections.insert(
+                        3,
+                        {
+                            "title": "Advertising Revenue",
+                            "subtitle": "Ad monetization leaders",
+                            "cards": cards,
+                        },
+                    )
+    except Exception:
+        pass
+
 auto_insights_df = _load_auto_insights(workbook_path, latest_year)
 
 # Styling
@@ -581,6 +766,43 @@ st.markdown(
     gap: 14px;
 }}
 
+.wm-strip-header {{
+    margin: 14px 0 8px;
+}}
+
+.wm-strip-title {{
+    color: {text_color};
+    font-size: 0.97rem;
+    font-weight: 780;
+    line-height: 1.2;
+}}
+
+.wm-strip-subtitle {{
+    color: {muted_color};
+    font-size: 0.78rem;
+    line-height: 1.35;
+    margin-top: 3px;
+}}
+
+.wm-hscroll {{
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 2px 12px 2px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+}}
+
+.wm-hscroll::-webkit-scrollbar {{
+    height: 8px;
+}}
+
+.wm-hscroll::-webkit-scrollbar-thumb {{
+    border-radius: 8px;
+    background: rgba(148,163,184,0.45);
+}}
+
 .wm-company-card {{
     background: {surface_color};
     border: 1px solid {border_color};
@@ -593,6 +815,13 @@ st.markdown(
 }}
 
 .wm-company-card:hover {{ transform: translateY(-3px); }}
+
+.wm-strip-card {{
+    flex: 0 0 248px;
+    min-width: 248px;
+    max-width: 248px;
+    scroll-snap-align: start;
+}}
 
 .wm-rank {{
     position: absolute;
@@ -841,54 +1070,27 @@ else:
         )
     st.markdown(f"<div class='wm-insight-grid'>{''.join(cards)}</div>", unsafe_allow_html=True)
 
-st.markdown(f"<div class='wm-section-title'>🏆 Market Leaders — Revenue {latest_year}</div>", unsafe_allow_html=True)
-if top_by_revenue.empty:
-    st.info("Revenue leaderboard will appear once yearly metrics are available.")
+st.markdown(f"<div class='wm-section-title'>🏆 Company KPI Leaderboards — {latest_year}</div>", unsafe_allow_html=True)
+if not leaderboard_sections:
+    st.info("KPI leaderboards will appear once yearly metrics are available.")
 else:
-    company_cards = []
-    for rank, (_, row) in enumerate(top_by_revenue.iterrows(), start=1):
-        company_name = str(row["company"])
-        company_color = _company_color(company_name)
-        logo_b64 = _resolve_logo(company_name, logos)
-        logo_html = (
-            f"<img class='wm-company-logo' src='data:image/png;base64,{logo_b64}' alt='{escape(company_name)} logo'/>"
-            if logo_b64
-            else ""
+    st.caption("Horizontal strips: drag or scroll to browse all companies in each KPI.")
+    for section in leaderboard_sections:
+        _render_leaderboard_strip(
+            title=section.get("title", "KPI"),
+            subtitle=section.get("subtitle", ""),
+            cards=section.get("cards", []),
         )
-        company_cards.append(
-            f"<div class='wm-company-card' style='--wm-color:{company_color};'>"
-            f"<span class='wm-rank'>{rank}</span>"
-            "<div class='wm-company-head'>"
-            f"{logo_html}<span class='wm-company-name'>{escape(company_name)}</span>"
-            "</div>"
-            f"<div class='wm-company-value'>{_format_money_musd(row['revenue'], 1)}</div>"
-            "<div class='wm-company-caption'>Revenue</div>"
-            "</div>"
-        )
-    st.markdown(f"<div class='wm-company-grid'>{''.join(company_cards)}</div>", unsafe_allow_html=True)
 
-if not growth_df.empty:
-    st.markdown("<div class='wm-section-title'>🚀 Fastest Growing</div>", unsafe_allow_html=True)
-    growth_cards = []
-    for _, row in growth_df.iterrows():
-        company_name = str(row["company"])
-        company_color = _company_color(company_name)
-        logo_b64 = _resolve_logo(company_name, logos)
-        logo_html = (
-            f"<img class='wm-company-logo' src='data:image/png;base64,{logo_b64}' alt='{escape(company_name)} logo'/>"
-            if logo_b64
-            else ""
+if growth_sections:
+    st.markdown("<div class='wm-section-title'>🚀 Fastest Growing by KPI</div>", unsafe_allow_html=True)
+    st.caption("YoY growth strips from the same KPI library.")
+    for section in growth_sections:
+        _render_leaderboard_strip(
+            title=section.get("title", "Growth"),
+            subtitle=section.get("subtitle", ""),
+            cards=section.get("cards", []),
         )
-        growth_cards.append(
-            f"<div class='wm-company-card' style='--wm-color:{company_color};'>"
-            "<div class='wm-company-head'>"
-            f"{logo_html}<span class='wm-company-name'>{escape(company_name)}</span>"
-            "</div>"
-            f"<div class='wm-company-value'>+{float(row['growth_pct']):.1f}%</div>"
-            "<div class='wm-company-caption'>YoY Revenue Growth</div>"
-            "</div>"
-        )
-    st.markdown(f"<div class='wm-company-grid'>{''.join(growth_cards)}</div>", unsafe_allow_html=True)
 
 st.markdown(
     """
