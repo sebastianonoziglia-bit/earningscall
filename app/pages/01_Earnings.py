@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 check_password()
 st.markdown(get_page_style(), unsafe_allow_html=True)
+st.session_state["_active_nav_page"] = "earnings"
 display_header()
 st.markdown(
     """

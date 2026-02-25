@@ -38,6 +38,7 @@ from utils.data_granularity import (
 )
 
 st.markdown(get_page_style(), unsafe_allow_html=True)
+st.session_state["_active_nav_page"] = "overview"
 display_header()
 
 # Streamlit markdown can treat indented HTML as a code block. Normalize HTML blocks to avoid that.

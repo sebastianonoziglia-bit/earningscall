@@ -57,6 +57,7 @@ load_genie_specific_styles()
 # Add header with language selector
 from utils.header import render_header
 from utils.language import get_text
+st.session_state["_active_nav_page"] = "genie"
 render_header()
 
 # Add SQL Assistant in the sidebar

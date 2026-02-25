@@ -2,6 +2,9 @@
 runOnSave = false
 fileWatcherType = "none"
 
+[client]
+showSidebarNavigation = false
+
 [theme]
 primaryColor = "#FF6B6B"
 backgroundColor = "#FFFFFF"

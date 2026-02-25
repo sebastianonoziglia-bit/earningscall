@@ -26,6 +26,7 @@ apply_global_fonts()
 
 # One-time sync per container startup (not per session)
 SYNC_FLAG_FILE = "/tmp/transcript_sync_done"
+AUTO_SYNC_ENV = "AUTO_SYNC_TRANSCRIPTS_ON_STARTUP"
 
 
 def _run_startup_transcript_sync() -> None:
@@ -39,7 +40,10 @@ def _run_startup_transcript_sync() -> None:
         st.warning(f"Transcript sync failed: {exc}")
 
 
-_run_startup_transcript_sync()
+# Keep startup fast/stable on hosted runtimes (HF).
+# Enable only when explicitly requested via env var.
+if str(os.getenv(AUTO_SYNC_ENV, "")).strip().lower() in {"1", "true", "yes", "on"}:
+    _run_startup_transcript_sync()
 
 
 # Query-param navigation support (same behavior as before)
@@ -80,6 +84,7 @@ if target_param:
         st.switch_page(page_map[target_key])
 
 
+st.session_state["_active_nav_page"] = "home"
 display_header(enable_dom_patch=False)
 
 sync_col_left, sync_col_right = st.columns([6, 2])

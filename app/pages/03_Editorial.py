@@ -31,6 +31,7 @@ st.markdown(get_animation_style(), unsafe_allow_html=True)
 # Add header with language selector
 from utils.header import render_header
 from utils.language import get_text
+st.session_state["_active_nav_page"] = "editorial"
 render_header()
 
 # Add SQL Assistant in the sidebar
