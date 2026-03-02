@@ -3795,10 +3795,10 @@ def _render_overview_hero_banner() -> None:
                 border-radius: 20px;
                 overflow: hidden;
                 min-height: 280px;
-                margin: 8px 0 26px 0;
+                margin: 0 0 26px 0;
                 {hero_background}
                 background-size: cover;
-                background-position: center;
+                background-position: center center;
                 box-shadow: 0 20px 48px rgba(2, 6, 23, 0.28);
             }}
             .ov-hero::before {{

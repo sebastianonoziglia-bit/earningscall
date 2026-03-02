@@ -48,6 +48,18 @@ def _route_query_navigation():
     target_page = _QUERY_PAGE_MAP.get(target_key)
     if not target_page:
         return
+    current_key = str(
+        st.session_state.get("active_nav_page")
+        or st.session_state.get("_active_nav_page")
+        or ""
+    ).strip().lower()
+    current_page = _QUERY_PAGE_MAP.get(current_key, "")
+    if target_key == current_key or (current_page and target_page == current_page):
+        try:
+            st.query_params.clear()
+        except Exception:
+            pass
+        return
     try:
         st.query_params.clear()
     except Exception:

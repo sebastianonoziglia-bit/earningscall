@@ -49,44 +49,6 @@ if str(os.getenv(AUTO_SYNC_ENV, "")).strip().lower() in {"1", "true", "yes", "on
     _run_startup_transcript_sync()
 
 
-# Query-param navigation support (same behavior as before)
-query_params = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
-
-
-def _first_param(value):
-    if isinstance(value, list):
-        return value[0] if value else None
-    return value
-
-
-nav_param = _first_param(query_params.get("nav")) if query_params else None
-go_param = _first_param(query_params.get("go")) if query_params else None
-page_param = _first_param(query_params.get("page")) if query_params else None
-company_param = _first_param(query_params.get("company")) if query_params else None
-
-target_param = nav_param or go_param or page_param
-if target_param:
-    target_key = str(target_param).strip().lower()
-    page_map = {
-        "overview": "pages/00_Overview.py",
-        "earnings": "pages/01_Earnings.py",
-        "01_earnings": "pages/01_Earnings.py",
-        "stocks": "pages/02_Stocks.py",
-        "editorial": "pages/03_Editorial.py",
-        "genie": "pages/04_Genie.py",
-        "financial_genie": "pages/04_Genie.py",
-        "financial-genie": "pages/04_Genie.py",
-    }
-    if target_key in page_map:
-        if target_key in {"earnings", "01_earnings"} and company_param:
-            st.session_state["prefill_company"] = company_param
-        try:
-            st.query_params.clear()
-        except Exception:
-            pass
-        st.switch_page(page_map[target_key])
-
-
 st.session_state["active_nav_page"] = "home"
 st.session_state["_active_nav_page"] = "home"
 display_header(enable_dom_patch=False)
@@ -201,8 +163,7 @@ def _clean_signal_title(raw_title: str) -> str:
 def _render_leaderboard_strip(title: str, subtitle: str, cards: List[dict]) -> None:
     if not cards:
         return
-    preview_count = 5
-    visible_cards = cards[:preview_count]
+    visible_cards = cards
 
     header_html = (
         "<div class='wm-strip-header'>"
@@ -224,6 +185,13 @@ def _render_leaderboard_strip(title: str, subtitle: str, cards: List[dict]) -> N
             else ""
         )
         value_text = escape(str(card.get("value", "N/A")))
+        yoy_pct = card.get("yoy_pct")
+        if isinstance(yoy_pct, (int, float)) and not pd.isna(yoy_pct):
+            yoy_arrow = "↑" if float(yoy_pct) >= 0 else "↓"
+            yoy_color = "#22c55e" if float(yoy_pct) >= 0 else "#ef4444"
+            yoy_html = f"<div class='wm-company-yoy' style='color:{yoy_color};'>{yoy_arrow} {abs(float(yoy_pct)):.1f}% YoY</div>"
+        else:
+            yoy_html = ""
         card_blocks.append(
             f"<div class='wm-company-card wm-strip-card' style='--wm-color:{company_color};'>"
             f"{rank_badge}"
@@ -231,7 +199,16 @@ def _render_leaderboard_strip(title: str, subtitle: str, cards: List[dict]) -> N
             f"{logo_html}<span class='wm-company-name'>{escape(company_name)}</span>"
             "</div>"
             f"<div class='wm-company-value'>{value_text}</div>"
+            f"{yoy_html}"
             f"<div class='wm-company-caption'>{escape(title)}</div>"
+            "</div>"
+        )
+
+    if len(cards) > 5:
+        card_blocks.append(
+            "<div class='wm-strip-card wm-more-indicator'>"
+            "<div class='wm-more-arrow'>→</div>"
+            f"<div class='wm-more-label'>Scroll for<br/>{len(cards)} companies</div>"
             "</div>"
         )
 
@@ -239,33 +216,6 @@ def _render_leaderboard_strip(title: str, subtitle: str, cards: List[dict]) -> N
         f"{header_html}<div class='wm-hscroll'>{''.join(card_blocks)}</div>",
         unsafe_allow_html=True,
     )
-
-    if len(cards) > preview_count:
-        with st.expander(f"→ {title}: show full ranking ({len(cards)} companies)", expanded=False):
-            full_blocks = []
-            for card in cards:
-                company_name = str(card.get("company", "Unknown")).strip()
-                company_color = str(card.get("color") or _company_color(company_name))
-                rank = card.get("rank")
-                rank_badge = f"<span class='wm-rank'>{int(rank)}</span>" if isinstance(rank, (int, float)) else ""
-                logo_b64 = str(card.get("logo", "") or "").strip()
-                logo_html = (
-                    f"<img class='wm-company-logo' src='data:image/png;base64,{logo_b64}' alt='{escape(company_name)} logo'/>"
-                    if logo_b64
-                    else ""
-                )
-                value_text = escape(str(card.get("value", "N/A")))
-                full_blocks.append(
-                    f"<div class='wm-company-card wm-strip-card' style='--wm-color:{company_color};'>"
-                    f"{rank_badge}"
-                    "<div class='wm-company-head'>"
-                    f"{logo_html}<span class='wm-company-name'>{escape(company_name)}</span>"
-                    "</div>"
-                    f"<div class='wm-company-value'>{value_text}</div>"
-                    f"<div class='wm-company-caption'>{escape(title)}</div>"
-                    "</div>"
-                )
-            st.markdown(f"<div class='wm-hscroll'>{''.join(full_blocks)}</div>", unsafe_allow_html=True)
 
 
 def _resolve_workbook_path(data_processor) -> Optional[Path]:
@@ -370,36 +320,47 @@ revenue_growth_pct = _safe_pct(total_revenue_latest - total_revenue_prev, total_
 profit_margin_pct = _safe_pct(total_net_income_latest, total_revenue_latest)
 rd_intensity_pct = _safe_pct(total_rd_latest, total_revenue_latest)
 
-# Build company KPI leaderboard payloads (show top-5 + expandable full ranking).
+# Build company KPI leaderboard payloads (horizontal scroll, all companies visible via strip).
 leaderboard_sections = []
 
 
-def _rank_cards_from_block(block: pd.DataFrame, value_col: str, formatter) -> list:
+def _rank_cards_from_block(block: pd.DataFrame, value_col: str, formatter, prev_block: Optional[pd.DataFrame] = None) -> list:
     if block.empty or value_col not in block.columns:
         return []
     scoped = block[["company", value_col]].dropna(subset=[value_col]).copy()
     if scoped.empty:
         return []
     scoped = scoped.sort_values(value_col, ascending=False)
+    prev_lookup = {}
+    if prev_block is not None and not prev_block.empty and value_col in prev_block.columns:
+        prev_scoped = prev_block[["company", value_col]].dropna(subset=[value_col]).copy()
+        if not prev_scoped.empty:
+            prev_lookup = {str(r["company"]): float(r[value_col]) for _, r in prev_scoped.iterrows()}
     cards = []
     for rank, (_, row) in enumerate(scoped.iterrows(), start=1):
         company_name = str(row["company"])
+        curr_val = float(row[value_col])
+        yoy_pct = None
+        prev_val = prev_lookup.get(company_name)
+        if prev_val is not None and prev_val != 0:
+            yoy_pct = ((curr_val - prev_val) / abs(prev_val)) * 100.0
         cards.append(
             {
                 "rank": rank,
                 "company": company_name,
-                "value": formatter(row[value_col]),
+                "value": formatter(curr_val),
                 "color": _company_color(company_name),
                 "logo": _resolve_logo(company_name, logos),
-                "raw": float(row[value_col]),
+                "raw": curr_val,
+                "yoy_pct": yoy_pct,
             }
         )
     return cards
 
 
-revenue_cards = _rank_cards_from_block(df_latest, "revenue", lambda v: _format_money_musd(v, 1))
-market_cap_cards = _rank_cards_from_block(df_latest, "market_cap", lambda v: _format_money_musd(v, 1))
-rd_cards = _rank_cards_from_block(df_latest, "rd", lambda v: _format_money_musd(v, 1))
+revenue_cards = _rank_cards_from_block(df_latest, "revenue", lambda v: _format_money_musd(v, 1), prev_block=df_prev)
+market_cap_cards = _rank_cards_from_block(df_latest, "market_cap", lambda v: _format_money_musd(v, 1), prev_block=df_prev)
+rd_cards = _rank_cards_from_block(df_latest, "rd", lambda v: _format_money_musd(v, 1), prev_block=df_prev)
 
 ad_revenue_cards = []
 ad_growth_cards = []
@@ -434,9 +395,13 @@ if workbook_path and workbook_path.exists():
                     "Snapchat": "Snapchat",
                 }
                 revenue_lookup = {}
+                prev_revenue_lookup = {}
                 if not df_latest.empty and "revenue" in df_latest.columns:
                     for _, r in df_latest[["company", "revenue"]].dropna(subset=["revenue"]).iterrows():
                         revenue_lookup[str(r["company"])] = float(r["revenue"])
+                if not df_prev.empty and "revenue" in df_prev.columns:
+                    for _, r in df_prev[["company", "revenue"]].dropna(subset=["revenue"]).iterrows():
+                        prev_revenue_lookup[str(r["company"])] = float(r["revenue"])
 
                 ad_rows = []
                 for col, company_name in ad_map.items():
@@ -451,12 +416,20 @@ if workbook_path and workbook_path.exists():
                     growth_pct = _safe_pct(ad_musd - prev_musd, prev_musd) if not pd.isna(prev_musd) else None
                     company_revenue = revenue_lookup.get(company_name)
                     intensity_pct = _safe_pct(ad_musd, company_revenue) if company_revenue else None
+                    prev_company_revenue = prev_revenue_lookup.get(company_name)
+                    intensity_prev = _safe_pct(prev_musd, prev_company_revenue) if prev_company_revenue and not pd.isna(prev_musd) else None
+                    intensity_yoy_pct = (
+                        ((float(intensity_pct) - float(intensity_prev)) / abs(float(intensity_prev)) * 100.0)
+                        if intensity_pct is not None and intensity_prev not in (None, 0)
+                        else None
+                    )
                     ad_rows.append(
                         {
                             "company": company_name,
                             "ad_musd": ad_musd,
                             "ad_growth_pct": growth_pct,
                             "ad_intensity_pct": intensity_pct,
+                            "ad_intensity_yoy_pct": intensity_yoy_pct,
                         }
                     )
 
@@ -471,6 +444,7 @@ if workbook_path and workbook_path.exists():
                                 "color": _company_color(row["company"]),
                                 "logo": _resolve_logo(row["company"], logos),
                                 "raw": row["ad_musd"],
+                                "yoy_pct": row["ad_growth_pct"],
                             }
                         )
 
@@ -485,6 +459,7 @@ if workbook_path and workbook_path.exists():
                                 "color": _company_color(row["company"]),
                                 "logo": _resolve_logo(row["company"], logos),
                                 "raw": float(row["ad_growth_pct"]),
+                                "yoy_pct": row["ad_growth_pct"],
                             }
                         )
 
@@ -499,6 +474,7 @@ if workbook_path and workbook_path.exists():
                                 "color": _company_color(row["company"]),
                                 "logo": _resolve_logo(row["company"], logos),
                                 "raw": float(row["ad_intensity_pct"]),
+                                "yoy_pct": row["ad_intensity_yoy_pct"],
                             }
                         )
     except Exception:
@@ -536,6 +512,8 @@ st.markdown(
 .wm-wrap {{
     max-width: 1500px;
     margin: 0 auto;
+    margin-top: 0;
+    padding-top: 0;
     padding: 0 14px 36px;
 }}
 
@@ -832,6 +810,8 @@ st.markdown(
     padding: 4px 2px 12px 2px;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148,163,184,0.55) transparent;
 }}
 
 .wm-hscroll::-webkit-scrollbar {{
@@ -905,6 +885,41 @@ st.markdown(
     line-height: 1.1;
     color: var(--wm-color, #0073ff);
     margin-top: 5px;
+}}
+
+.wm-company-yoy {{
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-top: 3px;
+}}
+
+.wm-more-indicator {{
+    flex: 0 0 120px;
+    min-width: 120px;
+    max-width: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,115,255,0.08);
+    border: 2px dashed rgba(0,115,255,0.35);
+    border-radius: 14px;
+    cursor: default;
+}}
+
+.wm-more-arrow {{
+    font-size: 2rem;
+    color: #0073ff;
+    font-weight: 900;
+}}
+
+.wm-more-label {{
+    font-size: 0.75rem;
+    color: #0073ff;
+    text-align: center;
+    margin-top: 6px;
+    font-weight: 700;
+    line-height: 1.35;
 }}
 
 .wm-company-caption {{
@@ -988,7 +1003,7 @@ if hero_home_b64:
           .wm-page-hero {{
             width: 100%;
             min-height: 260px;
-            margin: -0.5rem -1.5rem 0 -1.5rem;
+            margin: 0 -1.5rem 0 -1.5rem;
             background-image: url('data:{hero_home_mime};base64,{hero_home_b64}');
             background-size: cover;
             background-position: center 30%;
@@ -1021,7 +1036,7 @@ st.markdown(
     f"""
 <div class="wm-hero">
   <div class="wm-status"><span class="wm-status-dot"></span>Live Data • {latest_year}</div>
-  <h1 class="wm-title">Global Media Economy Intelligence</h1>
+  <h1 class="wm-title">Competitive Monetization Intelligence</h1>
   <div class="wm-subtitle">
     Strategic signal layer across technology and media leaders. Tracking <strong>{company_count}</strong> companies,
     <strong>{_format_money_musd(total_revenue_latest, 1)}</strong> in annual revenue, and cross-market structure changes in one view.
