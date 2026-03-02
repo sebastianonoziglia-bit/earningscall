@@ -1,9 +1,12 @@
 import os
+import base64
+import re
 from datetime import datetime
 from html import escape
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -84,26 +87,23 @@ if target_param:
         st.switch_page(page_map[target_key])
 
 
+st.session_state["active_nav_page"] = "home"
 st.session_state["_active_nav_page"] = "home"
 display_header(enable_dom_patch=False)
-
-sync_col_left, sync_col_right = st.columns([6, 2])
-with sync_col_right:
-    if st.button("🔄 Sync Transcripts", help="Manually sync transcript data", use_container_width=True):
-        if os.path.exists(SYNC_FLAG_FILE):
-            os.remove(SYNC_FLAG_FILE)
-        with st.spinner("Syncing transcripts..."):
-            try:
-                sync_local_transcripts_to_workbook()
-                with open(SYNC_FLAG_FILE, "w", encoding="utf-8") as handle:
-                    handle.write(str(datetime.now()))
-                st.success("Sync complete!")
-            except Exception as exc:
-                st.error(f"Sync failed: {exc}")
 
 
 APP_DIR = Path(__file__).resolve().parent
 ROOT_DIR = APP_DIR.parent
+
+hero_home_path = APP_DIR / "attached_assets" / "hero_home.jpg"
+hero_home_b64 = ""
+hero_home_mime = "image/jpeg"
+if hero_home_path.exists():
+    hero_home_b64 = base64.b64encode(hero_home_path.read_bytes()).decode()
+elif (APP_DIR / "attached_assets" / "FAQ MFE.png").exists():
+    fallback_path = APP_DIR / "attached_assets" / "FAQ MFE.png"
+    hero_home_b64 = base64.b64encode(fallback_path.read_bytes()).decode()
+    hero_home_mime = "image/png"
 
 
 def _to_numeric(series: pd.Series) -> pd.Series:
@@ -192,9 +192,18 @@ def _render_company_logos(companies_raw: str, logos: Dict[str, str]) -> str:
     return f"<div class='wm-insight-logos'>{''.join(chips)}</div>"
 
 
+def _clean_signal_title(raw_title: str) -> str:
+    title = str(raw_title or "").strip()
+    title = re.sub(r"\s*\(auto\)\s*$", "", title, flags=re.IGNORECASE)
+    return title
+
+
 def _render_leaderboard_strip(title: str, subtitle: str, cards: List[dict]) -> None:
     if not cards:
         return
+    preview_count = 5
+    visible_cards = cards[:preview_count]
+
     header_html = (
         "<div class='wm-strip-header'>"
         f"<div class='wm-strip-title'>{escape(str(title))}</div>"
@@ -203,7 +212,7 @@ def _render_leaderboard_strip(title: str, subtitle: str, cards: List[dict]) -> N
     )
 
     card_blocks = []
-    for card in cards:
+    for card in visible_cards:
         company_name = str(card.get("company", "Unknown")).strip()
         company_color = str(card.get("color") or _company_color(company_name))
         rank = card.get("rank")
@@ -230,6 +239,33 @@ def _render_leaderboard_strip(title: str, subtitle: str, cards: List[dict]) -> N
         f"{header_html}<div class='wm-hscroll'>{''.join(card_blocks)}</div>",
         unsafe_allow_html=True,
     )
+
+    if len(cards) > preview_count:
+        with st.expander(f"→ {title}: show full ranking ({len(cards)} companies)", expanded=False):
+            full_blocks = []
+            for card in cards:
+                company_name = str(card.get("company", "Unknown")).strip()
+                company_color = str(card.get("color") or _company_color(company_name))
+                rank = card.get("rank")
+                rank_badge = f"<span class='wm-rank'>{int(rank)}</span>" if isinstance(rank, (int, float)) else ""
+                logo_b64 = str(card.get("logo", "") or "").strip()
+                logo_html = (
+                    f"<img class='wm-company-logo' src='data:image/png;base64,{logo_b64}' alt='{escape(company_name)} logo'/>"
+                    if logo_b64
+                    else ""
+                )
+                value_text = escape(str(card.get("value", "N/A")))
+                full_blocks.append(
+                    f"<div class='wm-company-card wm-strip-card' style='--wm-color:{company_color};'>"
+                    f"{rank_badge}"
+                    "<div class='wm-company-head'>"
+                    f"{logo_html}<span class='wm-company-name'>{escape(company_name)}</span>"
+                    "</div>"
+                    f"<div class='wm-company-value'>{value_text}</div>"
+                    f"<div class='wm-company-caption'>{escape(title)}</div>"
+                    "</div>"
+                )
+            st.markdown(f"<div class='wm-hscroll'>{''.join(full_blocks)}</div>", unsafe_allow_html=True)
 
 
 def _resolve_workbook_path(data_processor) -> Optional[Path]:
@@ -334,116 +370,53 @@ revenue_growth_pct = _safe_pct(total_revenue_latest - total_revenue_prev, total_
 profit_margin_pct = _safe_pct(total_net_income_latest, total_revenue_latest)
 rd_intensity_pct = _safe_pct(total_rd_latest, total_revenue_latest)
 
-if not df_latest.empty:
-    top_by_revenue = df_latest[["company", "revenue"]].dropna(subset=["revenue"]).nlargest(5, "revenue")
-else:
-    top_by_revenue = pd.DataFrame(columns=["company", "revenue"])
-
-growth_df = pd.DataFrame()
-if not df_latest.empty and not df_prev.empty:
-    prev_rev = df_prev[["company", "revenue"]].rename(columns={"revenue": "revenue_prev"})
-    growth_df = df_latest[["company", "revenue"]].merge(prev_rev, on="company", how="left")
-    growth_df["growth_pct"] = growth_df.apply(
-        lambda row: _safe_pct(row["revenue"] - row["revenue_prev"], row["revenue_prev"]),
-        axis=1,
-    )
-    growth_df = growth_df.dropna(subset=["growth_pct"]).nlargest(3, "growth_pct")
-
-# Build per-company KPI leaderboard payloads (all companies, horizontal scroll rows).
+# Build company KPI leaderboard payloads (show top-5 + expandable full ranking).
 leaderboard_sections = []
-growth_sections = []
 
-if not df_latest.empty:
-    metric_sections = [
-        ("Revenue", "revenue", "Annual revenue leaders"),
-        ("Net Income", "net_income", "Bottom-line leaders"),
-        ("Operating Income", "operating_income", "Core profitability leaders"),
-        ("Market Cap", "market_cap", "Market value concentration"),
-        ("Debt", "debt", "Highest leverage by absolute debt"),
-        ("Cash Balance", "cash_balance", "Liquidity leaders"),
-        ("R&D", "rd", "Innovation spend leaders"),
-        ("Capex", "capex", "Infrastructure investment leaders"),
-    ]
-    for title, key, subtitle in metric_sections:
-        if key not in df_latest.columns:
-            continue
-        block = df_latest[["company", key]].dropna(subset=[key]).copy()
-        if block.empty:
-            continue
-        block = block.sort_values(key, ascending=False)
-        cards = []
-        for rank, (_, row) in enumerate(block.iterrows(), start=1):
-            company_name = str(row["company"])
-            value = row[key]
-            cards.append(
-                {
-                    "rank": rank,
-                    "company": company_name,
-                    "value": _format_money_musd(value, 1),
-                    "color": _company_color(company_name),
-                    "logo": _resolve_logo(company_name, logos),
-                }
-            )
-        leaderboard_sections.append({"title": title, "subtitle": subtitle, "cards": cards})
 
-        yoy_col = f"{key}_yoy"
-        if yoy_col in df_latest.columns:
-            growth_block = (
-                df_latest[["company", yoy_col]]
-                .rename(columns={yoy_col: "growth"})
-                .dropna(subset=["growth"])
-                .sort_values("growth", ascending=False)
-            )
-        else:
-            growth_block = pd.DataFrame()
-            if not df_prev.empty and key in df_prev.columns:
-                prev_block = (
-                    df_prev[["company", key]]
-                    .dropna(subset=[key])
-                    .rename(columns={key: "prev_value"})
-                )
-                growth_block = (
-                    df_latest[["company", key]]
-                    .dropna(subset=[key])
-                    .merge(prev_block, on="company", how="left")
-                )
-                growth_block["growth"] = growth_block.apply(
-                    lambda r: _safe_pct(r[key] - r["prev_value"], r["prev_value"]),
-                    axis=1,
-                )
-                growth_block = growth_block.dropna(subset=["growth"]).sort_values("growth", ascending=False)
+def _rank_cards_from_block(block: pd.DataFrame, value_col: str, formatter) -> list:
+    if block.empty or value_col not in block.columns:
+        return []
+    scoped = block[["company", value_col]].dropna(subset=[value_col]).copy()
+    if scoped.empty:
+        return []
+    scoped = scoped.sort_values(value_col, ascending=False)
+    cards = []
+    for rank, (_, row) in enumerate(scoped.iterrows(), start=1):
+        company_name = str(row["company"])
+        cards.append(
+            {
+                "rank": rank,
+                "company": company_name,
+                "value": formatter(row[value_col]),
+                "color": _company_color(company_name),
+                "logo": _resolve_logo(company_name, logos),
+                "raw": float(row[value_col]),
+            }
+        )
+    return cards
 
-        if not growth_block.empty:
-            g_cards = []
-            for rank, (_, row) in enumerate(growth_block.iterrows(), start=1):
-                company_name = str(row["company"])
-                g_cards.append(
-                    {
-                        "rank": rank,
-                        "company": company_name,
-                        "value": f"{float(row['growth']):+.1f}%",
-                        "color": _company_color(company_name),
-                        "logo": _resolve_logo(company_name, logos),
-                    }
-                )
-            growth_sections.append(
-                {
-                    "title": f"{title} Growth",
-                    "subtitle": "YoY leaderboard",
-                    "cards": g_cards,
-                }
-            )
 
-# Advertising revenue leaderboard from annual ad sheet (if available).
+revenue_cards = _rank_cards_from_block(df_latest, "revenue", lambda v: _format_money_musd(v, 1))
+market_cap_cards = _rank_cards_from_block(df_latest, "market_cap", lambda v: _format_money_musd(v, 1))
+rd_cards = _rank_cards_from_block(df_latest, "rd", lambda v: _format_money_musd(v, 1))
+
+ad_revenue_cards = []
+ad_growth_cards = []
+ad_intensity_cards = []
+
+# Advertising revenue, growth, and intensity leaderboard sections.
 if workbook_path and workbook_path.exists():
     try:
         ad_df = pd.read_excel(workbook_path, sheet_name="Company_advertising_revenue")
         ad_df.columns = [str(c).strip() for c in ad_df.columns]
         if "Year" in ad_df.columns:
             ad_df["Year"] = pd.to_numeric(ad_df["Year"], errors="coerce")
-            ad_row = ad_df[ad_df["Year"] == int(latest_year)].copy()
-            if not ad_row.empty:
-                ad_row = ad_row.iloc[0]
+            latest_rows = ad_df[ad_df["Year"] == int(latest_year)].copy()
+            prev_rows = ad_df[ad_df["Year"] == int(prev_year)].copy() if prev_year is not None else pd.DataFrame()
+            if not latest_rows.empty:
+                ad_row = latest_rows.iloc[0]
+                prev_row = prev_rows.iloc[0] if not prev_rows.empty else None
                 ad_map = {
                     "Google_Ads": "Alphabet",
                     "Meta_Ads": "Meta Platforms",
@@ -460,38 +433,89 @@ if workbook_path and workbook_path.exists():
                     "TikTok": "TikTok",
                     "Snapchat": "Snapchat",
                 }
-                cards = []
+                revenue_lookup = {}
+                if not df_latest.empty and "revenue" in df_latest.columns:
+                    for _, r in df_latest[["company", "revenue"]].dropna(subset=["revenue"]).iterrows():
+                        revenue_lookup[str(r["company"])] = float(r["revenue"])
+
+                ad_rows = []
                 for col, company_name in ad_map.items():
                     if col not in ad_df.columns:
                         continue
                     value = pd.to_numeric(ad_row.get(col), errors="coerce")
                     if pd.isna(value):
                         continue
-                    # Sheet values are USD billions.
-                    value_musd = float(value) * 1000.0
-                    cards.append(
+                    ad_musd = float(value) * 1000.0
+                    prev_val = pd.to_numeric(prev_row.get(col), errors="coerce") if prev_row is not None else np.nan
+                    prev_musd = float(prev_val) * 1000.0 if not pd.isna(prev_val) else np.nan
+                    growth_pct = _safe_pct(ad_musd - prev_musd, prev_musd) if not pd.isna(prev_musd) else None
+                    company_revenue = revenue_lookup.get(company_name)
+                    intensity_pct = _safe_pct(ad_musd, company_revenue) if company_revenue else None
+                    ad_rows.append(
                         {
                             "company": company_name,
-                            "raw": value_musd,
-                            "value": _format_money_musd(value_musd, 1),
-                            "color": _company_color(company_name),
-                            "logo": _resolve_logo(company_name, logos),
+                            "ad_musd": ad_musd,
+                            "ad_growth_pct": growth_pct,
+                            "ad_intensity_pct": intensity_pct,
                         }
                     )
-                cards = sorted(cards, key=lambda x: x["raw"], reverse=True)
-                for idx, card in enumerate(cards, start=1):
-                    card["rank"] = idx
-                if cards:
-                    leaderboard_sections.insert(
-                        3,
-                        {
-                            "title": "Advertising Revenue",
-                            "subtitle": "Ad monetization leaders",
-                            "cards": cards,
-                        },
-                    )
+
+                if ad_rows:
+                    ad_ranked = sorted(ad_rows, key=lambda x: x["ad_musd"], reverse=True)
+                    for idx, row in enumerate(ad_ranked, start=1):
+                        ad_revenue_cards.append(
+                            {
+                                "rank": idx,
+                                "company": row["company"],
+                                "value": _format_money_musd(row["ad_musd"], 1),
+                                "color": _company_color(row["company"]),
+                                "logo": _resolve_logo(row["company"], logos),
+                                "raw": row["ad_musd"],
+                            }
+                        )
+
+                    growth_ranked = [r for r in ad_rows if r["ad_growth_pct"] is not None]
+                    growth_ranked = sorted(growth_ranked, key=lambda x: x["ad_growth_pct"], reverse=True)
+                    for idx, row in enumerate(growth_ranked, start=1):
+                        ad_growth_cards.append(
+                            {
+                                "rank": idx,
+                                "company": row["company"],
+                                "value": f"{float(row['ad_growth_pct']):+.1f}%",
+                                "color": _company_color(row["company"]),
+                                "logo": _resolve_logo(row["company"], logos),
+                                "raw": float(row["ad_growth_pct"]),
+                            }
+                        )
+
+                    intensity_ranked = [r for r in ad_rows if r["ad_intensity_pct"] is not None]
+                    intensity_ranked = sorted(intensity_ranked, key=lambda x: x["ad_intensity_pct"], reverse=True)
+                    for idx, row in enumerate(intensity_ranked, start=1):
+                        ad_intensity_cards.append(
+                            {
+                                "rank": idx,
+                                "company": row["company"],
+                                "value": f"{float(row['ad_intensity_pct']):.1f}%",
+                                "color": _company_color(row["company"]),
+                                "logo": _resolve_logo(row["company"], logos),
+                                "raw": float(row["ad_intensity_pct"]),
+                            }
+                        )
     except Exception:
         pass
+
+if revenue_cards:
+    leaderboard_sections.append({"title": "Revenue", "subtitle": "Top annual revenue leaders", "cards": revenue_cards})
+if ad_revenue_cards:
+    leaderboard_sections.append({"title": "Advertising Revenue", "subtitle": "Top ad monetization leaders", "cards": ad_revenue_cards})
+if ad_growth_cards:
+    leaderboard_sections.append({"title": "Ad Growth", "subtitle": "Top year-over-year ad growth leaders", "cards": ad_growth_cards})
+if ad_intensity_cards:
+    leaderboard_sections.append({"title": "Ad Intensity", "subtitle": "Ad revenue as % of total revenue", "cards": ad_intensity_cards})
+if market_cap_cards:
+    leaderboard_sections.append({"title": "Market Cap", "subtitle": "Top market capitalization leaders", "cards": market_cap_cards})
+if rd_cards:
+    leaderboard_sections.append({"title": "R&D", "subtitle": "Top innovation spend leaders", "cards": rd_cards})
 
 auto_insights_df = _load_auto_insights(workbook_path, latest_year)
 
@@ -725,6 +749,17 @@ st.markdown(
 .wm-priority-medium {{ background: rgba(249,115,22,0.15); color: #f97316; }}
 .wm-priority-low {{ background: rgba(59,130,246,0.15); color: #3b82f6; }}
 
+.wm-priority-legend {{
+    margin: 4px 0 14px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid {border_color};
+    background: {'rgba(15,23,42,0.04)' if is_dark else 'rgba(15,23,42,0.03)'};
+    color: {muted_color};
+    font-size: 0.8rem;
+    line-height: 1.5;
+}}
+
 .wm-insight-title {{
     color: {text_color};
     font-size: 1.05rem;
@@ -945,6 +980,33 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# Hero image band between header and page body
+if hero_home_b64:
+    st.markdown(
+        f"""
+        <style>
+          .wm-page-hero {{
+            width: 100%;
+            min-height: 260px;
+            margin: -0.5rem -1.5rem 0 -1.5rem;
+            background-image: url('data:{hero_home_mime};base64,{hero_home_b64}');
+            background-size: cover;
+            background-position: center 30%;
+            background-repeat: no-repeat;
+            position: relative;
+          }}
+          .wm-page-hero::after {{
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.0) 100%);
+          }}
+        </style>
+        <div class="wm-page-hero"></div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # Render
 st.markdown("<div class='wm-wrap'>", unsafe_allow_html=True)
 
@@ -1016,6 +1078,15 @@ st.markdown(
 )
 
 st.markdown("<div class='wm-section-title'>🎯 Strategic Signals</div>", unsafe_allow_html=True)
+st.markdown(
+    "<div class='wm-priority-legend'>"
+    "<strong>Priority legend</strong>: "
+    "<strong>High</strong> = strongest magnitude + cross-market structural impact for the selected period; "
+    "<strong>Medium</strong> = meaningful trend with moderate breadth; "
+    "<strong>Low</strong> = early signal or narrower/single-cohort movement."
+    "</div>",
+    unsafe_allow_html=True,
+)
 
 if auto_insights_df.empty:
     fallback_signals = [
@@ -1051,7 +1122,7 @@ if auto_insights_df.empty:
             "<div class='wm-insight-card'>"
             f"<div class='wm-priority wm-priority-{priority}'>{escape(priority.upper())}</div>"
             f"{_render_company_logos(insight.get('companies', ''), logos)}"
-            f"<div class='wm-insight-title'>{escape(str(insight.get('title', 'Untitled')))}</div>"
+            f"<div class='wm-insight-title'>{escape(_clean_signal_title(insight.get('title', 'Untitled')))}</div>"
             f"<p class='wm-insight-text'>{escape(str(insight.get('text', '')))}</p>"
             "</div>"
         )
@@ -1062,7 +1133,7 @@ else:
         priority = str(row.get("priority", "medium")).strip().lower()
         if priority not in {"high", "medium", "low"}:
             priority = "medium"
-        title = str(row.get("title", "Untitled")).strip()
+        title = _clean_signal_title(row.get("title", "Untitled"))
         text = str(row.get("text", row.get("comment", ""))).strip()
         companies_raw = str(row.get("companies", "")).strip()
         cards.append(
@@ -1079,20 +1150,10 @@ st.markdown(f"<div class='wm-section-title'>🏆 Company KPI Leaderboards — {l
 if not leaderboard_sections:
     st.info("KPI leaderboards will appear once yearly metrics are available.")
 else:
-    st.caption("Horizontal strips: drag or scroll to browse all companies in each KPI.")
+    st.caption("Each category shows top 5 by default. Expand each row to view the full ranking.")
     for section in leaderboard_sections:
         _render_leaderboard_strip(
             title=section.get("title", "KPI"),
-            subtitle=section.get("subtitle", ""),
-            cards=section.get("cards", []),
-        )
-
-if growth_sections:
-    st.markdown("<div class='wm-section-title'>🚀 Fastest Growing by KPI</div>", unsafe_allow_html=True)
-    st.caption("YoY growth strips from the same KPI library.")
-    for section in growth_sections:
-        _render_leaderboard_strip(
-            title=section.get("title", "Growth"),
             subtitle=section.get("subtitle", ""),
             cards=section.get("cards", []),
         )

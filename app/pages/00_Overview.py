@@ -24,7 +24,7 @@ from data_processor import FinancialDataProcessor
 from subscriber_data_processor import SubscriberDataProcessor
 from utils.state_management import get_data_processor, initialize_session_state
 from utils.animation_helper import update_chart_layout, create_consistent_frame, get_dynamic_tick_values, create_animation_buttons
-from utils.styles import get_page_style
+from utils.styles import get_page_style, load_overview_specific_styles
 from utils.components import load_company_logos, render_ai_assistant
 from utils.header import display_header
 from utils.data_loader import CONTINENT_MAPPINGS, AD_MACRO_CATEGORIES
@@ -38,6 +38,8 @@ from utils.data_granularity import (
 )
 
 st.markdown(get_page_style(), unsafe_allow_html=True)
+load_overview_specific_styles()
+st.session_state["active_nav_page"] = "overview"
 st.session_state["_active_nav_page"] = "overview"
 display_header()
 

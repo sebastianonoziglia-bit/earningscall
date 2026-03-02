@@ -81,13 +81,18 @@ def load_common_styles():
 		    [data-testid="stMarkdownContainer"] h5,
 		    [data-testid="stMarkdownContainer"] h6 { margin: 0.65rem 0 0.4rem 0; }
 
-	    section[data-testid="stSidebar"] *,
-	    [data-testid="stSidebarNav"] * {
-	        font-family: var(--app-font) !important;
-	    }
+		    section[data-testid="stSidebar"] *,
+		    [data-testid="stSidebarNav"] * {
+		        font-family: var(--app-font) !important;
+		    }
 
-    section[data-testid="stSidebar"] {
-        resize: horizontal;
+            /* Remove excessive default top whitespace across pages */
+            [data-testid="stAppViewContainer"] > section > div.block-container {
+                padding-top: 0.5rem !important;
+            }
+
+	    section[data-testid="stSidebar"] {
+	        resize: horizontal;
         overflow: auto;
         min-width: 220px;
         max-width: 420px;
@@ -828,6 +833,39 @@ def load_overview_specific_styles():
         background-color: #f5f7f9;
         border-radius: 10px;
         margin-bottom: 20px;
+    }
+
+    /* Remove wrapper artifacts around overview navigator buttons */
+    div[data-testid="column"] > div[data-testid="stVerticalBlock"] > div[data-baseweb="block"] {
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+    }
+    div[data-testid="stButtonGroup"],
+    div[data-testid="stButtonGroup"] > div {
+        border: none !important;
+        outline: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+    }
+    div[data-testid="stVerticalBlock"] .stButton > button {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid rgba(15,23,42,0.12) !important;
+        box-shadow: 0 2px 8px rgba(2,6,23,0.06) !important;
+        transition: transform 0.15s, box-shadow 0.15s !important;
+    }
+    div[data-testid="stVerticalBlock"] .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(0,115,255,0.15) !important;
+        border-color: rgba(37,99,235,0.4) !important;
+    }
+    div[data-testid="stVerticalBlock"] .stButton > button:focus,
+    div[data-testid="stVerticalBlock"] .stButton > button:active,
+    div[data-testid="stVerticalBlock"] .stButton > button:focus-visible {
+        outline: none !important;
+        box-shadow: 0 0 0 2px rgba(37,99,235,0.35) !important;
     }
     
     @media (max-width: 768px) {

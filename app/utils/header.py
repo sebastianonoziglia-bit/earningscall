@@ -1,6 +1,6 @@
 import streamlit as st
-from utils.language import init_language, render_language_selector
-from utils.theme import apply_theme, render_theme_toggle
+from utils.language import init_language
+from utils.theme import apply_theme
 
 
 _NAV_ITEMS = [
@@ -24,6 +24,8 @@ _QUERY_PAGE_MAP = {
     "financial_genie": "pages/04_Genie.py",
     "financial-genie": "pages/04_Genie.py",
 }
+
+_SUPPORTED_LANGS = {"en", "it", "es"}
 
 
 def _first_param(value):
@@ -51,6 +53,18 @@ def _route_query_navigation():
     except Exception:
         pass
     st.switch_page(target_page)
+
+
+def _apply_query_language():
+    query_params = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
+    if not query_params:
+        return
+    lang_param = _first_param(query_params.get("lang"))
+    if not lang_param:
+        return
+    lang_code = str(lang_param).strip().lower()
+    if lang_code in _SUPPORTED_LANGS:
+        st.session_state.language = lang_code
 
 
 def _render_bottom_nav(active_key: str):
@@ -126,39 +140,65 @@ def _render_bottom_nav(active_key: str):
     st.markdown("<div class='app-bottom-nav-spacer'></div>", unsafe_allow_html=True)
 
 
-def _render_top_nav():
-    """Render visible top nav with active-page highlighting."""
-    active_key = str(st.session_state.get("_active_nav_page", "")).strip().lower()
+def _render_sticky_top_bar(active_key: str):
+    nav_links = []
+    for item in _NAV_ITEMS:
+        active_class = " active" if item["key"] == active_key else ""
+        nav_links.append(
+            f"<a href='?nav={item['query']}' class='{active_class}'>{item['icon']} {item['label']}</a>"
+        )
+
+    current_lang = str(st.session_state.get("language", "en")).strip().lower()
+    lang_en_cls = "active" if current_lang == "en" else ""
+    lang_it_cls = "active" if current_lang == "it" else ""
+    lang_es_cls = "active" if current_lang == "es" else ""
+
     st.markdown(
-        """
+        f"""
         <style>
-        .app-top-nav-note {
-            margin: 0 0 6px 2px;
-            font-size: 0.74rem;
-            color: var(--app-muted, #64748B);
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            font-weight: 700;
-        }
+          .app-top-bar {{
+            position: sticky; top: 0; z-index: 9998;
+            background: rgba(255,255,255,0.93);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(15,23,42,0.10);
+            padding: 7px 18px;
+            display: flex; align-items: center; gap: 5px;
+            margin: 0 -1.5rem 0.5rem -1.5rem;
+          }}
+          .app-top-bar a {{
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 6px 14px; border-radius: 8px;
+            text-decoration: none !important;
+            font-size: 0.88rem; font-weight: 700;
+            color: #475569 !important;
+            border: 1px solid transparent;
+            transition: background 0.15s, color 0.15s;
+            white-space: nowrap;
+          }}
+          .app-top-bar a:hover {{ background: #f1f5f9; color: #0f172a !important; }}
+          .app-top-bar a.active {{
+            background: #1d4ed8; color: #fff !important;
+            border-color: #1e40af;
+          }}
+          .app-top-bar .app-top-bar-spacer {{
+            flex: 1;
+          }}
+          .app-top-bar .lang-link {{
+            padding: 6px 10px;
+            min-width: 38px;
+            justify-content: center;
+          }}
         </style>
+        <div class="app-top-bar">
+          {''.join(nav_links)}
+          <span class="app-top-bar-spacer"></span>
+          <a href="?lang=en" class="lang-link {lang_en_cls}">🇺🇸</a>
+          <a href="?lang=it" class="lang-link {lang_it_cls}">🇮🇹</a>
+          <a href="?lang=es" class="lang-link {lang_es_cls}">🇪🇸</a>
+        </div>
         """,
         unsafe_allow_html=True,
     )
-    st.markdown("<div class='app-top-nav-note'>Navigation</div>", unsafe_allow_html=True)
-
-    cols = st.columns(len(_NAV_ITEMS))
-    for col, item in zip(cols, _NAV_ITEMS):
-        with col:
-            if st.button(
-                f"{item['icon']} {item['label']}",
-                key=f"global_top_nav_{item['key']}",
-                use_container_width=True,
-                type="primary" if item["key"] == active_key else "secondary",
-            ):
-                if item["key"] != active_key:
-                    st.switch_page(item["target"])
-
-    _render_bottom_nav(active_key)
 
 
 def display_header(enable_dom_patch: bool = True):
@@ -167,30 +207,22 @@ def display_header(enable_dom_patch: bool = True):
     This includes language selection buttons.
     """
     _route_query_navigation()
+    _apply_query_language()
 
     # Initialize language from URL query params or session state
     init_language()
-    
-    # Create three columns for the header layout
-    left_col, center_col, right_col = st.columns([1, 4, 1])
-    
-    # Left column: Language selection
-    with left_col:
-        render_language_selector()
-
-    # Right column: Theme toggle
-    with right_col:
-        st.markdown("<div class='theme-toggle-label'>Theme</div>", unsafe_allow_html=True)
-        render_theme_toggle()
-    
-    # Space between panels
-    st.markdown("<br>", unsafe_allow_html=True)
 
     # Replace sidebar app navigation with top navigation.
     st.session_state["hide_sidebar_nav"] = True
-    _render_top_nav()
+    active_key = str(
+        st.session_state.get("active_nav_page")
+        or st.session_state.get("_active_nav_page")
+        or ""
+    ).strip().lower()
+    _render_sticky_top_bar(active_key)
+    _render_bottom_nav(active_key)
 
-    # Apply theme after toggles are rendered
+    # Apply global styles/theme utilities (theme toggle removed).
     apply_theme(enable_dom_patch=enable_dom_patch)
     
 
