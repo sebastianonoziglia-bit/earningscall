@@ -5,6 +5,7 @@ from datetime import datetime
 from html import escape
 from pathlib import Path
 from typing import Dict, List, Optional
+from urllib.parse import quote_plus
 
 import numpy as np
 import pandas as pd
@@ -158,6 +159,41 @@ def _clean_signal_title(raw_title: str) -> str:
     title = str(raw_title or "").strip()
     title = re.sub(r"\s*\(auto\)\s*$", "", title, flags=re.IGNORECASE)
     return title
+
+
+def _build_hero_company_logo_bar(logos: Dict[str, str]) -> str:
+    logo_order = [
+        "Alphabet",
+        "Meta Platforms",
+        "Amazon",
+        "Apple",
+        "Microsoft",
+        "Netflix",
+        "Disney",
+        "Comcast",
+        "Paramount Global",
+        "Warner Bros. Discovery",
+        "Spotify",
+        "Roku",
+    ]
+    blocks: List[str] = []
+    for company in logo_order:
+        img_b64 = _resolve_logo(company, logos)
+        if not img_b64:
+            continue
+        company_q = quote_plus(company)
+        blocks.append(
+            f"<a class='wm-hero-logo-link' href='?nav=earnings&company={company_q}' "
+            f"target='_self' rel='noopener' onclick=\"window.location.assign('?nav=earnings&company={company_q}'); return false;\" "
+            f"aria-label='Open earnings for {escape(company)}'>"
+            "<span class='wm-hero-logo-wrap'>"
+            f"<img class='wm-hero-logo' src='data:image/png;base64,{img_b64}' alt='{escape(company)} logo' />"
+            "</span>"
+            "</a>"
+        )
+    if not blocks:
+        return ""
+    return f"<div class='wm-hero-logo-bar'>{''.join(blocks)}</div>"
 
 
 def _render_leaderboard_strip(title: str, subtitle: str, cards: List[dict]) -> None:
@@ -997,6 +1033,7 @@ st.markdown(
 
 # Hero image band between header and page body
 if hero_home_b64:
+    hero_logo_bar_html = _build_hero_company_logo_bar(logos)
     st.markdown(
         f"""
         <style>
@@ -1010,14 +1047,58 @@ if hero_home_b64:
             background-repeat: no-repeat;
             position: relative;
           }}
+          .wm-hero-logo-bar {{
+            position: absolute;
+            left: 20px;
+            right: 20px;
+            bottom: 14px;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-height: 82px;
+            border-radius: 16px;
+            padding: 14px 16px;
+            overflow-x: auto;
+            background: rgba(255,255,255,0.14);
+            border: 1px solid rgba(255,255,255,0.34);
+            backdrop-filter: blur(10px);
+          }}
+          .wm-hero-logo-link {{
+            display: inline-flex;
+            text-decoration: none !important;
+            border-radius: 999px;
+            transition: transform 120ms ease, filter 120ms ease;
+          }}
+          .wm-hero-logo-link:hover {{
+            transform: translateY(-1px) scale(1.04);
+            filter: drop-shadow(0 4px 10px rgba(15,23,42,0.34));
+          }}
+          .wm-hero-logo-wrap {{
+            width: 56px;
+            height: 56px;
+            min-width: 56px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.38);
+          }}
+          .wm-hero-logo {{
+            width: 34px;
+            height: 34px;
+            object-fit: contain;
+          }}
           .wm-page-hero::after {{
             content: '';
             position: absolute;
             inset: 0;
             background: linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.0) 100%);
+            pointer-events: none;
           }}
         </style>
-        <div class="wm-page-hero"></div>
+        <div class="wm-page-hero">{hero_logo_bar_html}</div>
         """,
         unsafe_allow_html=True,
     )

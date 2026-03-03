@@ -18,6 +18,7 @@ import json
 import re
 import base64
 import requests
+from urllib.parse import quote_plus
 import streamlit.components.v1 as components
 from pathlib import Path
 from data_processor import FinancialDataProcessor
@@ -3872,10 +3873,15 @@ def _render_overview_hero_banner() -> None:
         img = logos.get(company)
         if not img:
             continue
+        company_q = quote_plus(company)
         logo_html += (
+            f"<a class='ov-hero-logo-link' href='?nav=earnings&company={company_q}' "
+            f"target='_self' rel='noopener' onclick=\"window.location.assign('?nav=earnings&company={company_q}'); return false;\" "
+            f"aria-label='Open earnings for {html.escape(company)}'>"
             "<span class='ov-hero-logo-wrap'>"
             f"<img class='ov-hero-logo' src='data:image/png;base64,{img}' alt='{html.escape(company)} logo'/>"
             "</span>"
+            "</a>"
         )
 
     hero_background = "background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);"
@@ -3903,6 +3909,7 @@ def _render_overview_hero_banner() -> None:
                 position: absolute;
                 inset: 0;
                 background: linear-gradient(180deg, rgba(2,6,23,0.35) 0%, rgba(2,6,23,0.6) 100%);
+                pointer-events: none;
             }}
             .ov-hero-copy {{
                 position: relative;
@@ -3930,19 +3937,30 @@ def _render_overview_hero_banner() -> None:
                 bottom: 16px;
                 z-index: 3;
                 border-radius: 16px;
-                padding: 10px 14px;
+                padding: 14px 16px;
+                min-height: 82px;
                 display: flex;
-                gap: 10px;
+                gap: 12px;
                 align-items: center;
                 overflow-x: auto;
                 background: rgba(255,255,255,0.14);
                 border: 1px solid rgba(255,255,255,0.30);
                 backdrop-filter: blur(10px);
             }}
+            .ov-hero-logo-link {{
+                display: inline-flex;
+                text-decoration: none !important;
+                border-radius: 999px;
+                transition: transform 120ms ease, filter 120ms ease;
+            }}
+            .ov-hero-logo-link:hover {{
+                transform: translateY(-1px) scale(1.04);
+                filter: drop-shadow(0 4px 10px rgba(15,23,42,0.32));
+            }}
             .ov-hero-logo-wrap {{
-                width: 42px;
-                height: 42px;
-                min-width: 42px;
+                width: 56px;
+                height: 56px;
+                min-width: 56px;
                 border-radius: 50%;
                 display: inline-flex;
                 align-items: center;
@@ -3951,8 +3969,8 @@ def _render_overview_hero_banner() -> None:
                 border: 1px solid rgba(255,255,255,0.35);
             }}
             .ov-hero-logo {{
-                width: 26px;
-                height: 26px;
+                width: 34px;
+                height: 34px;
                 object-fit: contain;
             }}
             </style>
