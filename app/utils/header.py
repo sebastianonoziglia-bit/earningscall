@@ -159,17 +159,27 @@ def _render_sticky_top_bar(active_key: str):
     st.markdown(
         f"""
         <style>
-          [data-testid="stAppViewContainer"] > section > div.block-container {{
-            padding-top: 0.3rem !important;
+          [data-testid="stAppViewContainer"] > section > div.block-container,
+          [data-testid="stAppViewContainer"] > .main .block-container,
+          section.main > div.block-container {{
+            padding-top: 0 !important;
+            margin-top: 0 !important;
           }}
           .app-top-bar {{
-            position: sticky; top: 0; z-index: 9998;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 9998;
             background: rgba(15,23,42,0.72);
             backdrop-filter: blur(10px);
             border-bottom: 1px solid rgba(148,163,184,0.24);
-            padding: 7px 18px;
+            padding: 7px 26px;
             display: flex; align-items: center; gap: 5px;
-            margin: 0 -1.5rem 0 -1.5rem;
+            margin: 0;
+          }}
+          .app-top-offset {{
+            height: 56px;
           }}
           .app-top-bar a {{
             display: inline-flex; align-items: center; gap: 5px;
@@ -202,6 +212,25 @@ def _render_sticky_top_bar(active_key: str):
           <a href="?lang=it" target="_self" rel="noopener" class="lang-link {lang_it_cls}">🇮🇹</a>
           <a href="?lang=es" target="_self" rel="noopener" class="lang-link {lang_es_cls}">🇪🇸</a>
         </div>
+        <div class="app-top-offset"></div>
+        <script>
+          (function() {{
+            const bindSameTab = (selector) => {{
+              document.querySelectorAll(selector).forEach((el) => {{
+                if (el.dataset.sameTabBound === "1") return;
+                el.dataset.sameTabBound = "1";
+                el.addEventListener("click", (evt) => {{
+                  const href = el.getAttribute("href");
+                  if (!href || href.startsWith("#")) return;
+                  evt.preventDefault();
+                  window.location.assign(href);
+                }});
+              }});
+            }};
+            bindSameTab(".app-top-bar a[href^='?']");
+            bindSameTab(".app-bottom-nav-item[href^='?']");
+          }})();
+        </script>
         """,
         unsafe_allow_html=True,
     )

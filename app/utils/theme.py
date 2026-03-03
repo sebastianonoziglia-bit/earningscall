@@ -216,8 +216,15 @@ def apply_theme(enable_dom_patch: bool = True):
         }
         [data-testid="stAppViewContainer"] > .main .block-container {
             max-width: none !important;
+            padding-top: 0 !important;
+            margin-top: 0 !important;
             padding-left: 1.5rem !important;
             padding-right: 1.5rem !important;
+        }
+        [data-testid="stAppViewContainer"] > section > div.block-container,
+        section.main > div.block-container {
+            padding-top: 0 !important;
+            margin-top: 0 !important;
         }
 
         /* Inputs / selects */
