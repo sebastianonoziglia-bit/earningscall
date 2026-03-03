@@ -55,15 +55,8 @@ def _route_query_navigation():
     ).strip().lower()
     current_page = _QUERY_PAGE_MAP.get(current_key, "")
     if target_key == current_key or (current_page and target_page == current_page):
-        try:
-            st.query_params.clear()
-        except Exception:
-            pass
+        # Already on target page: no switch and no query mutation to avoid rerun loops.
         return
-    try:
-        st.query_params.clear()
-    except Exception:
-        pass
     st.switch_page(target_page)
 
 
@@ -84,7 +77,7 @@ def _render_bottom_nav(active_key: str):
     for item in _NAV_ITEMS:
         active_class = " app-bottom-nav-item-active" if item["key"] == active_key else ""
         chips.append(
-            f"<a class='app-bottom-nav-item{active_class}' href='?nav={item['query']}'>"
+            f"<a class='app-bottom-nav-item{active_class}' href='?nav={item['query']}' target='_self' rel='noopener'>"
             f"{item['icon']} {item['label']}"
             "</a>"
         )
@@ -138,9 +131,7 @@ def _render_bottom_nav(active_key: str):
             background: linear-gradient(135deg,#1D4ED8 0%, #2563EB 100%) !important;
             color: #FFFFFF !important;
         }
-        .app-bottom-nav-spacer {
-            height: 74px;
-        }
+        .app-bottom-nav-spacer { height: 0; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -157,7 +148,7 @@ def _render_sticky_top_bar(active_key: str):
     for item in _NAV_ITEMS:
         active_class = " active" if item["key"] == active_key else ""
         nav_links.append(
-            f"<a href='?nav={item['query']}' class='{active_class}'>{item['icon']} {item['label']}</a>"
+            f"<a href='?nav={item['query']}' target='_self' rel='noopener' class='{active_class}'>{item['icon']} {item['label']}</a>"
         )
 
     current_lang = str(st.session_state.get("language", "en")).strip().lower()
@@ -168,26 +159,29 @@ def _render_sticky_top_bar(active_key: str):
     st.markdown(
         f"""
         <style>
+          [data-testid="stAppViewContainer"] > section > div.block-container {{
+            padding-top: 0.3rem !important;
+          }}
           .app-top-bar {{
             position: sticky; top: 0; z-index: 9998;
-            background: rgba(255,255,255,0.93);
+            background: rgba(15,23,42,0.72);
             backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(15,23,42,0.10);
+            border-bottom: 1px solid rgba(148,163,184,0.24);
             padding: 7px 18px;
             display: flex; align-items: center; gap: 5px;
-            margin: 0 -1.5rem 0.5rem -1.5rem;
+            margin: 0 -1.5rem 0 -1.5rem;
           }}
           .app-top-bar a {{
             display: inline-flex; align-items: center; gap: 5px;
             padding: 6px 14px; border-radius: 8px;
             text-decoration: none !important;
             font-size: 0.88rem; font-weight: 700;
-            color: #475569 !important;
+            color: #E2E8F0 !important;
             border: 1px solid transparent;
             transition: background 0.15s, color 0.15s;
             white-space: nowrap;
           }}
-          .app-top-bar a:hover {{ background: #f1f5f9; color: #0f172a !important; }}
+          .app-top-bar a:hover {{ background: rgba(30,64,175,0.35); color: #FFFFFF !important; }}
           .app-top-bar a.active {{
             background: #1d4ed8; color: #fff !important;
             border-color: #1e40af;
@@ -204,9 +198,9 @@ def _render_sticky_top_bar(active_key: str):
         <div class="app-top-bar">
           {''.join(nav_links)}
           <span class="app-top-bar-spacer"></span>
-          <a href="?lang=en" class="lang-link {lang_en_cls}">🇺🇸</a>
-          <a href="?lang=it" class="lang-link {lang_it_cls}">🇮🇹</a>
-          <a href="?lang=es" class="lang-link {lang_es_cls}">🇪🇸</a>
+          <a href="?lang=en" target="_self" rel="noopener" class="lang-link {lang_en_cls}">🇺🇸</a>
+          <a href="?lang=it" target="_self" rel="noopener" class="lang-link {lang_it_cls}">🇮🇹</a>
+          <a href="?lang=es" target="_self" rel="noopener" class="lang-link {lang_es_cls}">🇪🇸</a>
         </div>
         """,
         unsafe_allow_html=True,

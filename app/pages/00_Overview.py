@@ -3504,6 +3504,7 @@ def render_macro_kpi_panel(
     m2_quarterly = _load_m2_quarterly(excel_path, source_stamp)
     groupm_channels = _load_groupm_channels_df(excel_path, source_stamp)
     duopoly_series = _compute_duopoly_share_series(data_processor, excel_path, source_stamp)
+    inflation_df = _load_inflation_yearly_df(excel_path, source_stamp)
     metrics_df = getattr(data_processor, "df_metrics", None)
 
     if (
@@ -3548,6 +3549,7 @@ def render_macro_kpi_panel(
 
     internet_share = np.nan
     retail_yoy = np.nan
+    internet_share_delta = np.nan
     if not groupm_current.empty:
         row = groupm_current.iloc[0]
         channels = [
@@ -3571,6 +3573,11 @@ def render_macro_kpi_panel(
             cur_retail = float(row.get("Retail_Media") or 0.0)
             if prev_retail > 0:
                 retail_yoy = ((cur_retail - prev_retail) / prev_retail) * 100.0
+            prev_total = float(sum([float(prev_row.iloc[0].get(c) or 0.0) for c in channels]))
+            if prev_total > 0 and pd.notna(internet_share):
+                prev_internet_value = float(prev_row.iloc[0].get("Search", 0.0) or 0.0) + float(prev_row.iloc[0].get("NonSearch", 0.0) or 0.0)
+                prev_internet_share = (prev_internet_value / prev_total) * 100.0
+                internet_share_delta = internet_share - prev_internet_share
 
     duopoly_value = np.nan
     duopoly_delta = np.nan
@@ -3618,7 +3625,97 @@ def render_macro_kpi_panel(
                     if len(r_scope) > 1:
                         ratio_delta = ratio_value - float(r_scope.iloc[-2]["ratio"])
 
-    st.markdown("### Macro KPI Panel")
+    inflation_trend = np.nan
+    if inflation_df is not None and not inflation_df.empty:
+        infl_scope = inflation_df[inflation_df["Year"] <= int(selected_year)].sort_values("Year")
+        if infl_scope.empty:
+            infl_scope = inflation_df.sort_values("Year")
+        if len(infl_scope) >= 2:
+            inflation_trend = float(infl_scope.iloc[-1]["Inflation_YoY"]) - float(infl_scope.iloc[-2]["Inflation_YoY"])
+
+    liquidity_score = 0
+    if pd.notna(m2_yoy):
+        if float(m2_yoy) > 3.0:
+            liquidity_score = 1
+        elif float(m2_yoy) < 0.0:
+            liquidity_score = -1
+
+    inflation_score = 0
+    if pd.notna(inflation_trend):
+        if float(inflation_trend) < -0.10:
+            inflation_score = 1
+        elif float(inflation_trend) > 0.10:
+            inflation_score = -1
+
+    digital_score = 0
+    if pd.notna(internet_share_delta):
+        if float(internet_share_delta) > 0.20:
+            digital_score = 1
+        elif float(internet_share_delta) < -0.20:
+            digital_score = -1
+
+    concentration_delta = np.nan
+    concentration_high = False
+    if pd.notna(duopoly_delta):
+        concentration_delta = float(duopoly_delta)
+    elif pd.notna(ratio_delta):
+        concentration_delta = float(ratio_delta)
+    if pd.notna(duopoly_value) and float(duopoly_value) >= 44.0:
+        concentration_high = True
+    if pd.notna(ratio_value) and float(ratio_value) >= 0.60:
+        concentration_high = True
+
+    concentration_score = 0
+    if pd.notna(concentration_delta):
+        if pd.notna(duopoly_delta):
+            if concentration_delta > 1.0:
+                concentration_score = -1
+            elif concentration_delta < -1.0:
+                concentration_score = 1
+        else:
+            if concentration_delta > 0.03:
+                concentration_score = -1
+            elif concentration_delta < -0.03:
+                concentration_score = 1
+
+    regime_score = liquidity_score + inflation_score + digital_score + concentration_score
+    if regime_score >= 2:
+        regime_icon = "🟢"
+        regime_title = "Current Advertising Demand Regime: Expansion"
+        regime_description = (
+            "Liquidity supportive, inflation contained, advertising allocation expanding across digital and video channels."
+        )
+        regime_style = "background:rgba(34,197,94,0.14); border:1px solid rgba(34,197,94,0.36); color:#166534;"
+    elif regime_score <= -2:
+        regime_icon = "🔴"
+        regime_title = "Current Advertising Demand Regime: Tightening"
+        regime_description = (
+            "Liquidity contracting, inflation compressing advertiser margins, performance bias accelerating allocation shifts."
+        )
+        regime_style = "background:rgba(239,68,68,0.14); border:1px solid rgba(239,68,68,0.35); color:#991B1B;"
+    else:
+        regime_icon = "🟡"
+        if concentration_high:
+            regime_title = "Current Advertising Demand Regime: Neutral with Competitive Pressure"
+        else:
+            regime_title = "Current Advertising Demand Regime: Neutral"
+        regime_description = (
+            "Liquidity stabilizing, inflation moderating, platform concentration reinforcing pricing competition."
+        )
+        regime_style = "background:rgba(245,158,11,0.14); border:1px solid rgba(245,158,11,0.35); color:#92400E;"
+
+    st.markdown("### Macro Snapshot")
+    st.markdown(
+        _html_block(
+            f"""
+            <div style="border-radius:12px; padding:10px 12px; margin:6px 0 14px 0; {regime_style}">
+              <div style="font-size:0.95rem; font-weight:800; line-height:1.35;">{regime_icon} {regime_title}</div>
+              <div style="font-size:0.88rem; margin-top:4px; line-height:1.45;">{html.escape(regime_description)}</div>
+            </div>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
     cols = st.columns(4)
     with cols[0]:
         st.metric(
@@ -3794,11 +3891,11 @@ def _render_overview_hero_banner() -> None:
                 position: relative;
                 border-radius: 20px;
                 overflow: hidden;
-                min-height: 280px;
+                min-height: clamp(320px, 42vh, 520px);
                 margin: 0 0 26px 0;
                 {hero_background}
                 background-size: cover;
-                background-position: center center;
+                background-position: top center;
                 box-shadow: 0 20px 48px rgba(2, 6, 23, 0.28);
             }}
             .ov-hero::before {{
@@ -3858,23 +3955,6 @@ def _render_overview_hero_banner() -> None:
                 height: 26px;
                 object-fit: contain;
             }}
-            .ov-quick-nav-wrap {{
-                margin-top: -36px;
-                position: relative;
-                z-index: 4;
-            }}
-            .ov-quick-nav-wrap [data-testid="stPageLink"] a {{
-                border-radius: 12px !important;
-                border: 1px solid rgba(148,163,184,0.28) !important;
-                background: rgba(15,23,42,0.74) !important;
-                color: #E2E8F0 !important;
-                font-weight: 700 !important;
-                min-height: 44px !important;
-            }}
-            .ov-quick-nav-wrap [data-testid="stPageLink"] a:hover {{
-                border-color: rgba(59,130,246,0.52) !important;
-                background: rgba(30,64,175,0.42) !important;
-            }}
             </style>
             <div class='ov-hero'>
                 <div class='ov-hero-copy'>
@@ -3890,23 +3970,6 @@ def _render_overview_hero_banner() -> None:
         ),
         unsafe_allow_html=True,
     )
-
-    st.markdown("<div class='ov-quick-nav-wrap'>", unsafe_allow_html=True)
-    nav_cols = st.columns(5)
-    nav_items = [
-        ("Welcome.py", "Home", "🏠"),
-        ("pages/00_Overview.py", "Overview", "📊"),
-        ("pages/01_Earnings.py", "Earnings", "💰"),
-        ("pages/02_Stocks.py", "Stocks", "📈"),
-        ("pages/04_Genie.py", "Genie", "🧞"),
-    ]
-    for col, (target, label, icon) in zip(nav_cols, nav_items):
-        with col:
-            try:
-                st.page_link(target, label=label, icon=icon, use_container_width=True)
-            except Exception:
-                st.markdown(f"[{icon} {label}]({target})")
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _add_rate_regime_bands(fig: go.Figure, rates_df: pd.DataFrame) -> None:
@@ -7363,7 +7426,7 @@ plotly_config = {
 begin_snap_section("overview_summary")
 
 # Main app content
-st.title("Overview - Financial Market Intelligence")
+st.title("Advertising Demand & Competitive Context")
 _render_overview_hero_banner()
 
 # Initialize data processor
@@ -7608,9 +7671,180 @@ if selected_overview_area == "export":
     end_snap_section()
     st.stop()
 
+
+def _is_digital_metric_type(metric_name: str) -> bool:
+    text = str(metric_name or "").strip().lower()
+    if not text:
+        return False
+    digital_tokens = (
+        "digital",
+        "search",
+        "social",
+        "display",
+        "internet",
+        "online",
+        "nonsearch",
+        "retail",
+        "ecommerce",
+        "programmatic",
+        "video",
+        "connected tv",
+        "ctv",
+    )
+    return any(token in text for token in digital_tokens)
+
+
+def _calc_scope_growth_pct(
+    country_df: pd.DataFrame,
+    year: int,
+    allowed_countries: set[str] | None = None,
+) -> float:
+    if country_df is None or country_df.empty:
+        return np.nan
+    scope = country_df[country_df["Year"].isin([int(year) - 1, int(year)])].copy()
+    if allowed_countries:
+        scope = scope[scope["Country"].isin(allowed_countries)].copy()
+    if scope.empty:
+        return np.nan
+    annual = scope.groupby("Year", as_index=False)["Value"].sum(min_count=1)
+    curr = annual.loc[annual["Year"] == int(year), "Value"]
+    prev = annual.loc[annual["Year"] == int(year) - 1, "Value"]
+    if curr.empty or prev.empty:
+        return np.nan
+    curr_val = float(curr.iloc[0])
+    prev_val = float(prev.iloc[0])
+    if prev_val == 0 or pd.isna(prev_val):
+        return np.nan
+    return ((curr_val - prev_val) / prev_val) * 100.0
+
+
+def _calc_digital_share_growth_pp(
+    country_df: pd.DataFrame,
+    year: int,
+    allowed_countries: set[str] | None = None,
+) -> float:
+    if country_df is None or country_df.empty:
+        return np.nan
+    scope = country_df[country_df["Year"].isin([int(year) - 1, int(year)])].copy()
+    if allowed_countries:
+        scope = scope[scope["Country"].isin(allowed_countries)].copy()
+    if scope.empty:
+        return np.nan
+    scope["IsDigital"] = scope["Metric_type"].apply(_is_digital_metric_type)
+    total = scope.groupby("Year", as_index=False)["Value"].sum(min_count=1).rename(columns={"Value": "TotalValue"})
+    digital = (
+        scope[scope["IsDigital"]]
+        .groupby("Year", as_index=False)["Value"]
+        .sum(min_count=1)
+        .rename(columns={"Value": "DigitalValue"})
+    )
+    merged = total.merge(digital, on="Year", how="left")
+    merged["DigitalValue"] = merged["DigitalValue"].fillna(0.0)
+    merged = merged[merged["TotalValue"] > 0].copy()
+    if merged.empty:
+        return np.nan
+    merged["DigitalSharePct"] = (merged["DigitalValue"] / merged["TotalValue"]) * 100.0
+    curr = merged.loc[merged["Year"] == int(year), "DigitalSharePct"]
+    prev = merged.loc[merged["Year"] == int(year) - 1, "DigitalSharePct"]
+    if curr.empty or prev.empty:
+        return np.nan
+    return float(curr.iloc[0]) - float(prev.iloc[0])
+
+
+def _render_europe_vs_global_position_badge(country_df: pd.DataFrame, map_year: int) -> None:
+    st.markdown("#### Europe Advertising Position vs Global")
+    st.markdown(
+        "Classification Types: 🟢 In Line / Resilient · 🟡 Below Global Average · 🔴 Structurally Lagging"
+    )
+
+    europe_countries = set(CONTINENT_MAPPINGS.get("Europe", []))
+    apac_countries = set(CONTINENT_MAPPINGS.get("Asia Pacific", []))
+    north_america_countries = set(CONTINENT_MAPPINGS.get("North America", []))
+
+    global_growth = _calc_scope_growth_pct(country_df, int(map_year))
+    europe_growth = _calc_scope_growth_pct(country_df, int(map_year), europe_countries)
+    us_growth = _calc_scope_growth_pct(country_df, int(map_year), {"United States"})
+    if pd.isna(us_growth):
+        us_growth = _calc_scope_growth_pct(country_df, int(map_year), north_america_countries)
+    apac_growth = _calc_scope_growth_pct(country_df, int(map_year), apac_countries)
+
+    high_growth_candidates = [v for v in [us_growth, apac_growth] if pd.notna(v)]
+    high_growth_reference = max(high_growth_candidates) if high_growth_candidates else np.nan
+
+    gd = europe_growth - global_growth if pd.notna(europe_growth) and pd.notna(global_growth) else np.nan
+    hg = europe_growth - high_growth_reference if pd.notna(europe_growth) and pd.notna(high_growth_reference) else np.nan
+
+    europe_digital_growth = _calc_digital_share_growth_pp(country_df, int(map_year), europe_countries)
+    global_digital_growth = _calc_digital_share_growth_pp(country_df, int(map_year))
+    dad = (
+        europe_digital_growth - global_digital_growth
+        if pd.notna(europe_digital_growth) and pd.notna(global_digital_growth)
+        else np.nan
+    )
+
+    if pd.notna(gd) and pd.notna(hg) and gd <= -3.0 and hg <= -5.0:
+        regime_icon = "🔴"
+        regime_label = "Europe Structurally Lagging High-Growth Regions"
+        regime_style = "background:rgba(239,68,68,0.16); border:1px solid rgba(239,68,68,0.4); color:#FCA5A5;"
+        base_desc = (
+            f"Europe materially underperforms global and high-growth regions by over {abs(gd):.1f}pp, "
+            "reflecting structural digital acceleration gaps and rising competitive pressure from global platforms."
+        )
+    elif pd.notna(gd) and pd.notna(hg) and gd >= -0.5 and hg >= -3.0:
+        regime_icon = "🟢"
+        regime_label = "Europe In Line with Global Advertising Momentum"
+        regime_style = "background:rgba(34,197,94,0.14); border:1px solid rgba(34,197,94,0.45); color:#86EFAC;"
+        base_desc = (
+            f"European ad growth is broadly aligned with global trends ({gd:+.1f}pp differential), "
+            "supported by balanced digital expansion and resilient premium inventory dynamics."
+        )
+    else:
+        regime_icon = "🟡"
+        regime_label = "Europe Growing Below Global Average"
+        regime_style = "background:rgba(245,158,11,0.14); border:1px solid rgba(245,158,11,0.42); color:#FDE68A;"
+        gd_abs_text = f"{abs(gd):.1f}" if pd.notna(gd) else "N/A"
+        hg_abs_text = f"{abs(hg):.1f}" if pd.notna(hg) else "N/A"
+        base_desc = (
+            f"European ad growth trails global by {gd_abs_text}pp and high-growth regions by {hg_abs_text}pp, "
+            "reflecting slower digital acceleration while maintaining relative premium inventory stability."
+        )
+
+    dad_modifier = ""
+    if pd.notna(dad) and dad <= -1.0:
+        dad_modifier = " Digital acceleration gap versus global markets remains significant."
+    elif pd.notna(dad) and dad >= 0:
+        dad_modifier = " Digital expansion remains broadly aligned with global trends."
+
+    st.markdown(
+        _html_block(
+            f"""
+            <div style="border-radius:14px; padding:12px 14px; margin:8px 0 10px 0; {regime_style}">
+              <div style="font-size:0.78rem; letter-spacing:0.08em; text-transform:uppercase; font-weight:700; opacity:0.9;">
+                Europe Demand Classification · {int(map_year)}
+              </div>
+              <div style="font-size:1.0rem; font-weight:800; margin-top:5px;">
+                {regime_icon} {regime_label}
+              </div>
+              <div style="font-size:0.92rem; line-height:1.5; margin-top:6px;">
+                {html.escape(base_desc + dad_modifier)}
+              </div>
+            </div>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
+
+    metric_cols = st.columns(3)
+    with metric_cols[0]:
+        st.metric("Growth Differential (GD)", f"{gd:+.1f}pp" if pd.notna(gd) else "N/A")
+    with metric_cols[1]:
+        st.metric("High-Growth Gap (HG)", f"{hg:+.1f}pp" if pd.notna(hg) else "N/A")
+    with metric_cols[2]:
+        st.metric("Digital Accel Differential (DAD)", f"{dad:+.1f}pp" if pd.notna(dad) else "N/A")
+
 # SECTION 1 — GLOBAL CONTEXT (WORLD MAP)
 st.markdown("<div id='section-global-media-economy'></div>", unsafe_allow_html=True)
-st.subheader("The Global Media Economy")
+st.subheader("Global Media Economy")
 st.markdown(
     "Global advertising is geographically distributed across regions and markets. "
     "Hover countries to view values.",
@@ -7686,6 +7920,8 @@ if not country_ad_df.empty:
     if year_for_map not in available_ad_years:
         prior_years = [y for y in available_ad_years if y <= int(map_year_selected)]
         year_for_map = max(prior_years) if prior_years else max(available_ad_years)
+
+    _render_europe_vs_global_position_badge(country_ad_df, int(year_for_map))
 
     macro_prev_years = [y for y in available_ad_years if y < year_for_map]
     macro_prev_year = max(macro_prev_years) if macro_prev_years else None

@@ -1002,11 +1002,11 @@ if hero_home_b64:
         <style>
           .wm-page-hero {{
             width: 100%;
-            min-height: 260px;
+            min-height: clamp(360px, 44vh, 560px);
             margin: 0 -1.5rem 0 -1.5rem;
             background-image: url('data:{hero_home_mime};base64,{hero_home_b64}');
             background-size: cover;
-            background-position: center 30%;
+            background-position: top center;
             background-repeat: no-repeat;
             position: relative;
           }}
@@ -1063,30 +1063,6 @@ st.markdown(
       <div class="wm-kpi-change">{_format_money_musd(total_rd_latest, 1)} invested</div>
     </div>
   </div>
-</div>
-""",
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-<div class="wm-nav-grid">
-  <a class="wm-nav-btn wm-nav-overview" href="?nav=overview" target="_self">
-    <div class="wm-nav-title">Executive Overview</div>
-    <div class="wm-nav-desc">Macro regime, concentration, and strategic narratives</div>
-  </a>
-  <a class="wm-nav-btn wm-nav-earnings" href="?nav=earnings" target="_self">
-    <div class="wm-nav-title">Earnings Analysis</div>
-    <div class="wm-nav-desc">Company metrics, segments, and commentary drilldowns</div>
-  </a>
-  <a class="wm-nav-btn wm-nav-stocks" href="?nav=stocks" target="_self">
-    <div class="wm-nav-title">Market Performance</div>
-    <div class="wm-nav-desc">Price action, index context, and valuation movement</div>
-  </a>
-  <a class="wm-nav-btn wm-nav-genie" href="?nav=genie" target="_self">
-    <div class="wm-nav-title">AI Assistant</div>
-    <div class="wm-nav-desc">Context-aware Q&A over metrics and transcript intelligence</div>
-  </a>
 </div>
 """,
     unsafe_allow_html=True,
@@ -1165,32 +1141,13 @@ st.markdown(f"<div class='wm-section-title'>🏆 Company KPI Leaderboards — {l
 if not leaderboard_sections:
     st.info("KPI leaderboards will appear once yearly metrics are available.")
 else:
-    st.caption("Each category shows top 5 by default. Expand each row to view the full ranking.")
+    st.caption("Scroll horizontally to explore all companies in each KPI strip.")
     for section in leaderboard_sections:
         _render_leaderboard_strip(
             title=section.get("title", "KPI"),
             subtitle=section.get("subtitle", ""),
             cards=section.get("cards", []),
         )
-
-st.markdown(
-    """
-<div class="wm-cta">
-  <div class="wm-cta-title">Strategic Next Steps</div>
-  <div class="wm-cta-text">
-    Use the overview for regime context, move to earnings for company-level operating detail,
-    and use Genie for rapid hypothesis checks against transcripts and financial metrics.
-  </div>
-  <div class="wm-cta-actions">
-    <a class="wm-cta-btn" href="?nav=overview" target="_self">📊 Open Executive Overview</a>
-    <a class="wm-cta-btn" href="?nav=earnings" target="_self">💰 Open Earnings Analysis</a>
-    <a class="wm-cta-btn wm-ghost" href="?nav=stocks" target="_self">📈 Open Market Performance</a>
-    <a class="wm-cta-btn wm-ghost" href="?nav=genie" target="_self">🤖 Open AI Assistant</a>
-  </div>
-</div>
-""",
-    unsafe_allow_html=True,
-)
 
 source_label = str(workbook_path) if workbook_path else "not found"
 st.markdown(
