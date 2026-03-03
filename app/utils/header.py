@@ -171,6 +171,15 @@ def _render_sticky_top_bar(active_key: str):
             display: none !important;
             height: 0 !important;
           }}
+          [data-testid="stAppViewContainer"] {{
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+          }}
+          [data-testid="stAppViewContainer"] > .main,
+          [data-testid="stAppViewContainer"] > section.main {{
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+          }}
           #root > div:first-child {{
             padding-top: 0 !important;
           }}
@@ -182,6 +191,9 @@ def _render_sticky_top_bar(active_key: str):
           [data-testid="stAppViewContainer"] > section > div.block-container,
           section.main > div.block-container {{
             padding-top: 0 !important;
+            margin-top: 0 !important;
+          }}
+          .main .block-container > div:first-child {{
             margin-top: 0 !important;
           }}
           .app-top-bar {{
@@ -224,6 +236,16 @@ def _render_sticky_top_bar(active_key: str):
             min-width: 38px;
             justify-content: center;
           }}
+          /* style-only markdown nodes still create flex gaps; collapse them globally */
+          [data-testid="stMarkdownContainer"]:has(> style:only-child),
+          [data-testid="element-container"]:has([data-testid="stMarkdownContainer"] > style:only-child) {{
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            line-height: 0 !important;
+            overflow: hidden !important;
+          }}
           [data-testid="element-container"]:has(.app-top-bar),
           [data-testid="stMarkdownContainer"]:has(.app-top-bar) {{
             margin: 0 !important;
@@ -231,6 +253,9 @@ def _render_sticky_top_bar(active_key: str):
             height: 0 !important;
             min-height: 0 !important;
             overflow: visible !important;
+            position: absolute !important;
+            inset: 0 auto auto 0 !important;
+            width: 0 !important;
           }}
         </style>
         <div class="app-top-bar">
@@ -250,21 +275,6 @@ def display_header(enable_dom_patch: bool = True):
     Display the common header across all app pages.
     This includes language selection buttons.
     """
-    st.markdown(
-        """
-        <style>
-        header[data-testid="stHeader"] { display: none !important; height: 0 !important; }
-        [data-testid="stToolbar"] { display: none !important; height: 0 !important; }
-        [data-testid="stAppViewContainer"] { padding-top: 0 !important; margin-top: 0 !important; }
-        [data-testid="stAppViewContainer"] > .main,
-        [data-testid="stAppViewContainer"] > section.main { padding-top: 0 !important; margin-top: 0 !important; }
-        .block-container { padding-top: 0 !important; margin-top: 0 !important; }
-        #root > div:first-child { padding-top: 0 !important; }
-        .main .block-container > div:first-child { margin-top: 0 !important; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
     _route_query_navigation()
     _apply_query_language()
 

@@ -117,9 +117,3 @@ def apply_global_fonts():
     }
     </style>
     """, unsafe_allow_html=True)
-
-
-# Backward-compatible alias
-
-def apply_oswald_font():
-    apply_global_fonts()
