@@ -5,12 +5,15 @@ Applies Montserrat font family across all pages and components
 
 import streamlit as st
 
+_FONTS_INJECTED = False
+
 
 def apply_global_fonts():
-    """Apply Montserrat font styling to the entire application (once per session)."""
-    if st.session_state.get("_global_fonts_applied"):
+    """Apply Montserrat font styling to the entire application (once per process)."""
+    global _FONTS_INJECTED
+    if _FONTS_INJECTED:
         return
-    st.session_state["_global_fonts_applied"] = True
+    _FONTS_INJECTED = True
 
     st.markdown("""
     <style>

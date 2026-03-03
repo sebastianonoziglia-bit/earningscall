@@ -1177,14 +1177,18 @@ if hero_home_b64:
         f"""
         <style>
           .wm-page-hero {{
-            width: 100%;
-            min-height: clamp(360px, 44vh, 560px);
-            margin: 0 -1.5rem 0 -1.5rem;
+            display: block;
+            width: calc(100% + 3rem);
+            margin-left: -1.5rem;
+            margin-right: -1.5rem;
+            margin-top: -1px;
+            min-height: clamp(300px, 40vh, 520px);
             background-image: url('data:{hero_home_mime};base64,{hero_home_b64}');
             background-size: cover;
             background-position: top center;
             background-repeat: no-repeat;
             position: relative;
+            overflow: hidden;
           }}
           .wm-hero-logo-bar {{
             position: absolute;

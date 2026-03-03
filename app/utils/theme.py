@@ -824,9 +824,6 @@ def apply_theme(enable_dom_patch: bool = True):
               attributeFilter: ["aria-checked", "aria-pressed", "aria-selected"],
             }});
           }});
-          if (radioRoots.length === 0) {{
-            observer.observe(document.body, {{ childList: true, subtree: false }});
-          }}
           window.__mfeRadioFixObserver = observer;
         }})();
         </script>
