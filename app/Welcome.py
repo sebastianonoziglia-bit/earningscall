@@ -26,8 +26,6 @@ from utils.state_management import get_data_processor
 from utils.theme import get_theme_mode
 from utils.transcript_startup_sync import sync_local_transcripts_to_workbook
 
-apply_global_fonts()
-
 # One-time sync per container startup (not per session)
 SYNC_FLAG_FILE = "/tmp/transcript_sync_done"
 AUTO_SYNC_ENV = "AUTO_SYNC_TRANSCRIPTS_ON_STARTUP"
@@ -53,6 +51,7 @@ if str(os.getenv(AUTO_SYNC_ENV, "")).strip().lower() in {"1", "true", "yes", "on
 st.session_state["active_nav_page"] = "home"
 st.session_state["_active_nav_page"] = "home"
 display_header(enable_dom_patch=False)
+apply_global_fonts()
 
 
 APP_DIR = Path(__file__).resolve().parent

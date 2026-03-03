@@ -231,7 +231,6 @@ def _render_sticky_top_bar(active_key: str):
             height: 0 !important;
             min-height: 0 !important;
             overflow: visible !important;
-            margin-bottom: -1rem !important;
           }}
         </style>
         <div class="app-top-bar">

@@ -3,7 +3,6 @@ import streamlit as st
 st.set_page_config(page_title="Overview", page_icon="📊", layout="wide")
 
 from utils.global_fonts import apply_global_fonts
-apply_global_fonts()
 
 
 import pandas as pd
@@ -38,11 +37,12 @@ from utils.data_granularity import (
     update_global_time_context,
 )
 
-st.markdown(get_page_style(), unsafe_allow_html=True)
-load_overview_specific_styles()
 st.session_state["active_nav_page"] = "overview"
 st.session_state["_active_nav_page"] = "overview"
 display_header()
+apply_global_fonts()
+st.markdown(get_page_style(), unsafe_allow_html=True)
+load_overview_specific_styles()
 
 # Streamlit markdown can treat indented HTML as a code block. Normalize HTML blocks to avoid that.
 def _html_block(html: str) -> str:
