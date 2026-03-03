@@ -57,6 +57,10 @@ def _route_query_navigation():
     if target_key == current_key or (current_page and target_page == current_page):
         # Already on target page: no switch and no query mutation to avoid rerun loops.
         return
+    last_switch = st.session_state.get("_last_nav_switch", "")
+    if last_switch == target_key:
+        return
+    st.session_state["_last_nav_switch"] = target_key
     st.switch_page(target_page)
 
 

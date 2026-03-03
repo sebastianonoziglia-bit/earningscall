@@ -815,12 +815,18 @@ def apply_theme(enable_dom_patch: bool = True):
               }}
             }}
           }});
-          observer.observe(document.body, {{
-            subtree: true,
-            childList: true,
-            attributes: true,
-            attributeFilter: ["aria-checked", "aria-pressed", "aria-selected"],
+          const radioRoots = document.querySelectorAll('div[data-testid="stRadio"]');
+          radioRoots.forEach((root) => {{
+            observer.observe(root, {{
+              subtree: true,
+              childList: true,
+              attributes: true,
+              attributeFilter: ["aria-checked", "aria-pressed", "aria-selected"],
+            }});
           }});
+          if (radioRoots.length === 0) {{
+            observer.observe(document.body, {{ childList: true, subtree: false }});
+          }}
           window.__mfeRadioFixObserver = observer;
         }})();
         </script>

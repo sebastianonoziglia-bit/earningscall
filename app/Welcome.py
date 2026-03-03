@@ -98,6 +98,31 @@ def _safe_pct(numerator, denominator):
     return float(numerator) / float(denominator) * 100
 
 
+def _build_hero_narrative(year: int, revenue_fmt: str, growth_pct: Optional[float], company_count: int) -> str:
+    n = company_count or "N/A"
+    if growth_pct is None:
+        return f"In {year}, the tracked universe reported {revenue_fmt} in combined revenue across {n} major media and technology players."
+    if growth_pct >= 8:
+        return (
+            f"In {year}, the tracked universe generated {revenue_fmt} in combined revenue, accelerating "
+            f"{growth_pct:.1f}% YoY on the back of sustained monetization strength across {n} major players."
+        )
+    if growth_pct >= 2:
+        return (
+            f"In {year}, combined revenue reached {revenue_fmt} — a {growth_pct:.1f}% YoY expansion across {n} "
+            "tracked companies, reflecting steady but moderating growth momentum."
+        )
+    if growth_pct >= 0:
+        return (
+            f"In {year}, revenue grew modestly to {revenue_fmt} (+{growth_pct:.1f}% YoY), signaling a "
+            f"normalization phase across the {n}-company universe."
+        )
+    return (
+        f"In {year}, combined revenue contracted to {revenue_fmt} ({growth_pct:.1f}% YoY), with margin pressure "
+        f"visible across the {n}-company universe."
+    )
+
+
 def _company_color(company: str) -> str:
     palette = {
         "Alphabet": "#4285F4",
@@ -254,10 +279,10 @@ def _render_leaderboard_strip(title: str, subtitle: str, cards: List[dict]) -> N
     )
 
 
-def _resolve_workbook_path(data_processor) -> Optional[Path]:
+def _resolve_workbook_path(data_path: Optional[str] = None) -> Optional[Path]:
     candidates = []
-    if data_processor is not None and getattr(data_processor, "data_path", None):
-        candidates.append(Path(data_processor.data_path))
+    if data_path:
+        candidates.append(Path(data_path))
     candidates.extend(
         [
             APP_DIR / "attached_assets" / "Earnings + stocks  copy.xlsx",
@@ -300,25 +325,75 @@ def _load_auto_insights(workbook_path: Optional[Path], selected_year: int) -> pd
     return insights_df.head(6).copy()
 
 
+@st.cache_data(ttl=3600)
+def _load_homepage_yearly_comments(excel_path: str, source_stamp: int, selected_year: int) -> dict:
+    if not excel_path:
+        return {}
+    try:
+        comments_df = pd.read_excel(excel_path, sheet_name="Homepage_Yearly_Comments")
+    except Exception:
+        return {}
+    if comments_df.empty:
+        return {}
+
+    comments_df.columns = [str(c).strip().lower() for c in comments_df.columns]
+    if "is_active" in comments_df.columns:
+        comments_df["is_active"] = pd.to_numeric(comments_df["is_active"], errors="coerce").fillna(1).astype(int)
+        comments_df = comments_df[comments_df["is_active"] == 1]
+    if "year" in comments_df.columns:
+        comments_df["year"] = pd.to_numeric(comments_df["year"], errors="coerce")
+        comments_df = comments_df[comments_df["year"] == int(selected_year)]
+
+    result = {}
+    for _, row in comments_df.iterrows():
+        slot = str(row.get("slot", "")).strip().lower()
+        text = str(row.get("text", "")).strip()
+        if slot and text and text.lower() not in {"nan", "none", ""}:
+            result[slot] = text
+    return result
+
+
+@st.cache_data(ttl=300)
+def _load_page_data():
+    try:
+        dp = get_data_processor()
+        raw_metrics = getattr(dp, "df_metrics", pd.DataFrame())
+        metrics_df_cached = raw_metrics.copy() if raw_metrics is not None else pd.DataFrame()
+        companies_cached = dp.get_companies() if hasattr(dp, "get_companies") else []
+        data_path = str(getattr(dp, "data_path", "") or "")
+        source_stamp = int(getattr(dp, "source_stamp", 0) or 0)
+        return {
+            "metrics_df": metrics_df_cached,
+            "companies": companies_cached,
+            "data_path": data_path,
+            "source_stamp": source_stamp,
+            "error": "",
+        }
+    except Exception as exc:
+        return {
+            "metrics_df": pd.DataFrame(),
+            "companies": [],
+            "data_path": "",
+            "source_stamp": 0,
+            "error": str(exc),
+        }
+
+
 # Load data
 logos = load_company_logos()
 mode = get_theme_mode()
 is_dark = mode == "dark"
 
-data_processor = None
-metrics_df = pd.DataFrame()
-companies: List[str] = []
+page_data = _load_page_data()
+metrics_df = page_data.get("metrics_df", pd.DataFrame())
+companies = page_data.get("companies", [])
+source_stamp = int(page_data.get("source_stamp", 0) or 0)
+data_path = str(page_data.get("data_path", "") or "")
 
-try:
-    data_processor = get_data_processor()
-    raw_metrics = getattr(data_processor, "df_metrics", pd.DataFrame())
-    if raw_metrics is not None:
-        metrics_df = raw_metrics.copy()
-    companies = data_processor.get_companies() if hasattr(data_processor, "get_companies") else []
-except Exception as exc:
-    st.warning(f"Data initialization warning: {exc}")
+if page_data.get("error"):
+    st.warning(f"Data initialization warning: {page_data['error']}")
 
-workbook_path = _resolve_workbook_path(data_processor)
+workbook_path = _resolve_workbook_path(data_path)
 
 if not metrics_df.empty:
     metrics_df.columns = [str(col).strip().lower() for col in metrics_df.columns]
@@ -355,6 +430,25 @@ total_revenue_prev = float(df_prev["revenue"].sum()) if not df_prev.empty and "r
 revenue_growth_pct = _safe_pct(total_revenue_latest - total_revenue_prev, total_revenue_prev) if total_revenue_prev else None
 profit_margin_pct = _safe_pct(total_net_income_latest, total_revenue_latest)
 rd_intensity_pct = _safe_pct(total_rd_latest, total_revenue_latest)
+margin_pct = profit_margin_pct
+
+total_market_cap_prev = float(df_prev["market_cap"].sum()) if not df_prev.empty and "market_cap" in df_prev.columns else None
+market_cap_growth_pct = (
+    _safe_pct(total_market_cap_latest - total_market_cap_prev, total_market_cap_prev)
+    if total_market_cap_prev not in (None, 0)
+    else None
+)
+
+total_net_income_prev = float(df_prev["net_income"].sum()) if not df_prev.empty and "net_income" in df_prev.columns else None
+margin_prev = (
+    (total_net_income_prev / total_revenue_prev * 100)
+    if (total_net_income_prev is not None and total_revenue_prev not in (None, 0))
+    else None
+)
+margin_delta_bps = round((margin_pct - margin_prev) * 100) if (margin_pct is not None and margin_prev is not None) else None
+
+total_rd_prev = float(df_prev["rd"].sum()) if not df_prev.empty and "rd" in df_prev.columns else None
+rd_growth_pct = _safe_pct(total_rd_latest - total_rd_prev, total_rd_prev) if total_rd_prev not in (None, 0) else None
 
 # Build company KPI leaderboard payloads (horizontal scroll, all companies visible via strip).
 leaderboard_sections = []
@@ -517,19 +611,24 @@ if workbook_path and workbook_path.exists():
         pass
 
 if revenue_cards:
-    leaderboard_sections.append({"title": "Revenue", "subtitle": "Top annual revenue leaders", "cards": revenue_cards})
+    leaderboard_sections.append({"title": "Revenue", "subtitle": f"Top annual revenue leaders · sorted highest to lowest · {latest_year}", "cards": revenue_cards})
 if ad_revenue_cards:
-    leaderboard_sections.append({"title": "Advertising Revenue", "subtitle": "Top ad monetization leaders", "cards": ad_revenue_cards})
+    leaderboard_sections.append({"title": "Advertising Revenue", "subtitle": f"Top ad monetization leaders · sorted highest to lowest · {latest_year}", "cards": ad_revenue_cards})
 if ad_growth_cards:
-    leaderboard_sections.append({"title": "Ad Growth", "subtitle": "Top year-over-year ad growth leaders", "cards": ad_growth_cards})
+    leaderboard_sections.append({"title": "Ad Growth", "subtitle": f"Top year-over-year ad growth leaders · sorted highest to lowest · {latest_year}", "cards": ad_growth_cards})
 if ad_intensity_cards:
-    leaderboard_sections.append({"title": "Ad Intensity", "subtitle": "Ad revenue as % of total revenue", "cards": ad_intensity_cards})
+    leaderboard_sections.append({"title": "Ad Intensity", "subtitle": f"Ad revenue as % of total revenue · sorted highest to lowest · {latest_year}", "cards": ad_intensity_cards})
 if market_cap_cards:
-    leaderboard_sections.append({"title": "Market Cap", "subtitle": "Top market capitalization leaders", "cards": market_cap_cards})
+    leaderboard_sections.append({"title": "Market Cap", "subtitle": f"Top market capitalization leaders · sorted highest to lowest · {latest_year}", "cards": market_cap_cards})
 if rd_cards:
-    leaderboard_sections.append({"title": "R&D", "subtitle": "Top innovation spend leaders", "cards": rd_cards})
+    leaderboard_sections.append({"title": "R&D", "subtitle": f"Top innovation spend leaders · sorted highest to lowest · {latest_year}", "cards": rd_cards})
 
 auto_insights_df = _load_auto_insights(workbook_path, latest_year)
+yearly_comments = _load_homepage_yearly_comments(
+    excel_path=str(workbook_path) if workbook_path else "",
+    source_stamp=source_stamp,
+    selected_year=latest_year,
+)
 
 # Styling
 bg_color = "#0B1220" if is_dark else "#F5F8FF"
@@ -787,6 +886,46 @@ st.markdown(
     font-size: 0.9rem;
     line-height: 1.6;
     margin: 0;
+}}
+
+body.theme-dark .wm-insight-card a {{
+    color: #93C5FD !important;
+}}
+
+.wm-narrative-block {{
+    margin: 0 0 28px;
+    padding: 20px 24px;
+    border-radius: 14px;
+    border-left: 4px solid #0073FF;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-left: 4px solid #0073FF;
+}}
+
+body.theme-dark .wm-narrative-block {{
+    background: rgba(15, 23, 42, 0.55);
+    border-color: rgba(148, 163, 184, 0.18);
+    border-left-color: #0073FF;
+}}
+
+.wm-narrative-label {{
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #0073FF;
+    margin-bottom: 8px;
+}}
+
+.wm-narrative-text {{
+    font-size: 0.97rem;
+    line-height: 1.7;
+    color: #1E293B;
+    margin: 0;
+}}
+
+body.theme-dark .wm-narrative-text {{
+    color: #CBD5E1;
 }}
 
 .wm-insight-logos {{
@@ -1112,6 +1251,34 @@ if revenue_growth_pct is not None:
     kpi_change_label = f"{arrow} {abs(revenue_growth_pct):.1f}% YoY"
 
 company_count = len(df_latest["company"].dropna().unique()) if not df_latest.empty else len(companies)
+hero_sentence = _build_hero_narrative(
+    latest_year,
+    _format_money_musd(total_revenue_latest, 1),
+    revenue_growth_pct,
+    company_count,
+)
+
+if market_cap_growth_pct is not None:
+    sign = "↑" if market_cap_growth_pct >= 0 else "↓"
+    market_cap_label = f"{sign} {abs(market_cap_growth_pct):.1f}% YoY"
+else:
+    market_cap_label = "Aggregated valuation"
+
+if margin_delta_bps is not None:
+    if margin_delta_bps > 0:
+        margin_label = f"↑ expanding +{margin_delta_bps}bps YoY"
+    elif margin_delta_bps < 0:
+        margin_label = f"↓ compressing {margin_delta_bps}bps YoY"
+    else:
+        margin_label = "Margin held flat YoY"
+else:
+    margin_label = "Net income / Revenue"
+
+if rd_growth_pct is not None:
+    sign = "↑" if rd_growth_pct >= 0 else "↓"
+    rd_label = f"{sign} {abs(rd_growth_pct):.1f}% more invested YoY" if rd_growth_pct >= 0 else f"↓ {abs(rd_growth_pct):.1f}% less invested YoY"
+else:
+    rd_label = f"${total_rd_latest / 1000:.1f}B invested" if total_rd_latest else "R&D spend"
 
 st.markdown(
     f"""
@@ -1119,8 +1286,7 @@ st.markdown(
   <div class="wm-status"><span class="wm-status-dot"></span>Live Data • {latest_year}</div>
   <h1 class="wm-title">Competitive Monetization Intelligence</h1>
   <div class="wm-subtitle">
-    Strategic signal layer across technology and media leaders. Tracking <strong>{company_count}</strong> companies,
-    <strong>{_format_money_musd(total_revenue_latest, 1)}</strong> in annual revenue, and cross-market structure changes in one view.
+    Strategic signal layer across technology and media leaders.<br>{escape(hero_sentence)}
   </div>
   <div class="wm-kpi-grid">
     <div class="wm-kpi-card">
@@ -1131,23 +1297,39 @@ st.markdown(
     <div class="wm-kpi-card">
       <div class="wm-kpi-label">Combined Market Cap</div>
       <div class="wm-kpi-value">{_format_money_musd(total_market_cap_latest, 1)}</div>
-      <div class="wm-kpi-change">Aggregated valuation</div>
+      <div class="wm-kpi-change">{market_cap_label}</div>
     </div>
     <div class="wm-kpi-card">
       <div class="wm-kpi-label">Industry Profit Margin</div>
       <div class="wm-kpi-value">{f'{profit_margin_pct:.1f}%' if profit_margin_pct is not None else 'N/A'}</div>
-      <div class="wm-kpi-change">Net income / Revenue</div>
+      <div class="wm-kpi-change">{margin_label}</div>
     </div>
     <div class="wm-kpi-card">
       <div class="wm-kpi-label">R&D Intensity</div>
       <div class="wm-kpi-value">{f'{rd_intensity_pct:.1f}%' if rd_intensity_pct is not None else 'N/A'}</div>
-      <div class="wm-kpi-change">{_format_money_musd(total_rd_latest, 1)} invested</div>
+      <div class="wm-kpi-change">{rd_label}</div>
     </div>
   </div>
 </div>
 """,
     unsafe_allow_html=True,
 )
+
+narrative_text = yearly_comments.get("narrative", "")
+if narrative_text:
+    narrative_text = narrative_text.replace("{year}", str(latest_year))
+    narrative_text = narrative_text.replace("{revenue}", _format_money_musd(total_revenue_latest, 1))
+    if revenue_growth_pct is not None:
+        narrative_text = narrative_text.replace("{pct}", f"{abs(revenue_growth_pct):.1f}")
+    st.markdown(
+        f"""
+        <div class='wm-narrative-block'>
+            <div class='wm-narrative-label'>📋 Annual Snapshot — {latest_year}</div>
+            <p class='wm-narrative-text'>{escape(narrative_text)}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 st.markdown("<div class='wm-section-title'>🎯 Strategic Signals</div>", unsafe_allow_html=True)
 st.markdown(
@@ -1196,6 +1378,12 @@ if auto_insights_df.empty:
             f"{_render_company_logos(insight.get('companies', ''), logos)}"
             f"<div class='wm-insight-title'>{escape(_clean_signal_title(insight.get('title', 'Untitled')))}</div>"
             f"<p class='wm-insight-text'>{escape(str(insight.get('text', '')))}</p>"
+            "<div style=\"margin-top:12px; padding-top:10px; border-top:1px solid rgba(15,23,42,0.07);\">"
+            "<a href=\"/Overview\" target=\"_self\" "
+            "style=\"font-size:0.8rem; font-weight:700; color:#0073FF; text-decoration:none; display:inline-flex; align-items:center; gap:4px; letter-spacing:0.01em;\">"
+            "Explore in Overview&nbsp;→"
+            "</a>"
+            "</div>"
             "</div>"
         )
     st.markdown(f"<div class='wm-insight-grid'>{''.join(cards)}</div>", unsafe_allow_html=True)
@@ -1214,6 +1402,12 @@ else:
             f"{_render_company_logos(companies_raw, logos)}"
             f"<div class='wm-insight-title'>{escape(title)}</div>"
             f"<p class='wm-insight-text'>{escape(text)}</p>"
+            "<div style=\"margin-top:12px; padding-top:10px; border-top:1px solid rgba(15,23,42,0.07);\">"
+            "<a href=\"/Overview\" target=\"_self\" "
+            "style=\"font-size:0.8rem; font-weight:700; color:#0073FF; text-decoration:none; display:inline-flex; align-items:center; gap:4px; letter-spacing:0.01em;\">"
+            "Explore in Overview&nbsp;→"
+            "</a>"
+            "</div>"
             "</div>"
         )
     st.markdown(f"<div class='wm-insight-grid'>{''.join(cards)}</div>", unsafe_allow_html=True)
