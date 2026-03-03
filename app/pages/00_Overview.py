@@ -3961,7 +3961,7 @@ def _render_overview_hero_banner() -> None:
                     <div class='ov-hero-title'>Overview Intelligence Hub</div>
                     <div class='ov-hero-sub'>
                         Macro regime, concentration, and company signal layers in one control surface.
-                        Use the navigator below to focus one analysis block at a time.
+                        Use the section selector to focus one analysis block at a time.
                     </div>
                 </div>
                 <div class='ov-hero-logo-bar'>{logo_html}</div>
