@@ -198,8 +198,8 @@ def _render_sticky_top_bar(active_key: str):
             margin: 0;
           }}
           .app-top-offset {{
-            height: 54px;
-            display: block;
+            height: 0 !important;
+            display: none !important;
           }}
           .app-top-bar a {{
             display: inline-flex; align-items: center; gap: 5px;
@@ -232,7 +232,6 @@ def _render_sticky_top_bar(active_key: str):
           <a href="?lang=it" target="_self" rel="noopener" class="lang-link {lang_it_cls}">🇮🇹</a>
           <a href="?lang=es" target="_self" rel="noopener" class="lang-link {lang_es_cls}">🇪🇸</a>
         </div>
-        <div class="app-top-offset"></div>
         <script>
           (function() {{
             const bindSameTab = (selector) => {{
@@ -266,8 +265,12 @@ def display_header(enable_dom_patch: bool = True):
         <style>
         header[data-testid="stHeader"] { display: none !important; height: 0 !important; }
         [data-testid="stToolbar"] { display: none !important; height: 0 !important; }
+        [data-testid="stAppViewContainer"] { padding-top: 0 !important; margin-top: 0 !important; }
+        [data-testid="stAppViewContainer"] > .main,
+        [data-testid="stAppViewContainer"] > section.main { padding-top: 0 !important; margin-top: 0 !important; }
         .block-container { padding-top: 0 !important; margin-top: 0 !important; }
         #root > div:first-child { padding-top: 0 !important; }
+        .main .block-container > div:first-child { margin-top: 0 !important; }
         </style>
         """,
         unsafe_allow_html=True,
