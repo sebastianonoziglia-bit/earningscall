@@ -224,12 +224,14 @@ def _render_sticky_top_bar(active_key: str):
             min-width: 38px;
             justify-content: center;
           }}
-          [data-testid="element-container"]:has(.app-top-bar) {{
+          [data-testid="element-container"]:has(.app-top-bar),
+          [data-testid="stMarkdownContainer"]:has(.app-top-bar) {{
             margin: 0 !important;
             padding: 0 !important;
             height: 0 !important;
             min-height: 0 !important;
             overflow: visible !important;
+            margin-bottom: -1rem !important;
           }}
         </style>
         <div class="app-top-bar">
@@ -239,52 +241,6 @@ def _render_sticky_top_bar(active_key: str):
           <a href="?lang=it" target="_self" rel="noopener" class="lang-link {lang_it_cls}">🇮🇹</a>
           <a href="?lang=es" target="_self" rel="noopener" class="lang-link {lang_es_cls}">🇪🇸</a>
         </div>
-        <script>
-          (function() {{
-            const bindSameTab = (selector) => {{
-              document.querySelectorAll(selector).forEach((el) => {{
-                if (el.dataset.sameTabBound === "1") return;
-                el.dataset.sameTabBound = "1";
-                el.addEventListener("click", (evt) => {{
-                  const href = el.getAttribute("href");
-                  if (!href || href.startsWith("#")) return;
-                  evt.preventDefault();
-                  window.location.assign(href);
-                }});
-              }});
-            }};
-            bindSameTab(".app-top-bar a[href^='?']");
-            bindSameTab(".app-bottom-nav-item[href^='?']");
-
-            const topBar = document.querySelector(".app-top-bar");
-            if (topBar) {{
-              const md = topBar.closest('[data-testid="stMarkdownContainer"]');
-              if (md) {{
-                md.style.margin = "0";
-                md.style.padding = "0";
-                md.style.height = "0";
-                md.style.minHeight = "0";
-                md.style.overflow = "visible";
-              }}
-              const elementContainer = topBar.closest('[data-testid="element-container"]');
-              if (elementContainer) {{
-                elementContainer.style.margin = "0";
-                elementContainer.style.padding = "0";
-                elementContainer.style.height = "0";
-                elementContainer.style.minHeight = "0";
-                elementContainer.style.overflow = "visible";
-              }}
-              const blockWrapper = topBar.parentElement;
-              if (blockWrapper) {{
-                blockWrapper.style.margin = "0";
-                blockWrapper.style.padding = "0";
-                blockWrapper.style.height = "0";
-                blockWrapper.style.minHeight = "0";
-                blockWrapper.style.overflow = "visible";
-              }}
-            }}
-          }})();
-        </script>
         """,
         unsafe_allow_html=True,
     )
