@@ -224,6 +224,13 @@ def _render_sticky_top_bar(active_key: str):
             min-width: 38px;
             justify-content: center;
           }}
+          [data-testid="element-container"]:has(.app-top-bar) {{
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+          }}
         </style>
         <div class="app-top-bar">
           {''.join(nav_links)}
@@ -248,6 +255,34 @@ def _render_sticky_top_bar(active_key: str):
             }};
             bindSameTab(".app-top-bar a[href^='?']");
             bindSameTab(".app-bottom-nav-item[href^='?']");
+
+            const topBar = document.querySelector(".app-top-bar");
+            if (topBar) {{
+              const md = topBar.closest('[data-testid="stMarkdownContainer"]');
+              if (md) {{
+                md.style.margin = "0";
+                md.style.padding = "0";
+                md.style.height = "0";
+                md.style.minHeight = "0";
+                md.style.overflow = "visible";
+              }}
+              const elementContainer = topBar.closest('[data-testid="element-container"]');
+              if (elementContainer) {{
+                elementContainer.style.margin = "0";
+                elementContainer.style.padding = "0";
+                elementContainer.style.height = "0";
+                elementContainer.style.minHeight = "0";
+                elementContainer.style.overflow = "visible";
+              }}
+              const blockWrapper = topBar.parentElement;
+              if (blockWrapper) {{
+                blockWrapper.style.margin = "0";
+                blockWrapper.style.padding = "0";
+                blockWrapper.style.height = "0";
+                blockWrapper.style.minHeight = "0";
+                blockWrapper.style.overflow = "visible";
+              }}
+            }}
           }})();
         </script>
         """,
