@@ -42,6 +42,16 @@ def ensure_intelligence_pipeline_is_fresh() -> dict:
     if not should_run:
         return {"ran": False}
 
+    transcript_index_path = transcripts_dir / "transcript_index.csv"
+    if not transcript_index_path.exists():
+        return {"ran": False, "reason": "No transcripts found — skipping pipeline"}
+    try:
+        transcript_index_df = pd.read_csv(transcript_index_path)
+    except Exception:
+        transcript_index_df = pd.DataFrame()
+    if transcript_index_df.empty:
+        return {"ran": False, "reason": "No transcripts found — skipping pipeline"}
+
     def _run_script(script: str) -> None:
         try:
             result = subprocess.run(
