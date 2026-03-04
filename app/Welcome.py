@@ -1,6 +1,9 @@
 import os
 import base64
 import re
+import subprocess
+import sys
+import time
 from datetime import datetime
 from html import escape
 from pathlib import Path
@@ -11,6 +14,56 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+
+@st.cache_resource
+def ensure_intelligence_pipeline_is_fresh() -> dict:
+    app_dir = Path(__file__).resolve().parent
+    root_dir = app_dir.parent
+    transcripts_dir = root_dir / "earningscall_transcripts"
+    db_path = root_dir / "earningscall_intelligence.db"
+
+    ONE_HOUR = 3600
+    if db_path.exists() and (time.time() - db_path.stat().st_mtime) < ONE_HOUR:
+        return {"ran": False, "reason": "DB built recently, skipping rebuild"}
+
+    newest_txt_mtime = 0.0
+    if transcripts_dir.exists():
+        txt_files = [p for p in transcripts_dir.rglob("*.txt") if p.is_file()]
+        xlsx_files = [p for p in transcripts_dir.rglob("*.xlsx") if p.is_file()]
+        # Explicitly exclude Excel files from the mtime check
+        txt_files = [p for p in txt_files if p.suffix.lower() != ".xlsx"]
+        if txt_files:
+            newest_txt_mtime = max(p.stat().st_mtime for p in txt_files)
+
+    db_mtime = db_path.stat().st_mtime if db_path.exists() else 0.0
+    should_run = (not db_path.exists()) or (newest_txt_mtime > db_mtime)
+
+    if not should_run:
+        return {"ran": False}
+
+    script_sequence = [
+        "scripts/rebuild_transcript_index.py",
+        "scripts/sync_all_intelligence.py",
+        "scripts/extract_transcript_topics.py",
+        "scripts/generate_insights.py",
+        "scripts/generate_financial_narratives.py",
+        "scripts/generate_diagnostic_report.py",
+    ]
+    for script in script_sequence:
+        try:
+            subprocess.run(
+                [sys.executable, script],
+                cwd=str(root_dir),
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except Exception as exc:
+            st.warning(f"Pipeline step failed ({script}): {exc}")
+
+    return {"ran": True}
+
+
 # Must stay first Streamlit command
 st.set_page_config(
     page_title="Global Media Intelligence",
@@ -18,6 +71,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+ensure_intelligence_pipeline_is_fresh()
 
 from utils.global_fonts import apply_global_fonts
 from utils.header import display_header

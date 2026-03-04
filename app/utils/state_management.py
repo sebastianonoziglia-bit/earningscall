@@ -110,7 +110,7 @@ def get_data_processor(_cache_bust: str = "v2-nasdaq-2026-02-04"):
         # Try to use the optimized data loader first if available
         if OPTIMIZED_LOADER_AVAILABLE:
             logger.info("Initializing optimized data loader")
-            optimized_loader = OptimizedDataLoader()
+            optimized_loader = _get_optimized_loader()
             return optimized_loader.get_data_processor()
 
         # Fall back to standard data processor if optimized loader not available
@@ -137,12 +137,15 @@ def get_data_processor(_cache_bust: str = "v2-nasdaq-2026-02-04"):
             raise
 
 
+@st.cache_resource(show_spinner=False)
+def _get_optimized_loader():
+    return OptimizedDataLoader()
+
+
 def get_optimized_loader():
     """Get an instance of the optimized data loader if available"""
     if not OPTIMIZED_LOADER_AVAILABLE:
         logger.warning("Optimized data loader is not available")
         return None
 
-    if 'optimized_data_loader' not in st.session_state:
-        st.session_state.optimized_data_loader = OptimizedDataLoader()
-    return st.session_state.optimized_data_loader
+    return _get_optimized_loader()
