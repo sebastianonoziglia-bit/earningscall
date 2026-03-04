@@ -25,6 +25,7 @@ from utils.data_loader import load_advertising_data, get_available_filters, read
 from utils.components import render_ai_assistant
 from utils.styles import load_common_styles, load_genie_specific_styles
 from utils.enhanced_chat_interface import render_enhanced_chat_interface
+from utils.thought_map import render_thought_map, render_thought_map_controls
 from utils.m2_supply_data import get_m2_monthly_data, get_m2_annual_data, create_m2_visualization
 from utils.fed_funds_data import get_fed_funds_annual_data
 from utils.bitcoin_analysis import get_bitcoin_monthly_returns, create_bitcoin_monthly_returns_chart, render_bitcoin_analysis_section
@@ -60,6 +61,45 @@ from utils.language import get_text
 st.session_state["active_nav_page"] = "genie"
 st.session_state["_active_nav_page"] = "genie"
 render_header()
+
+def _render_ai_settings_controls(key_prefix: str = "sidebar"):
+    api_key_input = st.text_input(
+        "OpenAI API Key",
+        type="password",
+        value=st.session_state.get("openai_api_key", ""),
+        help="Stored in session memory only — never persisted or logged.",
+        key=f"openai_api_key_input_{key_prefix}",
+    )
+    if api_key_input:
+        st.session_state["openai_api_key"] = api_key_input
+
+    current_model = st.session_state.get("genie_model", "gpt-4o")
+    model_options = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]
+    model_index = model_options.index(current_model) if current_model in model_options else 0
+    model_choice = st.selectbox(
+        "Model",
+        model_options,
+        index=model_index,
+        key=f"genie_model_select_{key_prefix}",
+    )
+    st.session_state["genie_model"] = model_choice
+
+    if st.button("🗑 Clear Conversation", key=f"clear_genie_chat_{key_prefix}"):
+        st.session_state["genie_history"] = []
+        st.session_state["thought_map"] = {
+            "nodes": {}, "edges": [], "root_ids": [], "version": 1
+        }
+        st.rerun()
+
+
+# ── AI Settings sidebar ──
+with st.sidebar.expander("🔑 AI Settings", expanded=False):
+    _render_ai_settings_controls("sidebar")
+
+# Sidebar is hidden in fullscreen mode; provide visible fallback controls in main page.
+if st.session_state.get("hide_sidebar_nav", False):
+    with st.expander("🔑 AI Settings", expanded=False):
+        _render_ai_settings_controls("inline")
 
 # Add SQL Assistant in the sidebar
 from utils.sql_assistant_sidebar import render_sql_assistant_sidebar
@@ -285,6 +325,112 @@ def _get_quarterly_years_for_companies(excel_path: str, companies: tuple) -> lis
         .tolist()
     )
     return sorted(set(years))
+
+
+@st.cache_data(ttl=3600)
+def _get_transcript_index(excel_path: str) -> dict:
+    """
+    Build a lightweight index of available transcripts for AI context.
+    Reads only company/year/quarter metadata.
+    """
+    if not excel_path:
+        return {}
+    try:
+        index_df = pd.read_excel(
+            excel_path,
+            sheet_name="Transcripts",
+            usecols=["company", "year", "quarter"],
+        )
+    except Exception:
+        return {}
+
+    if index_df is None or index_df.empty:
+        return {}
+
+    result = {}
+    for _, row in index_df.iterrows():
+        company = str(row.get("company", "")).strip()
+        year = pd.to_numeric(row.get("year"), errors="coerce")
+        quarter = str(row.get("quarter", "")).strip()
+        if not company or pd.isna(year) or not quarter:
+            continue
+        key = f"{company} {int(year)} {quarter}"
+        result[key] = True
+    return result
+
+
+@st.cache_data(ttl=3600)
+def _search_transcript(excel_path: str, company: str, year: int, quarter: str) -> str:
+    """Fetch a specific transcript row by company/year/quarter."""
+    if not excel_path:
+        return ""
+    try:
+        transcripts_df = pd.read_excel(excel_path, sheet_name="Transcripts")
+    except Exception:
+        return ""
+    if transcripts_df is None or transcripts_df.empty:
+        return ""
+    required = {"company", "year", "quarter", "transcript_text"}
+    if not required.issubset(set(transcripts_df.columns)):
+        return ""
+
+    mask = (
+        transcripts_df["company"].astype(str).str.lower().str.strip() == str(company).lower().strip()
+    ) & (
+        pd.to_numeric(transcripts_df["year"], errors="coerce") == int(year)
+    ) & (
+        transcripts_df["quarter"].astype(str).str.upper().str.strip() == str(quarter).upper().strip()
+    )
+
+    result = transcripts_df[mask]
+    if result.empty:
+        return ""
+    return str(result.iloc[0].get("transcript_text", "") or "")
+
+
+@st.cache_data(ttl=3600)
+def _get_active_overview_auto_insights(excel_path: str) -> list[dict]:
+    """
+    Load active Overview_Auto_Insights rows for Genie system context.
+    """
+    if not excel_path:
+        return []
+    try:
+        insights_df = pd.read_excel(excel_path, sheet_name="Overview_Auto_Insights")
+    except Exception:
+        return []
+    if insights_df is None or insights_df.empty:
+        return []
+
+    insights_df.columns = [str(col).strip().lower() for col in insights_df.columns]
+    if "is_active" in insights_df.columns:
+        active_series = pd.to_numeric(insights_df["is_active"], errors="coerce").fillna(0).astype(int)
+        insights_df = insights_df[active_series == 1]
+    if insights_df.empty:
+        return []
+
+    if "sort_order" in insights_df.columns:
+        insights_df["sort_order"] = pd.to_numeric(insights_df["sort_order"], errors="coerce")
+        insights_df = insights_df.sort_values(["sort_order"], na_position="last")
+
+    fields = [
+        "insight_id", "category", "title", "text", "comment", "priority",
+        "companies", "kpis", "graph_type", "year", "quarter"
+    ]
+    available_fields = [field for field in fields if field in insights_df.columns]
+    if not available_fields:
+        return []
+
+    cleaned_rows = []
+    for _, row in insights_df[available_fields].iterrows():
+        entry = {}
+        for field in available_fields:
+            value = row.get(field)
+            if pd.isna(value):
+                value = ""
+            entry[field] = value
+        cleaned_rows.append(entry)
+    return cleaned_rows
 
 # Update the mapping of macro categories to their detailed metrics
 MACRO_CATEGORY_MAPPING = {
@@ -2639,39 +2785,57 @@ else:
         with st.expander("📉 About Recession Periods"):
             st.info("Recession shading is currently disabled because the app no longer ships hard-coded recession periods. Add a dedicated recession/events sheet to enable this feature.")
 
-# Add the new Enhanced Chat Interface section
+try:
+    dashboard_state = {
+        "page": "Genie",
+        "excel_path": str(excel_path),
+        "selected_companies": selected_companies,
+        "selected_countries": all_selected_countries,
+        "metric_selection_mode": metric_selection_mode,
+        "selected_metrics": selected_detailed_metrics,
+        "selected_company_metrics": selected_company_metrics if "selected_company_metrics" in locals() else [],
+        "year_range": f"{year_range[0]}-{year_range[1]}" if "year_range" in locals() else "unknown",
+        "data_granularity": selected_granularity if "selected_granularity" in locals() else "Auto",
+        "quarter_focus": selected_quarter_focus if "selected_quarter_focus" in locals() else "All Quarters",
+        "month_focus": selected_month_focus if "selected_month_focus" in locals() else None,
+        "day_focus": selected_day_focus if "selected_day_focus" in locals() else None,
+        "sheet_granularity_library": st.session_state.get("global_time_context", {}).get("sheet_granularity_library", {}),
+        "show_m2_supply": bool(show_m2_supply) if "show_m2_supply" in locals() else False,
+        "show_inflation": bool(show_inflation) if "show_inflation" in locals() else False,
+        "show_fed_funds": bool(show_fed_funds) if "show_fed_funds" in locals() else False,
+        "adjust_purchasing_power": bool(adjust_purchasing_power) if "adjust_purchasing_power" in locals() else False,
+    }
+    dashboard_state["available_transcripts"] = list(_get_transcript_index(str(excel_path)).keys())
+    dashboard_state["active_overview_auto_insights"] = _get_active_overview_auto_insights(str(excel_path))
+except Exception as e:
+    st.error(f"Error loading data: {str(e)}")
+    st.stop()
+
+# ── GENIE CHAT + THOUGHT MAP SECTION ────────────────────────────────────────
 st.markdown("<hr style='margin: 2.5rem 0 1.5rem 0;'>", unsafe_allow_html=True)
-render_enhanced_chat_interface()
+render_enhanced_chat_interface(dashboard_state=dashboard_state)
+
+# ── THOUGHT MAP ──────────────────────────────────────────────────────────────
+st.markdown("<hr style='margin: 2.5rem 0 1rem 0;'>", unsafe_allow_html=True)
+st.markdown(
+    """
+<div style='display:flex; align-items:center; gap:12px; margin-bottom:6px;'>
+  <span style='font-size:1.15rem; font-weight:900; color:#0F172A;'>💭 Thought Map</span>
+  <span style='background:rgba(0,115,255,0.1); border:1px solid rgba(0,115,255,0.25);
+    border-radius:999px; padding:2px 10px; font-size:0.7rem; font-weight:700;
+    color:#0073FF; letter-spacing:0.06em; text-transform:uppercase;'>Beta</span>
+</div>
+<p style='color:#64748B; font-size:0.85rem; margin-bottom:1rem;'>
+  Visual map of Genie's reasoning — auto-populated from every response.
+  Add your own nodes, elaborate any branch, export as JSON or Markdown.
+</p>
+""",
+    unsafe_allow_html=True,
+)
+render_thought_map(height=520)
+render_thought_map_controls()
 st.markdown("<hr style='margin: 2.5rem 0 1.5rem 0;'>", unsafe_allow_html=True)
 
 # Show helper message if no data is selected
 if not selected_companies and not selected_metrics:
     st.info("Select metrics, companies, or enable global data to view the analysis.")
-
-
-try:
-    # Update AI context
-    dashboard_state = {
-        'page': 'Genie',
-        'selected_companies': selected_companies,
-        'selected_countries': all_selected_countries,
-        'metric_selection_mode': metric_selection_mode,
-        'selected_metrics': selected_detailed_metrics,
-        'selected_company_metrics': selected_company_metrics if 'selected_company_metrics' in locals() else [],
-        'year_range': f"{year_range[0]}-{year_range[1]}" if 'year_range' in locals() else "unknown",
-        'data_granularity': selected_granularity if 'selected_granularity' in locals() else "Auto",
-        'quarter_focus': selected_quarter_focus if 'selected_quarter_focus' in locals() else "All Quarters",
-        'month_focus': selected_month_focus if 'selected_month_focus' in locals() else None,
-        'day_focus': selected_day_focus if 'selected_day_focus' in locals() else None,
-        'sheet_granularity_library': st.session_state.get("global_time_context", {}).get("sheet_granularity_library", {}),
-        'show_m2_supply': bool(show_m2_supply) if 'show_m2_supply' in locals() else False,
-        'show_inflation': bool(show_inflation) if 'show_inflation' in locals() else False,
-        'show_fed_funds': bool(show_fed_funds) if 'show_fed_funds' in locals() else False,
-        'adjust_purchasing_power': bool(adjust_purchasing_power) if 'adjust_purchasing_power' in locals() else False,
-    }
-
-    # AI Assistant disabled for now
-
-except Exception as e:
-    st.error(f"Error loading data: {str(e)}")
-    st.stop()

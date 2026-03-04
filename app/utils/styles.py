@@ -88,7 +88,7 @@ def load_common_styles():
 
             /* Remove excessive default top whitespace across pages */
             [data-testid="stAppViewContainer"] > section > div.block-container {
-                padding-top: 0.5rem !important;
+                padding-top: 0 !important;
             }
 
 	    section[data-testid="stSidebar"] {

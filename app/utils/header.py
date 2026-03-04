@@ -238,7 +238,9 @@ def _render_sticky_top_bar(active_key: str):
           }}
           /* style-only markdown nodes still create flex gaps; collapse them globally */
           [data-testid="stMarkdownContainer"]:has(> style:only-child),
-          [data-testid="element-container"]:has([data-testid="stMarkdownContainer"] > style:only-child) {{
+          [data-testid="element-container"]:has([data-testid="stMarkdownContainer"] > style:only-child),
+          [data-testid="stMarkdownContainer"]:has(> script:only-child),
+          [data-testid="element-container"]:has([data-testid="stMarkdownContainer"] > script:only-child) {{
             margin: 0 !important;
             padding: 0 !important;
             height: 0 !important;
@@ -253,9 +255,7 @@ def _render_sticky_top_bar(active_key: str):
             height: 0 !important;
             min-height: 0 !important;
             overflow: visible !important;
-            position: absolute !important;
-            inset: 0 auto auto 0 !important;
-            width: 0 !important;
+            line-height: 0 !important;
           }}
         </style>
         <div class="app-top-bar">
