@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from html import escape
 from pathlib import Path
@@ -41,25 +42,40 @@ def ensure_intelligence_pipeline_is_fresh() -> dict:
     if not should_run:
         return {"ran": False}
 
-    script_sequence = [
-        "scripts/rebuild_transcript_index.py",
-        "scripts/sync_all_intelligence.py",
-        "scripts/extract_transcript_topics.py",
-        "scripts/generate_insights.py",
-        "scripts/generate_financial_narratives.py",
-        "scripts/generate_diagnostic_report.py",
-    ]
-    for script in script_sequence:
+    def _run_script(script: str) -> None:
         try:
-            subprocess.run(
+            result = subprocess.run(
                 [sys.executable, script],
                 cwd=str(root_dir),
-                check=True,
+                check=False,
                 capture_output=True,
                 text=True,
+                timeout=60,
             )
+            if result.returncode != 0:
+                pass  # silently skip failed scripts, never block startup
         except Exception as exc:
             st.warning(f"Pipeline step failed ({script}): {exc}")
+
+    _run_script("scripts/rebuild_transcript_index.py")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(_run_script, "scripts/build_intelligence_db.py"),
+            pool.submit(_run_script, "scripts/extract_transcript_topics.py"),
+        ]
+        for future in futures:
+            future.result()
+
+    _run_script("scripts/generate_insights.py")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(_run_script, "scripts/generate_financial_narratives.py"),
+            pool.submit(_run_script, "scripts/generate_diagnostic_report.py"),
+        ]
+        for future in futures:
+            future.result()
 
     return {"ran": True}
 

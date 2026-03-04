@@ -1013,6 +1013,134 @@ class InsightGenerator:
 
         return insights
 
+    def _generate_homepage_yearly_comment(self, annual: pd.DataFrame, workbook_path: str) -> None:
+        if annual is None or annual.empty or not workbook_path:
+            return
+
+        data = annual.copy()
+        if "year" not in data.columns or "company" not in data.columns:
+            return
+
+        for col in ["revenue", "operating_income", "market_cap"]:
+            if col in data.columns:
+                data[col] = pd.to_numeric(data[col], errors="coerce")
+        data["year"] = pd.to_numeric(data["year"], errors="coerce")
+        data = data.dropna(subset=["year"]).copy()
+        if data.empty:
+            return
+        data["year"] = data["year"].astype(int)
+
+        year = int(data["year"].max())
+        current = data[data["year"] == year].copy()
+        prev = data[data["year"] == year - 1].copy()
+        if current.empty or "revenue" not in current.columns:
+            return
+
+        total_revenue_year = float(current["revenue"].sum(min_count=1) or 0.0)
+        total_revenue_prev = float(prev["revenue"].sum(min_count=1) or 0.0) if not prev.empty else 0.0
+        yoy_pct = _safe_pct_change(total_revenue_year, total_revenue_prev)
+        if yoy_pct is None:
+            yoy_pct = 0.0
+        total_revenue_b = total_revenue_year / 1000.0
+
+        fastest_grower = "N/A"
+        fastest_grower_pct = 0.0
+        growth = data[["company", "year", "revenue"]].dropna().sort_values(["company", "year"])
+        if not growth.empty:
+            growth["revenue_yoy_pct"] = growth.groupby("company")["revenue"].pct_change() * 100.0
+            latest_growth = growth[(growth["year"] == year) & growth["revenue_yoy_pct"].notna()].copy()
+            if not latest_growth.empty:
+                top_growth = latest_growth.sort_values("revenue_yoy_pct", ascending=False).iloc[0]
+                fastest_grower = str(top_growth["company"])
+                fastest_grower_pct = float(top_growth["revenue_yoy_pct"])
+
+        highest_margin_company = "N/A"
+        highest_margin_pct = 0.0
+        if {"operating_income", "revenue"}.issubset(current.columns):
+            margins = current[(current["revenue"] > 0) & current["operating_income"].notna()].copy()
+            if not margins.empty:
+                margins["operating_margin_pct"] = (margins["operating_income"] / margins["revenue"]) * 100.0
+                top_margin = margins.sort_values("operating_margin_pct", ascending=False).iloc[0]
+                highest_margin_company = str(top_margin["company"])
+                highest_margin_pct = float(top_margin["operating_margin_pct"])
+
+        total_market_cap = 0.0
+        if "market_cap" in current.columns:
+            total_market_cap = float(current["market_cap"].sum(min_count=1) or 0.0)
+
+        top_topic = "N/A"
+        topics_path = Path(__file__).resolve().parents[1] / "earningscall_transcripts" / "transcript_topics.csv"
+        if topics_path.exists():
+            try:
+                topics_df = pd.read_csv(topics_path)
+                topics_df.columns = [str(c).strip().lower() for c in topics_df.columns]
+                if {"year", "topic"}.issubset(set(topics_df.columns)):
+                    topics_df["year"] = pd.to_numeric(topics_df["year"], errors="coerce")
+                    year_topics = topics_df[(topics_df["year"] == int(year)) & topics_df["topic"].notna()].copy()
+                    if not year_topics.empty:
+                        if "mention_count" in year_topics.columns:
+                            topic_counts = (
+                                year_topics.groupby("topic", as_index=False)["mention_count"]
+                                .sum(min_count=1)
+                                .sort_values("mention_count", ascending=False)
+                            )
+                        else:
+                            topic_counts = (
+                                year_topics.groupby("topic", as_index=False)
+                                .size()
+                                .rename(columns={"size": "mention_count"})
+                                .sort_values("mention_count", ascending=False)
+                            )
+                        if not topic_counts.empty:
+                            top_topic = str(topic_counts.iloc[0]["topic"])
+            except Exception:
+                top_topic = "N/A"
+
+        yoy_prefix = "+" if float(yoy_pct) >= 0 else ""
+        grower_prefix = "+" if float(fastest_grower_pct) >= 0 else ""
+        _ = total_market_cap
+        narrative = (
+            f"{year} marked a structural inflection in the tracked universe: "
+            f"combined revenue reached ${total_revenue_b:.0f}B ({yoy_prefix}{float(yoy_pct):.1f}% YoY), "
+            f"led by {fastest_grower} ({grower_prefix}{float(fastest_grower_pct):.1f}%). "
+            f"{highest_margin_company} posted the strongest operating margin at {float(highest_margin_pct):.1f}%. "
+            f"Across earnings calls, '{top_topic}' dominated executive narratives — "
+            f"signalling where the industry's strategic attention is concentrated."
+        )
+        subtitle = (
+            f"${total_revenue_b:.0f}B combined revenue · {yoy_prefix}{float(yoy_pct):.1f}% YoY · "
+            f"{fastest_grower} fastest growing · '{top_topic}' dominates executive agenda"
+        )
+
+        new_rows = pd.DataFrame(
+            [
+                {"year": int(year), "slot": "narrative", "text": narrative, "is_active": 1},
+                {"year": int(year), "slot": "subtitle", "text": subtitle, "is_active": 1},
+            ]
+        )
+
+        try:
+            existing = pd.read_excel(workbook_path, sheet_name="Homepage_Yearly_Comments")
+        except Exception:
+            existing = pd.DataFrame(columns=["year", "slot", "text", "is_active"])
+
+        existing.columns = [str(c).strip().lower() for c in existing.columns]
+        for col in ["year", "slot", "text", "is_active"]:
+            if col not in existing.columns:
+                existing[col] = "" if col in {"slot", "text"} else 1
+        existing = existing[["year", "slot", "text", "is_active"]].copy()
+        existing["year"] = pd.to_numeric(existing["year"], errors="coerce")
+        existing["slot"] = existing["slot"].astype(str).str.strip().str.lower()
+
+        existing = existing[
+            ~(
+                (existing["year"] == int(year))
+                & (existing["slot"].isin(["narrative", "subtitle"]))
+            )
+        ].copy()
+        combined = pd.concat([existing, new_rows], ignore_index=True)
+        _write_insights_to_workbook(combined, workbook_path, "Homepage_Yearly_Comments")
+
     def generate_all_insights(self) -> List[Dict[str, Any]]:
         annual = self._annual_metrics()
         if not annual.empty:
@@ -1092,6 +1220,7 @@ def main() -> None:
             try:
                 _write_insights_to_workbook(out_df, workbook_path, args.sheet_name)
                 wrote_sheet = True
+                gen._generate_homepage_yearly_comment(gen._annual_metrics(), workbook_path)
                 per_company_rows = [i for i in insights if str(i.get("insight_id", "")).startswith("NAR_")]
                 if per_company_rows:
                     per_company_df = pd.DataFrame(per_company_rows)
