@@ -9,6 +9,7 @@ _NAV_ITEMS = [
     {"key": "earnings", "target": "pages/01_Earnings.py", "label": "Earnings", "icon": "💰", "query": "earnings"},
     {"key": "stocks", "target": "pages/02_Stocks.py", "label": "Stocks", "icon": "📈", "query": "stocks"},
     {"key": "editorial", "target": "pages/03_Editorial.py", "label": "Editorial", "icon": "📝", "query": "editorial"},
+    {"key": "semantics", "target": "pages/05_Semantics.py", "label": "Semantics", "icon": "🧠", "query": "semantics"},
     {"key": "genie", "target": "pages/04_Genie.py", "label": "Genie", "icon": "🧞", "query": "genie"},
 ]
 
@@ -20,6 +21,9 @@ _QUERY_PAGE_MAP = {
     "01_earnings": "pages/01_Earnings.py",
     "stocks": "pages/02_Stocks.py",
     "editorial": "pages/03_Editorial.py",
+    "semantics": "pages/05_Semantics.py",
+    "topic_signal": "pages/05_Semantics.py",
+    "topic-signal": "pages/05_Semantics.py",
     "genie": "pages/04_Genie.py",
     "financial_genie": "pages/04_Genie.py",
     "financial-genie": "pages/04_Genie.py",
@@ -73,7 +77,8 @@ def _apply_query_language():
         return
     lang_code = str(lang_param).strip().lower()
     if lang_code in _SUPPORTED_LANGS:
-        st.session_state.language = lang_code
+        if str(st.session_state.get("language", "")).strip().lower() != lang_code:
+            st.session_state.language = lang_code
 
 
 def _render_bottom_nav(active_key: str):

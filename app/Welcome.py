@@ -15,7 +15,7 @@ import pandas as pd
 import streamlit as st
 
 
-@st.cache_resource
+@st.cache_data(ttl=3600, show_spinner=False)
 def ensure_intelligence_pipeline_is_fresh() -> dict:
     app_dir = Path(__file__).resolve().parent
     root_dir = app_dir.parent
@@ -71,7 +71,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-ensure_intelligence_pipeline_is_fresh()
+if "pipeline_refreshed" not in st.session_state:
+    st.session_state["pipeline_refreshed"] = False
+if not st.session_state.get("pipeline_refreshed", False):
+    st.session_state["pipeline_refresh_result"] = ensure_intelligence_pipeline_is_fresh()
+    st.session_state["pipeline_refreshed"] = True
 
 from utils.global_fonts import apply_global_fonts
 from utils.header import display_header
