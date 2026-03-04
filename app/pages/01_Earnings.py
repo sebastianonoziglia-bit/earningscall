@@ -1381,6 +1381,16 @@ def load_company_insights_text(excel_path):
         return pd.DataFrame()
 
 
+@st.cache_data(show_spinner=False)
+def load_company_auto_narratives(excel_path):
+    try:
+        df = pd.read_excel(excel_path, sheet_name="Company_Auto_Narratives")
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+
 def _parse_quarter_int(value) -> int | None:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
@@ -3961,6 +3971,68 @@ else:
         )
     else:
         st.info("Company insights are not available for this company/year.")
+
+company_auto_narratives_df = load_company_auto_narratives(data_processor.data_path)
+if company_auto_narratives_df is not None and not company_auto_narratives_df.empty:
+    auto_rows = company_auto_narratives_df.copy()
+    if "company" not in auto_rows.columns and "companies" in auto_rows.columns:
+        auto_rows["company"] = auto_rows["companies"].astype(str).str.split("|").str[0]
+    if {"company", "year"}.issubset(auto_rows.columns):
+        auto_rows["company"] = auto_rows["company"].astype(str).str.strip().apply(normalize_company)
+        auto_rows["year"] = pd.to_numeric(auto_rows["year"], errors="coerce")
+        auto_rows = auto_rows[
+            (auto_rows["company"] == canonical_company)
+            & (auto_rows["year"] == int(year))
+        ].copy()
+        if not auto_rows.empty:
+            st.markdown(
+                """
+                <style>
+                .wm-priority {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 999px;
+                    padding: 0.18rem 0.5rem;
+                    font-size: 0.68rem;
+                    font-weight: 700;
+                    letter-spacing: 0.03em;
+                    text-transform: uppercase;
+                    line-height: 1;
+                }
+                .wm-priority-high { background: rgba(239,68,68,0.15); color: #ef4444; }
+                .wm-priority-medium { background: rgba(249,115,22,0.15); color: #f97316; }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+            company_color = (
+                COMPANY_COLORS.get(company)
+                or COMPANY_COLORS.get(canonical_company)
+                or COMPANY_COLORS.get(normalize_company(company))
+                or "#111827"
+            )
+            narrative_cards = []
+            for _, row in auto_rows.sort_values(["priority", "insight_id"]).iterrows():
+                raw_text = str(row.get("text", "") or row.get("comment", "") or "").strip()
+                if not raw_text:
+                    continue
+                priority = str(row.get("priority", "medium")).strip().lower()
+                priority = priority if priority in {"high", "medium"} else "medium"
+                category = str(row.get("category", "")).strip() or "Narrative"
+                narrative_cards.append(
+                    f"<div class=\"company-insight-card insight-card\" style=\"border-left: 4px solid {company_color};\">"
+                    f"<div style=\"display:flex; align-items:center; justify-content:space-between; gap:8px;\">"
+                    f"<div style=\"font-size:0.68rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#64748B;\">{html.escape(category)}</div>"
+                    f"<span class=\"wm-priority wm-priority-{priority}\">{html.escape(priority.upper())}</span>"
+                    "</div>"
+                    f"<div style=\"margin-top:8px; font-size:0.95rem; line-height:1.55;\">{html.escape(raw_text)}</div>"
+                    "<div style=\"margin-top:10px; color:#6b7280; font-size:0.78rem; font-style:italic;\">⚡ Auto-generated from financial metrics</div>"
+                    "</div>"
+                )
+            if narrative_cards:
+                st.markdown("#### Auto narratives")
+                st.markdown("".join(narrative_cards), unsafe_allow_html=True)
 
 components.html(
     """

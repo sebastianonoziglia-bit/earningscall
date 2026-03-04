@@ -299,6 +299,30 @@ class InsightGenerator:
             params=[int(self.year), str(self.quarter)],
         )
 
+    def _find_historical_peak_context(
+        self,
+        df: pd.DataFrame,
+        company: str,
+        metric_col: str,
+        current_value: float,
+        current_year: int,
+    ) -> tuple[bool, int | None, int | None]:
+        if df is None or df.empty or metric_col not in df.columns:
+            return False, None, None
+        history = df[
+            (df["company"] == company)
+            & (df["year"] < current_year)
+            & df[metric_col].notna()
+        ][["year", metric_col]].copy()
+        if history.empty:
+            return False, None, None
+        max_row = history.sort_values(metric_col, ascending=False).iloc[0]
+        max_hist_val = float(max_row[metric_col])
+        peak_year = int(max_row["year"])
+        is_record = float(current_value) > max_hist_val
+        years_since = current_year - peak_year if is_record else None
+        return is_record, years_since, peak_year
+
     def _mk_insight(
         self,
         *,
@@ -715,6 +739,280 @@ class InsightGenerator:
 
         return insights
 
+    def _generate_per_company_narratives(self, annual: pd.DataFrame) -> List[Dict[str, Any]]:
+        insights: List[Dict[str, Any]] = []
+        if annual is None or annual.empty:
+            return insights
+
+        work = annual.copy()
+        for col in ["revenue", "operating_income", "debt", "advertising_revenue", "r_and_d", "rd"]:
+            if col in work.columns:
+                work[col] = pd.to_numeric(work[col], errors="coerce")
+
+        rd_col = "r_and_d" if "r_and_d" in work.columns else ("rd" if "rd" in work.columns else None)
+        for company in sorted(work["company"].dropna().astype(str).str.strip().unique().tolist()):
+            company_df = work[work["company"] == company].copy().sort_values("year")
+            if company_df.empty:
+                continue
+
+            short_code = "".join(ch for ch in str(company) if ch.isalnum())[:3].upper() or "COM"
+
+            company_df["revenue_yoy_pct"] = company_df.groupby("company")["revenue"].pct_change() * 100.0
+            company_df["operating_margin_pct"] = np.where(
+                company_df["revenue"] > 0,
+                (company_df["operating_income"] / company_df["revenue"]) * 100.0,
+                np.nan,
+            )
+            company_df["margin_delta_pp"] = company_df["operating_margin_pct"] - company_df["operating_margin_pct"].shift(1)
+            company_df["debt_rev"] = np.where(
+                company_df["revenue"] > 0,
+                company_df["debt"] / company_df["revenue"],
+                np.nan,
+            )
+            company_df["debt_rev_prev"] = company_df["debt_rev"].shift(1)
+            if rd_col:
+                company_df["rd_pct"] = np.where(
+                    company_df["revenue"] > 0,
+                    (company_df[rd_col] / company_df["revenue"]) * 100.0,
+                    np.nan,
+                )
+                company_df["rd_delta_pp"] = company_df["rd_pct"] - company_df["rd_pct"].shift(1)
+            company_df["ad_share_pct"] = np.where(
+                company_df["revenue"] > 0,
+                (company_df["advertising_revenue"] / company_df["revenue"]) * 100.0,
+                np.nan,
+            )
+            company_df["ad_share_delta_pp"] = company_df["ad_share_pct"] - company_df["ad_share_pct"].shift(1)
+
+            latest = company_df.iloc[-1]
+            year = int(latest["year"])
+
+            yoy = latest.get("revenue_yoy_pct")
+            if pd.notna(yoy) and float(yoy) > 12.0:
+                is_record, years_since, peak_year = self._find_historical_peak_context(
+                    company_df[["company", "year", "revenue_yoy_pct"]].copy(),
+                    company,
+                    "revenue_yoy_pct",
+                    float(yoy),
+                    int(year),
+                )
+                if is_record and years_since is not None and peak_year is not None:
+                    text = (
+                        f"{company} posted +{float(yoy):.1f}% revenue growth in {year} — "
+                        f"the strongest expansion in {int(years_since)} years (last peak: {int(peak_year)})."
+                    )
+                else:
+                    text = (
+                        f"{company} delivered strong revenue growth of +{float(yoy):.1f}% in {year}, "
+                        "ahead of historical trend."
+                    )
+                row = self._mk_insight(
+                    insight_id=f"NAR_{short_code}_REV",
+                    category="Revenue",
+                    title=f"{company}: Revenue Momentum Signal (Auto)",
+                    text=text,
+                    priority="high",
+                    companies=[company],
+                    kpis=["revenue", "yoy_growth"],
+                    graph_type="revenue_trend",
+                    year_override=int(year),
+                    quarter_override="",
+                )
+                row["company"] = company
+                insights.append(row)
+
+            margin = latest.get("operating_margin_pct")
+            margin_delta = latest.get("margin_delta_pp")
+            if pd.notna(margin) and pd.notna(margin_delta):
+                if float(margin_delta) > 2.5:
+                    row = self._mk_insight(
+                        insight_id=f"NAR_{short_code}_OPM",
+                        category="Efficiency",
+                        title=f"{company}: Operating Margin Expansion (Auto)",
+                        text=(
+                            f"{company}: operating margin expanded +{float(margin_delta):.1f}pp "
+                            f"to {float(margin):.1f}% in {year} — efficiency compounding."
+                        ),
+                        priority="medium",
+                        companies=[company],
+                        kpis=["operating_income", "revenue", "operating_margin"],
+                        graph_type="operating_margin_trend",
+                        year_override=int(year),
+                        quarter_override="",
+                    )
+                    row["company"] = company
+                    insights.append(row)
+                elif float(margin_delta) < -2.5:
+                    row = self._mk_insight(
+                        insight_id=f"NAR_{short_code}_OPR",
+                        category="Risk",
+                        title=f"{company}: Operating Margin Pressure (Auto)",
+                        text=(
+                            f"⚠️ {company}: operating margin compressed {float(margin_delta):.1f}pp "
+                            f"to {float(margin):.1f}% in {year} — cost pressure visible."
+                        ),
+                        priority="high",
+                        companies=[company],
+                        kpis=["operating_income", "revenue", "operating_margin"],
+                        graph_type="operating_margin_trend",
+                        year_override=int(year),
+                        quarter_override="",
+                    )
+                    row["company"] = company
+                    insights.append(row)
+
+            debt_rev = latest.get("debt_rev")
+            debt_rev_prev = latest.get("debt_rev_prev")
+            if (
+                pd.notna(debt_rev)
+                and pd.notna(debt_rev_prev)
+                and pd.notna(margin_delta)
+                and float(debt_rev) > float(debt_rev_prev)
+                and float(margin_delta) < 0.0
+            ):
+                row = self._mk_insight(
+                    insight_id=f"NAR_{short_code}_DPR",
+                    category="Risk",
+                    title=f"{company}: Dual Pressure Signal (Auto)",
+                    text=(
+                        f"⚠️ {company}: dual pressure detected in {year} — leverage rising "
+                        f"({float(debt_rev):.2f}x debt/revenue) while margins compress ({float(margin_delta):.1f}pp). "
+                        "Monitor closely."
+                    ),
+                    priority="high",
+                    companies=[company],
+                    kpis=["debt", "revenue", "debt_to_revenue", "operating_margin"],
+                    graph_type="debt_to_revenue_trend",
+                    year_override=int(year),
+                    quarter_override="",
+                )
+                row["company"] = company
+                insights.append(row)
+
+            if rd_col:
+                rd_pct = latest.get("rd_pct")
+                rd_delta = latest.get("rd_delta_pp")
+                if pd.notna(rd_pct) and pd.notna(rd_delta) and float(rd_delta) > 1.5:
+                    row = self._mk_insight(
+                        insight_id=f"NAR_{short_code}_RDI",
+                        category="Innovation",
+                        title=f"{company}: R&D Intensity Inflection (Auto)",
+                        text=(
+                            f"{company}: R&D intensity at {float(rd_pct):.1f}% of revenue in {year}, "
+                            f"up {float(rd_delta):.1f}pp YoY — investment cycle intensifying."
+                        ),
+                        priority="medium",
+                        companies=[company],
+                        kpis=[rd_col, "revenue", "rd_intensity"],
+                        graph_type="rd_intensity_comparison",
+                        year_override=int(year),
+                        quarter_override="",
+                    )
+                    row["company"] = company
+                    insights.append(row)
+
+            ad_share = latest.get("ad_share_pct")
+            ad_delta = latest.get("ad_share_delta_pp")
+            if pd.notna(ad_share) and pd.notna(ad_delta) and float(ad_delta) > 2.0:
+                row = self._mk_insight(
+                    insight_id=f"NAR_{short_code}_ADM",
+                    category="Advertising",
+                    title=f"{company}: Ad Mix Shift (Auto)",
+                    text=(
+                        f"{company}: advertising now represents {float(ad_share):.1f}% of total revenue "
+                        f"(+{float(ad_delta):.1f}pp YoY) — monetization model evolving toward ad-supported growth."
+                    ),
+                    priority="medium",
+                    companies=[company],
+                    kpis=["advertising_revenue", "revenue", "ad_revenue_mix"],
+                    graph_type="ad_revenue_growth_comparison",
+                    year_override=int(year),
+                    quarter_override="",
+                )
+                row["company"] = company
+                insights.append(row)
+
+        return insights
+
+    def _generate_cross_company_anomalies(self, annual: pd.DataFrame) -> List[Dict[str, Any]]:
+        insights: List[Dict[str, Any]] = []
+        if annual is None or annual.empty:
+            return insights
+
+        latest_year = self._pick_best_year(annual, int(self.analysis_year))
+        metric_map = {
+            "revenue": "revenue",
+            "operating_income": "operating_income",
+            "market_cap": "market_cap",
+            "rd": "rd" if "rd" in annual.columns else ("r_and_d" if "r_and_d" in annual.columns else None),
+        }
+
+        for metric_key, metric_col in metric_map.items():
+            if not metric_col or metric_col not in annual.columns:
+                continue
+
+            metric_df = annual[["company", "year", metric_col]].copy()
+            metric_df[metric_col] = pd.to_numeric(metric_df[metric_col], errors="coerce")
+            metric_df = metric_df.dropna(subset=["company", "year", metric_col]).sort_values(["company", "year"])
+            if metric_df.empty:
+                continue
+
+            metric_df["yoy_pct"] = metric_df.groupby("company")[metric_col].pct_change() * 100.0
+            year_slice = metric_df[(metric_df["year"] == int(latest_year)) & metric_df["yoy_pct"].notna()].copy()
+            if year_slice.empty:
+                continue
+
+            sector_avg = float(year_slice["yoy_pct"].mean())
+            sector_std = float(year_slice["yoy_pct"].std(ddof=0))
+            if not np.isfinite(sector_std) or sector_std <= 0:
+                continue
+
+            for _, row in year_slice.iterrows():
+                company = str(row["company"]).strip()
+                yoy = float(row["yoy_pct"])
+                zscore = (yoy - sector_avg) / sector_std
+                short_code = "".join(ch for ch in company if ch.isalnum())[:3].upper() or "COM"
+                metric_label = metric_key.replace("_", " ")
+
+                if zscore > 1.8:
+                    insight = self._mk_insight(
+                        insight_id=f"ANO_{metric_key[:3].upper()}_{short_code}",
+                        category="Macro",
+                        title=f"{company}: Exceptional {metric_label.title()} Growth (Auto)",
+                        text=(
+                            f"{company} {metric_label} growth of +{yoy:.1f}% in {int(latest_year)} is "
+                            f"{zscore:.1f} standard deviations above the sector average ({sector_avg:.1f}%) "
+                            "— statistically exceptional."
+                        ),
+                        priority="high",
+                        companies=[company],
+                        kpis=[metric_col, "yoy_growth"],
+                        graph_type=f"{metric_key}_growth_anomaly",
+                        year_override=int(latest_year),
+                        quarter_override="",
+                    )
+                    insights.append(insight)
+                elif zscore < -1.8:
+                    insight = self._mk_insight(
+                        insight_id=f"ANO_{metric_key[:3].upper()}_{short_code}",
+                        category="Macro",
+                        title=f"{company}: {metric_label.title()} Underperformance (Auto)",
+                        text=(
+                            f"{company} {metric_label} growth of {yoy:.1f}% in {int(latest_year)} is "
+                            f"{abs(zscore):.1f} standard deviations below the sector average ({sector_avg:.1f}%) "
+                            "— statistically weak relative performance."
+                        ),
+                        priority="medium",
+                        companies=[company],
+                        kpis=[metric_col, "yoy_growth"],
+                        graph_type=f"{metric_key}_growth_anomaly",
+                        year_override=int(latest_year),
+                        quarter_override="",
+                    )
+                    insights.append(insight)
+
+        return insights
+
     def generate_all_insights(self) -> List[Dict[str, Any]]:
         annual = self._annual_metrics()
         if not annual.empty:
@@ -730,6 +1028,8 @@ class InsightGenerator:
         insights.extend(self._generate_attention_insights())
         insights.extend(self._generate_streaming_insights(annual))
         insights.extend(self._generate_business_model_insights(period))
+        insights.extend(self._generate_per_company_narratives(annual))
+        insights.extend(self._generate_cross_company_anomalies(annual))
 
         return insights
 
@@ -792,6 +1092,17 @@ def main() -> None:
             try:
                 _write_insights_to_workbook(out_df, workbook_path, args.sheet_name)
                 wrote_sheet = True
+                per_company_rows = [i for i in insights if str(i.get("insight_id", "")).startswith("NAR_")]
+                if per_company_rows:
+                    per_company_df = pd.DataFrame(per_company_rows)
+                    if "company" not in per_company_df.columns:
+                        companies_col = (
+                            per_company_df["companies"]
+                            if "companies" in per_company_df.columns
+                            else pd.Series([""] * len(per_company_df))
+                        )
+                        per_company_df["company"] = companies_col.fillna("").astype(str).str.split("|").str[0].str.strip()
+                    _write_insights_to_workbook(per_company_df, workbook_path, "Company_Auto_Narratives")
             except Exception as exc:
                 print(f"Workbook write skipped: {exc}")
 
