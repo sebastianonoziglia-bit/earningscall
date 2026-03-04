@@ -109,41 +109,28 @@ def get_data_processor(_cache_bust: str = "v2-nasdaq-2026-02-04"):
     try:
         # Try to use the optimized data loader first if available
         if OPTIMIZED_LOADER_AVAILABLE:
-            if 'optimized_data_loader' not in st.session_state:
-                logger.info("Initializing optimized data loader")
-                st.session_state.optimized_data_loader = OptimizedDataLoader()
-            return st.session_state.optimized_data_loader.get_data_processor()
+            logger.info("Initializing optimized data loader")
+            optimized_loader = OptimizedDataLoader()
+            return optimized_loader.get_data_processor()
 
         # Fall back to standard data processor if optimized loader not available
         logger.info("Using standard data processor (optimized loader not available)")
-        # Check if data processor exists and is valid
-        if 'data_processor' not in st.session_state or st.session_state.data_processor is None:
-            logger.info("Initializing new data processor instance")
-            data_processor = FinancialDataProcessor()
-            data_processor.load_data()
-            st.session_state.data_processor = data_processor
-        else:
-            try:
-                if hasattr(st.session_state.data_processor, "is_source_updated") and st.session_state.data_processor.is_source_updated():
-                    logger.info("Workbook source updated; reloading data processor.")
-                    st.session_state.data_processor.load_data()
-            except Exception as refresh_exc:
-                logger.warning(f"Could not auto-refresh data processor: {refresh_exc}")
+        logger.info("Initializing new data processor instance")
+        data_processor = FinancialDataProcessor()
+        data_processor.load_data()
 
         # Verify data is loaded properly by checking a basic method
-        if not hasattr(st.session_state.data_processor, 'get_companies') or not st.session_state.data_processor.get_companies():
+        if not hasattr(data_processor, 'get_companies') or not data_processor.get_companies():
             logger.warning("Data processor exists but companies data is missing. Reinitializing...")
             data_processor = FinancialDataProcessor()
             data_processor.load_data()
-            st.session_state.data_processor = data_processor
 
-        return st.session_state.data_processor
+        return data_processor
     except Exception as e:
         logger.error(f"Error initializing data processor: {str(e)}")
         # Create a minimal functioning data processor rather than raising an error
         try:
             data_processor = FinancialDataProcessor()
-            st.session_state.data_processor = data_processor
             return data_processor
         except Exception:
             logger.error("Critical failure creating data processor")

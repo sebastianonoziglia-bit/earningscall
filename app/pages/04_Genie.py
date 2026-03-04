@@ -18,7 +18,9 @@ from utils.auth import check_password
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
+import sqlite3
 import re
+import math
 from datetime import datetime
 from data_processor import FinancialDataProcessor
 from utils.data_loader import load_advertising_data, get_available_filters, read_excel_data
@@ -2811,9 +2813,274 @@ except Exception as e:
     st.error(f"Error loading data: {str(e)}")
     st.stop()
 
+# Persist current Genie filter state for downstream in-chat drilldowns.
+st.session_state["genie_context_company"] = selected_companies[0] if selected_companies else ""
+st.session_state["genie_context_year"] = int(year_range[1]) if "year_range" in locals() else None
+quarter_focus_for_context = str(selected_quarter_focus if "selected_quarter_focus" in locals() else "").strip().upper()
+st.session_state["genie_context_quarter"] = quarter_focus_for_context if re.fullmatch(r"Q[1-4]", quarter_focus_for_context) else ""
+
+
+def _store_last_genie_response(response_text: str, message_index: int) -> None:
+    st.session_state["last_genie_response"] = str(response_text or "")
+    st.session_state["last_genie_response_index"] = int(message_index)
+    st.session_state["last_genie_response_at"] = datetime.utcnow().isoformat()
+    st.session_state["last_genie_context_company"] = st.session_state.get("genie_context_company", "")
+    st.session_state["last_genie_context_year"] = st.session_state.get("genie_context_year")
+    st.session_state["last_genie_context_quarter"] = st.session_state.get("genie_context_quarter", "")
+
+
 # ── GENIE CHAT + THOUGHT MAP SECTION ────────────────────────────────────────
 st.markdown("<hr style='margin: 2.5rem 0 1.5rem 0;'>", unsafe_allow_html=True)
-render_enhanced_chat_interface(dashboard_state=dashboard_state)
+render_enhanced_chat_interface(dashboard_state=dashboard_state, on_new_response=_store_last_genie_response)
+
+# Fallback for pre-existing chat sessions where callback has not fired yet in this run.
+if not st.session_state.get("last_genie_response"):
+    _history = st.session_state.get("genie_history", [])
+    if _history and isinstance(_history, list):
+        for idx in range(len(_history) - 1, -1, -1):
+            item = _history[idx]
+            if str(item.get("role", "")).lower() == "assistant":
+                st.session_state["last_genie_response"] = str(item.get("content", "") or "")
+                st.session_state["last_genie_response_index"] = max(idx - 1, 0)
+                st.session_state["last_genie_context_company"] = st.session_state.get("genie_context_company", "")
+                st.session_state["last_genie_context_year"] = st.session_state.get("genie_context_year")
+                st.session_state["last_genie_context_quarter"] = st.session_state.get("genie_context_quarter", "")
+                break
+
+# In-chat drilldown panels: shown only after at least one Genie response.
+if st.session_state.get("last_genie_response"):
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        db_path = repo_root / "earningscall_intelligence.db"
+        transcript_topics_csv = repo_root / "earningscall_transcripts" / "transcript_topics.csv"
+
+        context_company = str(st.session_state.get("last_genie_context_company", "") or "").strip()
+        context_year = st.session_state.get("last_genie_context_year")
+        context_quarter = str(st.session_state.get("last_genie_context_quarter", "") or "").strip().upper()
+        if not context_quarter or not re.fullmatch(r"Q[1-4]", context_quarter):
+            context_quarter = ""
+        is_dark_mode = str(get_theme_mode()).strip().lower() == "dark"
+        local_plotly_template = "plotly_dark" if is_dark_mode else "plotly_white"
+
+        with st.expander("Show thought map", expanded=False):
+            response_text = str(st.session_state.get("last_genie_response", "") or "")
+            has_reasoning_tags = bool(
+                re.search(
+                    r"\[(STEP\s*\d+|BRANCH\s*[A-Z0-9]+|CONCLUSION|OBSERVATION|INFERENCE|ANALYSIS|RISK)\]",
+                    response_text,
+                    flags=re.IGNORECASE,
+                )
+            )
+            tm = st.session_state.get("thought_map", {})
+            all_nodes = tm.get("nodes", {}) if isinstance(tm, dict) else {}
+            all_edges = tm.get("edges", []) if isinstance(tm, dict) else []
+            last_src_idx = st.session_state.get("last_genie_response_index")
+
+            filtered_nodes = []
+            if isinstance(all_nodes, dict):
+                for node in all_nodes.values():
+                    if last_src_idx is None or node.get("source_message_index") == last_src_idx:
+                        filtered_nodes.append(node)
+
+            if not has_reasoning_tags or not filtered_nodes:
+                st.info("No thought map available for this response.")
+            else:
+                n = len(filtered_nodes)
+                if n == 1:
+                    x_coords = [0.0]
+                    y_coords = [0.0]
+                else:
+                    step = (2 * math.pi) / n
+                    x_coords = [math.cos(i * step) for i in range(n)]
+                    y_coords = [math.sin(i * step) for i in range(n)]
+
+                node_ids = [str(node.get("id", "")) for node in filtered_nodes]
+                node_labels = [str(node.get("label", "Node")) for node in filtered_nodes]
+                position_map = {node_id: (x_coords[idx], y_coords[idx]) for idx, node_id in enumerate(node_ids)}
+                node_id_set = set(node_ids)
+
+                edge_x = []
+                edge_y = []
+                for edge in all_edges if isinstance(all_edges, list) else []:
+                    src = str(edge.get("from", ""))
+                    dst = str(edge.get("to", ""))
+                    if src in node_id_set and dst in node_id_set and src in position_map and dst in position_map:
+                        x0, y0 = position_map[src]
+                        x1, y1 = position_map[dst]
+                        edge_x.extend([x0, x1, None])
+                        edge_y.extend([y0, y1, None])
+
+                edge_trace = go.Scatter(
+                    x=edge_x,
+                    y=edge_y,
+                    mode="lines",
+                    line=dict(width=1.6, color="rgba(100,116,139,0.55)"),
+                    hoverinfo="skip",
+                    name="Edges",
+                )
+                node_trace = go.Scatter(
+                    x=x_coords,
+                    y=y_coords,
+                    mode="markers+text",
+                    text=node_labels,
+                    textposition="top center",
+                    marker=dict(size=18, color="#2563EB", line=dict(width=1.5, color="#E2E8F0")),
+                    hovertemplate="%{text}<extra></extra>",
+                    name="Nodes",
+                )
+
+                thought_fig = go.Figure(data=[edge_trace, node_trace])
+                thought_fig.update_layout(
+                    template=local_plotly_template,
+                    margin=dict(l=20, r=20, t=24, b=20),
+                    xaxis=dict(visible=False),
+                    yaxis=dict(visible=False),
+                    showlegend=False,
+                    height=360,
+                )
+                st.plotly_chart(thought_fig, use_container_width=True)
+
+        topic_breakdown_df = pd.DataFrame(columns=["topic", "total"])
+        with st.expander("Topic breakdown", expanded=False):
+            if not db_path.exists() or not context_company or context_year is None or not context_quarter:
+                st.info("No topic data available for this period.")
+            else:
+                with sqlite3.connect(str(db_path)) as conn:
+                    topic_query = """
+                        SELECT tt.topic, SUM(tt.mention_count) as total
+                        FROM transcript_topics tt
+                        JOIN transcripts t ON tt.transcript_id = t.id
+                        WHERE t.company=? AND t.year=? AND t.quarter=?
+                        GROUP BY tt.topic
+                        ORDER BY total DESC
+                    """
+                    topic_breakdown_df = pd.read_sql_query(
+                        topic_query,
+                        conn,
+                        params=[context_company, int(context_year), context_quarter],
+                    )
+
+                if topic_breakdown_df.empty:
+                    st.info("No topic data available for this period.")
+                else:
+                    topic_breakdown_df["total"] = pd.to_numeric(topic_breakdown_df["total"], errors="coerce").fillna(0.0)
+                    topic_breakdown_df = topic_breakdown_df.sort_values("total", ascending=False).reset_index(drop=True)
+
+                    topic_color_map = {}
+                    try:
+                        if excel_path and Path(excel_path).exists():
+                            topics_master_df = pd.read_excel(excel_path, sheet_name="Topics_Master")
+                            if topics_master_df is not None and not topics_master_df.empty:
+                                topics_master_df = topics_master_df.copy()
+                                topics_master_df.columns = [str(col).strip().lower() for col in topics_master_df.columns]
+                                if "topic_id" in topics_master_df.columns and "color" in topics_master_df.columns:
+                                    if "is_active" in topics_master_df.columns:
+                                        active_mask = pd.to_numeric(topics_master_df["is_active"], errors="coerce").fillna(1).astype(int) == 1
+                                        topics_master_df = topics_master_df[active_mask]
+                                    for _, row in topics_master_df.iterrows():
+                                        tid = str(row.get("topic_id", "")).strip()
+                                        color = str(row.get("color", "")).strip()
+                                        if tid and color and color.lower() not in {"nan", "none"}:
+                                            topic_color_map[tid] = color
+                    except Exception:
+                        topic_color_map = {}
+
+                    default_colors = px.colors.qualitative.Plotly
+                    bar_colors = []
+                    for idx, topic_name in enumerate(topic_breakdown_df["topic"].astype(str).tolist()):
+                        bar_colors.append(topic_color_map.get(topic_name, default_colors[idx % len(default_colors)]))
+
+                    topic_fig = go.Figure(
+                        data=[
+                            go.Bar(
+                                x=topic_breakdown_df["total"].tolist(),
+                                y=topic_breakdown_df["topic"].astype(str).tolist(),
+                                orientation="h",
+                                marker=dict(color=bar_colors),
+                                hovertemplate="%{y}<br>Mentions: %{x}<extra></extra>",
+                            )
+                        ]
+                    )
+                    topic_fig.update_layout(
+                        template=local_plotly_template,
+                        title=f"Topic Mentions — {context_company} {int(context_year)} {context_quarter}",
+                        xaxis_title="Mentions",
+                        yaxis_title="Topic",
+                        margin=dict(l=20, r=20, t=60, b=20),
+                        height=380,
+                    )
+                    topic_fig.update_yaxes(autorange="reversed")
+                    st.plotly_chart(topic_fig, use_container_width=True)
+
+        with st.expander("Transcript quotes", expanded=False):
+            if topic_breakdown_df.empty or not transcript_topics_csv.exists() or not context_company or context_year is None or not context_quarter:
+                st.info("No transcript quotes available.")
+            else:
+                top_topic = str(topic_breakdown_df.iloc[0]["topic"]).strip()
+                quotes_df = pd.read_csv(transcript_topics_csv)
+                quotes_df.columns = [str(c).strip() for c in quotes_df.columns]
+                if "year" in quotes_df.columns:
+                    quotes_df["year"] = pd.to_numeric(quotes_df["year"], errors="coerce")
+                if "quarter" in quotes_df.columns:
+                    quotes_df["quarter"] = quotes_df["quarter"].astype(str).str.upper().str.strip()
+                if "company" in quotes_df.columns:
+                    quotes_df["company"] = quotes_df["company"].astype(str).str.strip()
+                if "topic" in quotes_df.columns:
+                    quotes_df["topic"] = quotes_df["topic"].astype(str).str.strip()
+
+                quotes_df = quotes_df[
+                    (quotes_df.get("company", pd.Series(dtype=str)) == context_company)
+                    & (quotes_df.get("year", pd.Series(dtype=float)) == float(context_year))
+                    & (quotes_df.get("quarter", pd.Series(dtype=str)) == context_quarter)
+                    & (quotes_df.get("topic", pd.Series(dtype=str)) == top_topic)
+                ].copy()
+
+                if quotes_df.empty:
+                    st.info("No transcript quotes available.")
+                else:
+                    quotes_df["sentence"] = quotes_df["text"] if "text" in quotes_df.columns else ""
+                    display_cols = ["sentence", "topic"]
+                    if "speaker" in quotes_df.columns:
+                        display_cols = ["speaker"] + display_cols
+                    st.dataframe(quotes_df[display_cols].head(5), use_container_width=True, hide_index=True)
+
+        with st.expander("Connected companies", expanded=False):
+            if topic_breakdown_df.empty or not db_path.exists() or not context_company or context_year is None or not context_quarter:
+                st.info("No connected companies found for this period.")
+            else:
+                top_topics = topic_breakdown_df["topic"].astype(str).head(3).tolist()
+                if not top_topics:
+                    st.info("No connected companies found for this period.")
+                else:
+                    placeholders = ",".join(["?"] * len(top_topics))
+                    connected_query = f"""
+                        SELECT t.company AS company, tt.topic AS topic, SUM(tt.mention_count) as mentions
+                        FROM transcript_topics tt
+                        JOIN transcripts t ON tt.transcript_id = t.id
+                        WHERE tt.topic IN ({placeholders})
+                          AND t.year=?
+                          AND t.quarter=?
+                          AND t.company != ?
+                        GROUP BY t.company, tt.topic
+                        ORDER BY mentions DESC
+                        LIMIT 15
+                    """
+                    params = top_topics + [int(context_year), context_quarter, context_company]
+                    with sqlite3.connect(str(db_path)) as conn:
+                        connected_df = pd.read_sql_query(connected_query, conn, params=params)
+
+                    if connected_df.empty:
+                        st.info("No connected companies found for this period.")
+                    else:
+                        st.markdown("**Other companies discussing the same topics**")
+                        connected_df["mentions"] = pd.to_numeric(connected_df["mentions"], errors="coerce").fillna(0).astype(int)
+                        st.dataframe(
+                            connected_df[["company", "topic", "mentions"]],
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+    except Exception:
+        pass
 
 # ── THOUGHT MAP ──────────────────────────────────────────────────────────────
 st.markdown("<hr style='margin: 2.5rem 0 1rem 0;'>", unsafe_allow_html=True)

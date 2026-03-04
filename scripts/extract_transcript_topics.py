@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import re
+import sys
 from typing import Dict, Iterable
 
 import numpy as np
@@ -358,6 +359,9 @@ TOPIC_KEYWORDS: Dict[str, list[str]] = {
     ],
 }
 
+TOPIC_WEIGHTS: Dict[str, float] = {topic: 1.0 for topic in TOPIC_KEYWORDS}
+TOPIC_COLORS: Dict[str, str] = {}
+
 KPI_PATTERNS: Dict[str, str] = {
     "Revenue": r"(?:revenue|sales).*?(\$?\d+(?:\.\d+)?\s*(?:trillion|billion|million|thousand|B|M|K))",
     "Operating Income": r"(?:operating income|operating profit).*?(\$?\d+(?:\.\d+)?\s*(?:trillion|billion|million|thousand|B|M|K))",
@@ -373,6 +377,75 @@ KPI_PATTERNS: Dict[str, str] = {
     "YoY Growth": r"(?:year over year|YoY)\D{0,35}(?:grew|growth|increased|up)?\D{0,20}(\d+(?:\.\d+)?%)",
     "QoQ Growth": r"(?:quarter over quarter|QoQ)\D{0,35}(?:grew|growth|increased|up)?\D{0,20}(\d+(?:\.\d+)?%)",
 }
+
+
+def resolve_workbook_path(repo_root: Path) -> str | None:
+    app_dir = repo_root / "app"
+    if str(app_dir) not in sys.path:
+        sys.path.insert(0, str(app_dir))
+    try:
+        from utils.workbook_source import resolve_financial_data_xlsx  # noqa: WPS433
+
+        return resolve_financial_data_xlsx(
+            [
+                str(app_dir / "attached_assets" / "Earnings + stocks  copy.xlsx"),
+                str(repo_root / "Earnings + stocks  copy.xlsx"),
+            ]
+        )
+    except Exception:
+        for candidate in (
+            app_dir / "attached_assets" / "Earnings + stocks  copy.xlsx",
+            repo_root / "Earnings + stocks  copy.xlsx",
+        ):
+            if candidate.exists():
+                return str(candidate)
+    return None
+
+
+def load_topics_from_excel(workbook_path: str | Path) -> tuple[Dict[str, list[str]], Dict[str, float], Dict[str, str]]:
+    topics_df = pd.read_excel(workbook_path, sheet_name="Topics_Master")
+    if topics_df is None or topics_df.empty:
+        raise RuntimeError("Topics_Master is empty")
+
+    topics_df = topics_df.copy()
+    topics_df.columns = [str(col).strip().lower() for col in topics_df.columns]
+    if not {"topic_id", "keywords"}.issubset(set(topics_df.columns)):
+        raise RuntimeError("Topics_Master missing required columns")
+
+    if "is_active" in topics_df.columns:
+        active_series = pd.to_numeric(topics_df["is_active"], errors="coerce").fillna(1)
+        topics_df = topics_df[active_series == 1].copy()
+
+    topic_keywords: Dict[str, list[str]] = {}
+    topic_weights: Dict[str, float] = {}
+    topic_colors: Dict[str, str] = {}
+
+    for _, row in topics_df.iterrows():
+        topic_id = str(row.get("topic_id", "")).strip()
+        if not topic_id:
+            continue
+
+        keywords_raw = row.get("keywords", "")
+        keywords = [kw.strip() for kw in str(keywords_raw).split(",") if str(kw).strip()]
+        if not keywords:
+            continue
+
+        topic_keywords[topic_id] = keywords
+
+        raw_weight = row.get("weight", 1.0)
+        try:
+            topic_weights[topic_id] = float(raw_weight)
+        except (TypeError, ValueError):
+            topic_weights[topic_id] = 1.0
+
+        color = str(row.get("color", "")).strip()
+        if color and color.lower() not in {"nan", "none"}:
+            topic_colors[topic_id] = color
+
+    if not topic_keywords:
+        raise RuntimeError("Topics_Master has no active topics")
+
+    return topic_keywords, topic_weights, topic_colors
 
 
 def _compile_topic_patterns(topic_keywords: Dict[str, list[str]]) -> Dict[str, list[re.Pattern[str]]]:
@@ -585,7 +658,11 @@ def build_topics_and_kpis_df(transcript_root: Path, repo_root: Path) -> tuple[pd
     return topics_df, kpis_df
 
 
-def build_metrics_df(topics_df: pd.DataFrame, transcript_index_df: pd.DataFrame) -> pd.DataFrame:
+def build_metrics_df(
+    topics_df: pd.DataFrame,
+    transcript_index_df: pd.DataFrame,
+    topic_weights: Dict[str, float] | None = None,
+) -> pd.DataFrame:
     if topics_df.empty:
         return pd.DataFrame(
             columns=[
@@ -593,6 +670,7 @@ def build_metrics_df(topics_df: pd.DataFrame, transcript_index_df: pd.DataFrame)
                 "quarter",
                 "topic",
                 "mention_count",
+                "weighted_score",
                 "companies_mentioned",
                 "total_companies",
                 "importance_pct",
@@ -613,6 +691,8 @@ def build_metrics_df(topics_df: pd.DataFrame, transcript_index_df: pd.DataFrame)
         )
     )
     metrics = grouped.merge(totals, on=["year", "quarter"], how="left")
+    weights = topic_weights or {}
+    metrics["weighted_score"] = metrics["mention_count"] * metrics["topic"].map(weights).fillna(1.0)
     metrics["total_companies"] = metrics["total_companies"].replace(0, np.nan)
     metrics["importance_pct"] = (metrics["companies_mentioned"] / metrics["total_companies"]) * 100.0
     metrics["importance_pct"] = metrics["importance_pct"].fillna(0.0)
@@ -648,6 +728,17 @@ def main() -> None:
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
+    workbook_path = resolve_workbook_path(repo_root)
+
+    global TOPIC_KEYWORDS, TOPIC_WEIGHTS, TOPIC_COLORS, TOPIC_PATTERNS
+    try:
+        if not workbook_path:
+            raise RuntimeError("workbook path missing")
+        TOPIC_KEYWORDS, TOPIC_WEIGHTS, TOPIC_COLORS = load_topics_from_excel(workbook_path)
+    except Exception:
+        print("Topics_Master sheet not found, using default topic definitions.")
+    TOPIC_PATTERNS = _compile_topic_patterns(TOPIC_KEYWORDS)
+
     transcript_root = (repo_root / args.root).resolve()
     if not transcript_root.exists():
         raise SystemExit(f"Transcript folder not found: {transcript_root}")
@@ -664,7 +755,11 @@ def main() -> None:
     transcript_index_df["quarter"] = transcript_index_df["quarter"].astype(int)
 
     topics_df, kpis_df = build_topics_and_kpis_df(transcript_root=transcript_root, repo_root=repo_root)
-    metrics_df = build_metrics_df(topics_df=topics_df, transcript_index_df=transcript_index_df)
+    metrics_df = build_metrics_df(
+        topics_df=topics_df,
+        transcript_index_df=transcript_index_df,
+        topic_weights=TOPIC_WEIGHTS,
+    )
 
     topics_out = transcript_root / "transcript_topics.csv"
     metrics_out = transcript_root / "topic_metrics.csv"

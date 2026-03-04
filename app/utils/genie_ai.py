@@ -1,5 +1,7 @@
 import json
 import re
+import sqlite3
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -109,9 +111,43 @@ def build_genie_messages(
     user_message: str,
 ) -> list[dict]:
     """Build a full OpenAI message list without truncating history."""
+    selected_companies = dashboard_state.get("selected_companies") or []
+    company = str(selected_companies[0]).strip() if isinstance(selected_companies, list) and selected_companies else ""
+
+    year = None
+    year_range_state = st.session_state.get("year_range_selector")
+    if isinstance(year_range_state, (list, tuple)) and len(year_range_state) >= 2:
+        try:
+            year = int(year_range_state[1])
+        except Exception:
+            year = None
+    if year is None:
+        year_range_text = str(dashboard_state.get("year_range", "") or "")
+        match = re.search(r"(\d{4})\s*-\s*(\d{4})", year_range_text)
+        if match:
+            year = int(match.group(2))
+
+    quarter_focus = str(
+        dashboard_state.get("quarter_focus")
+        or st.session_state.get("genie_selected_quarter_focus")
+        or ""
+    ).strip()
+    quarter = quarter_focus if re.fullmatch(r"Q[1-4]", quarter_focus, flags=re.IGNORECASE) else ""
+
+    context = build_genie_context_from_db(company=company, year=year, quarter=quarter)
+    transcript_excerpt = str(context.get("transcript", "") or "")[:3000]
+    db_context_prompt = (
+        "You are a financial analyst assistant. Use the following data to answer the user question. "
+        f"Metrics: {context.get('metrics', [])}. "
+        f"Top topics from transcripts: {context.get('topic_scores', [])}. "
+        f"Auto-generated insights: {context.get('insights', [])}. "
+        f"Transcript excerpt: {transcript_excerpt}"
+    )
+
     state_json = json.dumps(dashboard_state, indent=2, default=str)
     system_content = (
         GENIE_SYSTEM_PROMPT
+        + f"\n\n## DB CONTEXT\n{db_context_prompt}"
         + f"\n\n## CURRENT DASHBOARD STATE\n```json\n{state_json}\n```"
     )
     messages = [{"role": "system", "content": system_content}]
@@ -163,30 +199,94 @@ def stream_genie_response(messages: list[dict]) -> str:
 
 
 @st.cache_data(ttl=3600)
-def _load_transcripts_frame(excel_path: str) -> pd.DataFrame:
-    if not excel_path:
-        return pd.DataFrame()
+def build_genie_context_from_db(company, year, quarter) -> dict:
     try:
-        df = pd.read_excel(
-            excel_path,
-            sheet_name="Transcripts",
-            usecols=["company", "year", "quarter", "transcript_text"],
-        )
+        repo_root = Path(__file__).resolve().parents[2]
+        db_path = repo_root / "earningscall_intelligence.db"
+        insights_path = repo_root / "earningscall_transcripts" / "generated_insights_latest.csv"
+
+        if not db_path.exists():
+            return {"metrics": [], "transcript": "", "topic_scores": [], "insights": []}
+
+        company_text = str(company or "").strip()
+        year_int = int(year) if year is not None else None
+        quarter_text = str(quarter or "").strip().upper()
+        quarter_text = quarter_text if re.fullmatch(r"Q[1-4]", quarter_text) else ""
+
+        with sqlite3.connect(str(db_path)) as conn:
+            if company_text and year_int is not None:
+                metrics = pd.read_sql_query(
+                    "SELECT * FROM company_metrics WHERE company=? AND year=?",
+                    conn,
+                    params=[company_text, year_int],
+                )
+            else:
+                metrics = pd.DataFrame()
+
+            if company_text and year_int is not None and not quarter_text:
+                latest_q_df = pd.read_sql_query(
+                    "SELECT quarter FROM transcripts WHERE company=? AND year=? ORDER BY quarter DESC LIMIT 1",
+                    conn,
+                    params=[company_text, year_int],
+                )
+                if not latest_q_df.empty and "quarter" in latest_q_df.columns:
+                    inferred_q = str(latest_q_df.iloc[0]["quarter"] or "").strip().upper()
+                    if re.fullmatch(r"Q[1-4]", inferred_q):
+                        quarter_text = inferred_q
+
+            transcript_text = ""
+            if company_text and year_int is not None and quarter_text:
+                transcript_column = "text"
+                transcript_cols = pd.read_sql_query("PRAGMA table_info(transcripts)", conn)
+                if "name" in transcript_cols.columns:
+                    available = {str(v).strip().lower() for v in transcript_cols["name"].tolist()}
+                    if "text" not in available and "full_text" in available:
+                        transcript_column = "full_text"
+                transcript_query = (
+                    f"SELECT {transcript_column} AS text FROM transcripts "
+                    "WHERE company=? AND year=? AND quarter=?"
+                )
+                transcript_df = pd.read_sql_query(
+                    transcript_query,
+                    conn,
+                    params=[company_text, year_int, quarter_text],
+                )
+                if not transcript_df.empty and "text" in transcript_df.columns:
+                    transcript_text = str(transcript_df.iloc[0]["text"] or "")
+
+            if company_text and year_int is not None and quarter_text:
+                topic_query = """
+                    SELECT tt.topic, SUM(tt.mention_count) as total_mentions
+                    FROM transcript_topics tt
+                    JOIN transcripts t ON tt.transcript_id = t.id
+                    WHERE t.company=? AND t.year=? AND t.quarter=?
+                    GROUP BY tt.topic
+                    ORDER BY total_mentions DESC
+                """
+                topic_scores = pd.read_sql_query(topic_query, conn, params=[company_text, year_int, quarter_text])
+            else:
+                topic_scores = pd.DataFrame(columns=["topic", "total_mentions"])
+
+        insights = pd.DataFrame()
+        if insights_path.exists():
+            try:
+                insights_df = pd.read_csv(insights_path)
+                if "companies" in insights_df.columns and company_text:
+                    mask = insights_df["companies"].astype(str).str.contains(company_text, case=False, na=False)
+                    insights = insights_df[mask].copy()
+                else:
+                    insights = insights_df.copy()
+            except Exception:
+                insights = pd.DataFrame()
+
+        return {
+            "metrics": metrics.to_dict("records") if metrics is not None else [],
+            "transcript": transcript_text,
+            "topic_scores": topic_scores.to_dict("records") if topic_scores is not None else [],
+            "insights": insights.to_dict("records") if insights is not None else [],
+        }
     except Exception:
-        return pd.DataFrame()
-    if df is None or df.empty:
-        return pd.DataFrame()
-    df = df.copy()
-    df["company"] = df["company"].astype(str).str.strip()
-    df["company_lc"] = df["company"].str.lower()
-    df["year"] = pd.to_numeric(df["year"], errors="coerce")
-    df["quarter"] = df["quarter"].astype(str).str.upper().str.strip()
-    df["transcript_text"] = df["transcript_text"].astype(str)
-    df = df.dropna(subset=["year"])
-    if df.empty:
-        return pd.DataFrame()
-    df["year"] = df["year"].astype(int)
-    return df
+        return {"metrics": [], "transcript": "", "topic_scores": [], "insights": []}
 
 
 def build_query_transcript_context(user_message: str, dashboard_state: dict) -> dict:
@@ -197,65 +297,65 @@ def build_query_transcript_context(user_message: str, dashboard_state: dict) -> 
     if not message.strip():
         return {}
 
-    excel_path = str(dashboard_state.get("excel_path", "") or "")
-    df = _load_transcripts_frame(excel_path)
-    if df.empty:
-        return {}
+    selected_companies = dashboard_state.get("selected_companies") or []
+    target_company = str(selected_companies[0]).strip() if isinstance(selected_companies, list) and selected_companies else ""
 
-    company_aliases = {
-        "meta": "Meta Platforms",
-        "google": "Alphabet",
-        "warner bros discovery": "Warner Bros Discovery",
-        "warner bros. discovery": "Warner Bros Discovery",
-        "wbd": "Warner Bros Discovery",
-        "paramount": "Paramount Global",
-    }
-    message_lc = message.lower()
-    target_company = None
-    for company in sorted(df["company"].unique().tolist(), key=len, reverse=True):
-        if company.lower() in message_lc:
-            target_company = company
-            break
     if not target_company:
+        company_aliases = {
+            "meta": "Meta Platforms",
+            "google": "Alphabet",
+            "wbd": "Warner Bros. Discovery",
+            "paramount": "Paramount Global",
+        }
+        message_lc = message.lower()
         for alias, canonical in company_aliases.items():
             if alias in message_lc:
-                matches = df[df["company_lc"].str.contains(canonical.lower(), regex=False)]
-                if not matches.empty:
-                    target_company = matches.iloc[0]["company"]
-                    break
+                target_company = canonical
+                break
     if not target_company:
         return {}
 
     year_match = re.search(r"\b(20\d{2})\b", message)
     target_year = int(year_match.group(1)) if year_match else None
+    if target_year is None:
+        year_range_state = st.session_state.get("year_range_selector")
+        if isinstance(year_range_state, (list, tuple)) and len(year_range_state) >= 2:
+            try:
+                target_year = int(year_range_state[1])
+            except Exception:
+                target_year = None
+    if target_year is None:
+        year_range_text = str(dashboard_state.get("year_range", "") or "")
+        year_range_match = re.search(r"(\d{4})\s*-\s*(\d{4})", year_range_text)
+        if year_range_match:
+            target_year = int(year_range_match.group(2))
 
     quarter_match = re.search(r"\bQ([1-4])\b", message, flags=re.IGNORECASE)
     if quarter_match:
         target_quarter = f"Q{quarter_match.group(1)}"
     else:
-        alt_q_match = re.search(r"\b([1-4])Q\b", message, flags=re.IGNORECASE)
-        target_quarter = f"Q{alt_q_match.group(1)}" if alt_q_match else None
+        focus = str(
+            dashboard_state.get("quarter_focus")
+            or st.session_state.get("genie_selected_quarter_focus")
+            or ""
+        ).strip().upper()
+        target_quarter = focus if re.fullmatch(r"Q[1-4]", focus) else ""
 
-    scoped = df[df["company_lc"] == str(target_company).lower()]
-    if target_year is not None:
-        scoped = scoped[scoped["year"] == int(target_year)]
-    if target_quarter is not None:
-        scoped = scoped[scoped["quarter"] == target_quarter]
-
-    if scoped.empty:
-        scoped = df[df["company_lc"] == str(target_company).lower()]
-    if scoped.empty:
+    context = build_genie_context_from_db(
+        company=target_company,
+        year=target_year,
+        quarter=target_quarter,
+    )
+    transcript_text = str(context.get("transcript", "") or "").strip()
+    if not transcript_text:
         return {}
-
-    record = scoped.sort_values(["year", "quarter"], ascending=[False, False]).iloc[0]
-    transcript_text = str(record.get("transcript_text", "") or "").strip()
     excerpt = transcript_text[:6000]
     if len(transcript_text) > 6000:
         excerpt += "\n...[truncated for prompt context]..."
 
     return {
-        "company": str(record.get("company", "")),
-        "year": int(record.get("year", 0)),
-        "quarter": str(record.get("quarter", "")),
+        "company": target_company,
+        "year": int(target_year) if target_year is not None else 0,
+        "quarter": str(target_quarter),
         "transcript_excerpt": excerpt,
     }
