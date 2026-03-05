@@ -57,7 +57,7 @@ def ensure_intelligence_pipeline_is_fresh() -> dict:
     if transcript_index_df.empty:
         return {"ran": False, "reason": "No transcripts found — skipping pipeline"}
 
-    def _run_script(script: str) -> None:
+    def _run_script(script: str, timeout_seconds: int = 60) -> None:
         try:
             result = subprocess.run(
                 [sys.executable, script],
@@ -65,7 +65,7 @@ def ensure_intelligence_pipeline_is_fresh() -> dict:
                 check=False,
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=timeout_seconds,
             )
             if result.returncode != 0:
                 pass  # silently skip failed scripts, never block startup
@@ -82,7 +82,9 @@ def ensure_intelligence_pipeline_is_fresh() -> dict:
         for future in futures:
             future.result()
 
-    _run_script("scripts/generate_insights.py")
+    insights_csv = root_dir / "earningscall_transcripts" / "generated_insights_latest.csv"
+    if not (insights_csv.exists() and (time.time() - insights_csv.stat().st_mtime) < 86400):
+        _run_script("scripts/generate_insights.py", timeout_seconds=180)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [
