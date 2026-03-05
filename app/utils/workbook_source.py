@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import glob
+import logging
 import os
 import re
 import tempfile
@@ -15,6 +17,7 @@ import requests
 
 DEFAULT_GOOGLE_SHEET_ID = "1Pol1w-hDB1JjPUdFRP3BLwRwISqLdJBUvyYum9ekNUY"
 DEFAULT_GOOGLE_SHEET_URL = f"https://docs.google.com/spreadsheets/d/{DEFAULT_GOOGLE_SHEET_ID}/edit"
+logger = logging.getLogger(__name__)
 
 
 def extract_google_sheet_id(value: str | None) -> str | None:
@@ -175,13 +178,52 @@ def resolve_financial_data_xlsx(local_candidates: Iterable[str] | None = None) -
     2) Google Sheet export when explicitly requested (`FINANCIAL_DATA_SOURCE=google`).
     3) Safe local fallback if Google export is unavailable.
     """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    extra_fallbacks = [
+        os.path.join(base_dir, "attached_assets", "Earnings + stocks  copy.xlsx"),  # double space variant
+        os.path.join(base_dir, "..", "attached_assets", "Earnings + stocks copy.xlsx"),
+        os.path.join(base_dir, "..", "..", "attached_assets", "Earnings + stocks copy.xlsx"),
+    ]
+
+    search_candidates: list[str] = []
+    seen_candidates: set[str] = set()
+    for raw in list(local_candidates or []) + extra_fallbacks:
+        if not raw:
+            continue
+        candidate = str(raw)
+        if candidate in seen_candidates:
+            continue
+        seen_candidates.add(candidate)
+        exists = os.path.exists(candidate)
+        logger.info("WORKBOOK_RESOLVE try: %s exists=%s", candidate, exists)
+        search_candidates.append(candidate)
+
+    def _resolve_local_with_glob(candidates: Iterable[str]) -> Optional[str]:
+        resolved_local = _resolve_local_xlsx(candidates)
+        if resolved_local:
+            logger.info("WORKBOOK_RESOLVE selected local: %s exists=%s", resolved_local, os.path.exists(resolved_local))
+            return resolved_local
+
+        fallback = sorted(glob.glob(os.path.join(base_dir, "attached_assets", "*.xlsx")))
+        for candidate in fallback:
+            logger.info("WORKBOOK_RESOLVE glob: %s exists=%s", candidate, os.path.exists(candidate))
+        if fallback:
+            return os.path.abspath(fallback[0])
+
+        fallback2 = sorted(glob.glob(os.path.join(base_dir, "..", "attached_assets", "*.xlsx")))
+        for candidate in fallback2:
+            logger.info("WORKBOOK_RESOLVE glob: %s exists=%s", candidate, os.path.exists(candidate))
+        if fallback2:
+            return os.path.abspath(fallback2[0])
+        return None
+
     source_pref = str(os.getenv("FINANCIAL_DATA_SOURCE", "local")).strip().lower()
     if source_pref in {"local", "file", "xlsx"}:
-        return _resolve_local_xlsx(local_candidates)
+        return _resolve_local_with_glob(search_candidates)
 
     if source_pref not in {"google", "gsheet", "sheet"}:
         # Auto mode: prefer local, then try Google, then local again.
-        local = _resolve_local_xlsx(local_candidates)
+        local = _resolve_local_with_glob(search_candidates)
         if local:
             return local
 
@@ -196,7 +238,7 @@ def resolve_financial_data_xlsx(local_candidates: Iterable[str] | None = None) -
             downloaded = _download_google_sheet_xlsx(sheet_id, refresh_seconds=refresh_seconds)
             if downloaded and os.path.exists(downloaded) and _has_core_financial_coverage(downloaded):
                 return os.path.abspath(downloaded)
-        return _resolve_local_xlsx(local_candidates)
+        return _resolve_local_with_glob(search_candidates)
 
     sheet_ref = (
         os.getenv("FINANCIAL_DATA_GSHEET_URL")
@@ -211,7 +253,7 @@ def resolve_financial_data_xlsx(local_candidates: Iterable[str] | None = None) -
             return os.path.abspath(downloaded)
 
     # Critical fallback for private/unavailable sheets: keep app functional from local workbook.
-    return _resolve_local_xlsx(local_candidates)
+    return _resolve_local_with_glob(search_candidates)
 
 
 def get_workbook_source_stamp(path: str | None) -> int:

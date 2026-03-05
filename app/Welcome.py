@@ -1,5 +1,6 @@
 import os
 import base64
+import logging
 import re
 import subprocess
 import sys
@@ -14,6 +15,10 @@ from urllib.parse import quote_plus
 import numpy as np
 import pandas as pd
 import streamlit as st
+from utils.workbook_source import resolve_financial_data_xlsx
+
+
+logger = logging.getLogger(__name__)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -97,6 +102,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+_resolved = resolve_financial_data_xlsx([])
+logger.info(f"STARTUP: Excel resolved to → {_resolved}")
 if "pipeline_refreshed" not in st.session_state:
     st.session_state["pipeline_refreshed"] = False
 if not st.session_state.get("pipeline_refreshed", False):
@@ -436,7 +443,7 @@ def _load_homepage_yearly_comments(excel_path: str, source_stamp: int, selected_
     return result
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_page_data():
     try:
         dp = get_data_processor()
