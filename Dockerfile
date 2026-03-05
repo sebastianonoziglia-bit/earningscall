@@ -23,4 +23,4 @@ ENV STREAMLIT_SERVER_RUN_ON_SAVE=false
 ENV STREAMLIT_SERVER_FILEWATCHER_TYPE=none
 
 # Run the app
-CMD ["streamlit", "run", "app/Welcome.py", "--server.port=7860", "--server.address=0.0.0.0", "--server.runOnSave=false", "--server.fileWatcherType=none"]
+CMD ["streamlit", "run", "app/Welcome.py", "--server.headless=true", "--server.port=7860", "--server.fileWatcherType=none", "--browser.gatherUsageStats=false"]
