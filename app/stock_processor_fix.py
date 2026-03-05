@@ -193,6 +193,22 @@ class StockDataProcessor:
             "Paramount Global",
             "Spotify",
             "Roku",
+            "Bitcoin",
+            "S&P 500",
+            "Nasdaq",
+            "TTD",
+            "CRTO",
+            "DSP",
+            "U",
+            "APP",
+            "MGNI",
+            "PUBM",
+            "NEXN",
+            "DV",
+            "IAS",
+            "SNAP",
+            "PINS",
+            "Gold",
         ]
         merged = seed + discovered
         return sorted({str(name).strip() for name in merged if str(name).strip()}, key=lambda s: s.lower())

@@ -43,6 +43,11 @@ _ALIAS_TO_COMPANY = {
     "spot": "Spotify",
     "roku": "Roku",
     "roku inc": "Roku",
+    "s&p 500": "S&P 500",
+    "sp500": "S&P 500",
+    "nasdaq": "Nasdaq",
+    "gold": "Gold",
+    "bitcoin": "Bitcoin",
 }
 
 
@@ -193,15 +198,18 @@ def merge_with_live_stock_feed(base_df: pd.DataFrame, cache_bucket: int = 0) -> 
 
 
 def infer_company_label(asset: str, tag: str) -> str:
-    combined = f"{asset or ''} {tag or ''}".strip().lower()
+    asset_text = str(asset or "").strip()
+    tag_text = str(tag or "").strip()
+    combined = f"{asset_text} {tag_text}".strip().lower()
     for alias, company in _ALIAS_TO_COMPANY.items():
         if alias in combined:
             return company
-    ticker = _clean_ticker(tag) or _clean_ticker(asset)
+    if asset_text and asset_text.upper() not in {"NAN", "NONE", "NULL"}:
+        return asset_text
+    ticker = _clean_ticker(tag_text)
     if ticker:
         return ticker
-    label = str(asset or "").strip()
-    return label if label else ""
+    return ""
 
 
 def build_live_company_ticker_map(cache_bucket: int = 0) -> Dict[str, str]:
