@@ -4,6 +4,11 @@ from functools import lru_cache
 
 import pandas as pd
 from utils.workbook_source import resolve_financial_data_xlsx, get_workbook_source_stamp
+from utils.live_stock_feed import (
+    infer_company_label,
+    live_feed_cache_bucket,
+    merge_with_live_stock_feed,
+)
 
 
 def _resolve_data_path():
@@ -39,21 +44,26 @@ def _parse_numeric(value):
         return None
 
 
-@lru_cache(maxsize=1)
-def _load_stock_sheet(path, source_stamp):
+@lru_cache(maxsize=8)
+def _load_stock_sheet(path, source_stamp, live_bucket):
     if not path or not os.path.exists(path):
-        return pd.DataFrame()
+        local_df = pd.DataFrame(columns=["date", "price", "volume", "asset", "tag"])
+    else:
+        local_df = pd.read_excel(
+            path,
+            sheet_name="Stocks & Crypto",
+            usecols=["date", "price", "vol.", "asset", "tag"],
+        )
+        local_df = local_df.rename(columns={"vol.": "volume"})
+        local_df["date"] = pd.to_datetime(local_df["date"], errors="coerce")
+        local_df["price"] = local_df["price"].apply(_parse_numeric)
+        local_df["volume"] = local_df["volume"].apply(_parse_numeric)
+        local_df = local_df.dropna(subset=["date", "price"])
 
-    df = pd.read_excel(
-        path,
-        sheet_name="Stocks & Crypto",
-        usecols=["date", "price", "vol.", "asset", "tag"],
-    )
-    df = df.rename(columns={"vol.": "volume"})
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df["price"] = df["price"].apply(_parse_numeric)
-    df["volume"] = df["volume"].apply(_parse_numeric)
-    return df.dropna(subset=["date", "price"])
+    merged = merge_with_live_stock_feed(local_df, cache_bucket=live_bucket)
+    if merged is None or merged.empty:
+        return pd.DataFrame()
+    return merged.dropna(subset=["date", "price"])
 
 
 class StockDataProcessor:
@@ -120,7 +130,8 @@ class StockDataProcessor:
     def get_company_data(self, company, timeframe="1M", expanded=False):
         self._increment_calls()
         source_stamp = get_workbook_source_stamp(self.data_path)
-        df = _load_stock_sheet(self.data_path, source_stamp)
+        live_bucket = live_feed_cache_bucket(120)
+        df = _load_stock_sheet(self.data_path, source_stamp, live_bucket)
         if df.empty:
             return None
         df_company = self._filter_company(df, company)
@@ -154,8 +165,37 @@ class StockDataProcessor:
         return {
             "quote": quote,
             "history": history,
-            "source": "excel",
+            "source": "excel+live",
         }
+
+    def get_companies(self):
+        source_stamp = get_workbook_source_stamp(self.data_path)
+        live_bucket = live_feed_cache_bucket(120)
+        df = _load_stock_sheet(self.data_path, source_stamp, live_bucket)
+
+        discovered = []
+        if df is not None and not df.empty:
+            for _, row in df.iterrows():
+                label = infer_company_label(row.get("asset", ""), row.get("tag", ""))
+                if label:
+                    discovered.append(label)
+
+        seed = [
+            "Alphabet",
+            "Apple",
+            "Meta Platforms",
+            "Microsoft",
+            "Amazon",
+            "Netflix",
+            "Disney",
+            "Comcast",
+            "Warner Bros. Discovery",
+            "Paramount Global",
+            "Spotify",
+            "Roku",
+        ]
+        merged = seed + discovered
+        return sorted({str(name).strip() for name in merged if str(name).strip()}, key=lambda s: s.lower())
 
     def get_call_stats(self):
         return {

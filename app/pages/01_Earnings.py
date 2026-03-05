@@ -25,6 +25,11 @@ from utils.header import display_header
 from utils.theme import get_theme_mode
 from utils.data_availability import get_available_quarters
 from utils.components import render_ai_assistant
+from utils.live_stock_feed import (
+    build_live_company_ticker_map,
+    live_feed_cache_bucket,
+    merge_with_live_stock_feed,
+)
 
 def main():
     # Page config must be the first Streamlit command
@@ -1130,6 +1135,14 @@ def main():
         "Roku": ["ROKU"],
     }
 
+    live_ticker_map = build_live_company_ticker_map(live_feed_cache_bucket(120))
+    for company_name, ticker in live_ticker_map.items():
+        if not ticker:
+            continue
+        current = COMPANY_TICKERS.setdefault(company_name, [])
+        if ticker not in current:
+            COMPANY_TICKERS[company_name] = [ticker] + current
+
     COMPANY_HERO_IMAGES = {
         "Alphabet": "attached_assets/AlphabetGoogleHero.png",
         "Meta": "attached_assets/MetaHero.png",
@@ -1320,7 +1333,11 @@ def main():
             df = df[["date", "price", "asset", "tag"]]
             df["date"] = pd.to_datetime(df["date"], errors="coerce")
             df["price"] = pd.to_numeric(df["price"], errors="coerce")
-            return df.dropna(subset=["date", "price"])
+            merged = merge_with_live_stock_feed(
+                df.dropna(subset=["date", "price"]),
+                cache_bucket=live_feed_cache_bucket(120),
+            )
+            return merged
         except Exception as exc:
             logger.warning("Stock data load failed: %s", exc)
             return pd.DataFrame()
@@ -2971,8 +2988,11 @@ def main():
             latest_row = series_df.iloc[-1]
             latest_price = latest_row.get("price")
             latest_date = latest_row.get("date")
-            if not ticker_display:
-                for candidate in (latest_row.get("tag"), latest_row.get("asset")):
+            live_ticker = str(latest_row.get("tag", "")).strip().upper()
+            if live_ticker and live_ticker not in {"NAN", "NONE", "NULL"}:
+                ticker_display = live_ticker
+            elif not ticker_display:
+                for candidate in (latest_row.get("asset"),):
                     if isinstance(candidate, str) and candidate.strip():
                         ticker_display = candidate.strip().upper()
                         break

@@ -546,9 +546,22 @@ st.markdown("""
 # TAB 1: COMPANY DETAILS
 #############################
 with tab1:
-    # Get available companies
-    companies = _data_processor.get_companies()
     stock_processor = st.session_state.stock_processor
+    # Get available companies (financial universe + live stock feed additions)
+    base_companies = _data_processor.get_companies()
+    live_companies = (
+        stock_processor.get_companies()
+        if hasattr(stock_processor, "get_companies")
+        else []
+    )
+    companies = sorted(
+        {
+            str(name).strip()
+            for name in list(base_companies or []) + list(live_companies or [])
+            if isinstance(name, str) and name.strip()
+        },
+        key=lambda s: s.lower(),
+    )
     company_logos = load_company_logos()
     
     # Company selector
@@ -943,8 +956,9 @@ with tab1:
         - **Volume**: Trading volume
 
         **Data Sources**:
-        - Local Excel (`Earnings + stocks  copy.xlsx` → `Stocks & Crypto`)
-        - Updated when the Excel file is refreshed
+        - Historical baseline from local Excel (`Earnings + stocks  copy.xlsx` → `Stocks & Crypto`)
+        - Live append from Google Sheet feed (latest available rows)
+        - Latest price cards/hero values use the merged feed automatically
 
         Click on any company card to see detailed performance.
         """)

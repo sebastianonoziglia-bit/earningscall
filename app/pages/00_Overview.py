@@ -36,6 +36,7 @@ from utils.data_granularity import (
     get_quarter_labels_for_year,
     update_global_time_context,
 )
+from utils.live_stock_feed import build_live_company_ticker_map, live_feed_cache_bucket
 
 st.session_state["active_nav_page"] = "overview"
 st.session_state["_active_nav_page"] = "overview"
@@ -1007,6 +1008,11 @@ COMPANY_TICKERS = {
     "Spotify": "SPOT",
     "Roku": "ROKU",
 }
+
+_LIVE_TICKER_MAP = build_live_company_ticker_map(live_feed_cache_bucket(120))
+for _company_name, _ticker_value in _LIVE_TICKER_MAP.items():
+    if _ticker_value:
+        COMPANY_TICKERS[_company_name] = _ticker_value
 
 
 def company_ticker(company: str) -> str:
@@ -2800,6 +2806,10 @@ _COMPANY_TO_TICKER = {
     "Warner Bros. Discovery": "WBD",
     "Warner Bros Discovery": "WBD",
 }
+
+for _company_name, _ticker_value in _LIVE_TICKER_MAP.items():
+    if _ticker_value and _company_name in _COMPANY_TO_TICKER:
+        _COMPANY_TO_TICKER[_company_name] = _ticker_value
 
 _TICKER_TO_COMPANY = {
     value: key for key, value in _COMPANY_TO_TICKER.items()
