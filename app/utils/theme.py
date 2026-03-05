@@ -789,14 +789,14 @@ def apply_theme(enable_dom_patch: bool = True):
             window.__mfeRadioFixObserver = null;
           }}
 
-          let queued = false;
+          let _animRunning = false;
           const scheduleFix = () => {{
-            if (queued) return;
-            queued = true;
-            requestAnimationFrame(() => {{
-              queued = false;
+            if (_animRunning) return;
+            _animRunning = true;
+            window.setTimeout(() => {{
               applyRadioFixes();
-            }});
+              _animRunning = false;
+            }}, 0);
           }};
 
           scheduleFix();

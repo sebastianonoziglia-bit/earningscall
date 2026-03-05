@@ -34,55 +34,11 @@ def get_current_datetime():
 # Function to render the floating clock
 def render_floating_clock():
     """
-    Render a floating clock in the top right corner of the page
-    
-    This uses JavaScript to update the time every second
+    Render a static timestamp for page context.
     """
-    from utils.styles import get_floating_clock_style
-    
-    # Get initial values
     current_info = get_current_datetime()
-    
-    # Create the HTML for the floating clock
-    clock_html = f"""
-    <div id="floating-clock" class="floating-clock">
-        <div id="clock-time" class="clock-time">{current_info['time_str']}</div>
-        <div id="clock-date" class="clock-date">{current_info['date_str']}</div>
-    </div>
-    
-    <script>
-    // Function to update the clock
-    function updateClock() {{
-        // Create a date object for Italy's timezone (UTC+1)
-        const now = new Date();
-        // Convert to Italy time by adding the time difference
-        const italyNow = new Date(now.getTime() + (1 * 60 * 60 * 1000));
-        
-        // Format time (without seconds)
-        const hours = String(italyNow.getUTCHours()).padStart(2, '0');
-        const minutes = String(italyNow.getUTCMinutes()).padStart(2, '0');
-        const timeStr = `${{hours}}:${{minutes}}`;
-        
-        // Format date - using Italy locale
-        const options = {{ weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Rome' }};
-        const dateStr = now.toLocaleDateString('en-US', options);
-        
-        // Update the elements
-        document.getElementById('clock-time').textContent = timeStr;
-        document.getElementById('clock-date').textContent = dateStr;
-    }}
-    
-    // Update immediately and then every minute (60000ms)
-    updateClock();
-    setInterval(updateClock, 60000);
-    </script>
-    """
-    
-    # Apply the styles and render the clock
-    st.markdown(get_floating_clock_style(), unsafe_allow_html=True)
-    st.markdown(clock_html, unsafe_allow_html=True)
-    
-    # Return the current year for potential use in other functions
+    st.caption(f"Last updated: {current_info['time_str']}")
+
     return current_info['year']
 
 # Function to determine the appropriate verb tense based on year

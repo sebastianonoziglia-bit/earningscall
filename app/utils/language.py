@@ -337,6 +337,12 @@ def get_greeting_translated():
 
 def render_language_selector():
     """Render the language selection buttons in a container"""
+    def _rerun_if_language_user_changed():
+        # Only rerun if user explicitly changed language, not on first load
+        if st.session_state.get('_language_user_changed', False):
+            st.session_state['_language_user_changed'] = False
+            st.rerun()
+
     # Language selection buttons
     lang_cols = st.columns(3)
     with lang_cols[0]:
@@ -344,16 +350,19 @@ def render_language_selector():
             st.session_state.language = 'en'
             # Set URL query parameter
             st.query_params.lang = 'en'
-            st.rerun()
+            st.session_state['_language_user_changed'] = True
+            _rerun_if_language_user_changed()
     with lang_cols[1]:
         if st.button("🇮🇹", help="Italiano", key="it_button", use_container_width=True):
             st.session_state.language = 'it'
             # Set URL query parameter
             st.query_params.lang = 'it'
-            st.rerun()
+            st.session_state['_language_user_changed'] = True
+            _rerun_if_language_user_changed()
     with lang_cols[2]:
         if st.button("🇪🇸", help="Español", key="es_button", use_container_width=True):
             st.session_state.language = 'es'
             # Set URL query parameter
             st.query_params.lang = 'es'
-            st.rerun()
+            st.session_state['_language_user_changed'] = True
+            _rerun_if_language_user_changed()
