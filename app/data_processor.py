@@ -1,7 +1,16 @@
 import os
 from functools import lru_cache
 
-import psycopg
+try:
+    import psycopg
+    _PSYCOPG_AVAILABLE = True
+except ImportError:
+    try:
+        import psycopg2 as psycopg
+        _PSYCOPG_AVAILABLE = True
+    except ImportError:
+        psycopg = None
+        _PSYCOPG_AVAILABLE = False
 import pandas as pd
 import numpy as np
 # Import from helpers module
@@ -394,6 +403,8 @@ class FinancialDataProcessor:
             return sorted(self.df_metrics['company'].dropna().unique().tolist())
 
         try:
+            if not _PSYCOPG_AVAILABLE or psycopg is None:
+                return []
             conn = psycopg.connect(os.environ.get('DATABASE_URL'))
             cur = conn.cursor()
             cur.execute("SELECT DISTINCT company FROM company_metrics WHERE company IS NOT NULL ORDER BY company")
@@ -422,6 +433,8 @@ class FinancialDataProcessor:
             return sorted([int(y) for y in years], reverse=True)
 
         try:
+            if not _PSYCOPG_AVAILABLE or psycopg is None:
+                return [2024]
             conn = psycopg.connect(os.environ.get('DATABASE_URL'))
             cur = conn.cursor()
             cur.execute("SELECT DISTINCT year FROM company_metrics WHERE company = %s AND year IS NOT NULL ORDER BY year DESC", (company,))
@@ -583,6 +596,8 @@ class FinancialDataProcessor:
                     return employee_count
             
         try:
+            if not _PSYCOPG_AVAILABLE or psycopg is None:
+                return None
             conn = psycopg.connect(**self.db_params)
             cursor = conn.cursor()
             cursor.execute(
@@ -755,6 +770,8 @@ class FinancialDataProcessor:
                 return self.get_advertising_revenue(company, year)
 
         try:
+            if not _PSYCOPG_AVAILABLE or psycopg is None:
+                return None
             conn = psycopg.connect(**self.db_params)
             cur = conn.cursor()
 
@@ -827,6 +844,8 @@ class FinancialDataProcessor:
             return metrics_dict
 
         try:
+            if not _PSYCOPG_AVAILABLE or psycopg is None:
+                return None
             conn = psycopg.connect(os.environ.get('DATABASE_URL'))
             cur = conn.cursor()
             cur.execute("SELECT metric_name, value FROM company_metrics WHERE company = %s AND year = %s", (clean_company, year))
@@ -890,6 +909,8 @@ class FinancialDataProcessor:
                 return {'labels': labels, 'values': values, 'colors': colors[:len(labels)]}
 
         try:
+            if not _PSYCOPG_AVAILABLE or psycopg is None:
+                return {'labels': [company], 'values': [1], 'colors': ["#cccccc"]}
             conn = psycopg.connect(os.environ.get('DATABASE_URL'))
             cur = conn.cursor()
             cur.execute("SELECT segment_name, revenue FROM company_segments WHERE company = %s AND year = %s AND segment_name != 'Total Revenue'", (company, year))
