@@ -359,7 +359,9 @@ def _render_leaderboard_strip(title: str, subtitle: str, cards: List[dict]) -> N
             "</div>"
         )
 
-    if len(cards) > 5:
+    # Show the "scroll for more" indicator only when there are hidden cards
+    # beyond what we actually render.
+    if len(cards) > len(visible_cards):
         card_blocks.append(
             "<div class='wm-strip-card wm-more-indicator'>"
             "<div class='wm-more-arrow'>→</div>"
@@ -1524,18 +1526,28 @@ st.markdown(
 }}
 
 .wm-nav-btn {{
-    display: block;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
     text-decoration: none !important;
     border-radius: 14px;
     padding: 14px 14px;
     color: #fff !important;
-    border: 1px solid transparent;
-    transition: transform 0.16s ease, filter 0.16s ease;
+    background: rgba(37, 99, 235, 0.12);
+    border: 1px solid rgba(37, 99, 235, 0.28);
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.16s ease;
 }}
 
 .wm-nav-btn:hover {{
+    background: rgba(37, 99, 235, 0.22);
+    border-color: rgba(37, 99, 235, 0.5);
     transform: translateY(-2px);
-    filter: brightness(1.05);
+}}
+
+.wm-nav-btn:active {{
+    background: rgba(37, 99, 235, 0.32);
 }}
 
 .wm-nav-title {{
@@ -1551,10 +1563,10 @@ st.markdown(
     opacity: 0.94;
 }}
 
-.wm-nav-overview {{ background: #1d4ed8; border-color: #1e40af; }}
-.wm-nav-earnings {{ background: #0891b2; border-color: #0e7490; }}
-.wm-nav-stocks {{ background: #15803d; border-color: #166534; }}
-.wm-nav-genie {{ background: #4338ca; border-color: #3730a3; }}
+.wm-nav-overview {{ background: rgba(37, 99, 235, 0.12); border-color: rgba(37, 99, 235, 0.28); }}
+.wm-nav-earnings {{ background: rgba(37, 99, 235, 0.12); border-color: rgba(37, 99, 235, 0.28); }}
+.wm-nav-stocks {{ background: rgba(37, 99, 235, 0.12); border-color: rgba(37, 99, 235, 0.28); }}
+.wm-nav-genie {{ background: rgba(37, 99, 235, 0.12); border-color: rgba(37, 99, 235, 0.28); }}
 
 .wm-section-title {{
     margin: 28px 0 14px;

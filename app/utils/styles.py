@@ -850,22 +850,30 @@ def load_overview_specific_styles():
         background: transparent !important;
     }
     div[data-testid="stVerticalBlock"] .stButton > button {
-        width: 100%;
-        border-radius: 12px;
-        border: 1px solid rgba(15,23,42,0.12) !important;
-        box-shadow: 0 2px 8px rgba(2,6,23,0.06) !important;
-        transition: transform 0.15s, box-shadow 0.15s !important;
+        text-align: center !important;
+        justify-content: center !important;
+        display: flex !important;
+        align-items: center !important;
+        width: 100% !important;
+        background: rgba(37, 99, 235, 0.12) !important;
+        border: 1px solid rgba(37, 99, 235, 0.28) !important;
+        color: #FFFFFF !important;
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.02em !important;
+        transition: background 0.2s ease, border-color 0.2s ease !important;
+        padding: 10px 20px !important;
     }
     div[data-testid="stVerticalBlock"] .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 18px rgba(0,115,255,0.15) !important;
-        border-color: rgba(37,99,235,0.4) !important;
+        background: rgba(37, 99, 235, 0.22) !important;
+        border-color: rgba(37, 99, 235, 0.5) !important;
     }
     div[data-testid="stVerticalBlock"] .stButton > button:focus,
     div[data-testid="stVerticalBlock"] .stButton > button:active,
     div[data-testid="stVerticalBlock"] .stButton > button:focus-visible {
         outline: none !important;
-        box-shadow: 0 0 0 2px rgba(37,99,235,0.35) !important;
+        background: rgba(37, 99, 235, 0.32) !important;
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35) !important;
     }
     
     @media (max-width: 768px) {

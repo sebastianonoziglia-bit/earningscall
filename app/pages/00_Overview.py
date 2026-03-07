@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import streamlit as st
 # Set page config - Must be the first Streamlit command
 st.set_page_config(page_title="Overview", page_icon="📊", layout="wide")
@@ -21,7 +26,6 @@ import base64
 import requests
 from urllib.parse import quote_plus
 import streamlit.components.v1 as components
-from pathlib import Path
 from data_processor import FinancialDataProcessor
 from subscriber_data_processor import SubscriberDataProcessor
 from utils.state_management import get_data_processor, initialize_session_state
@@ -8401,9 +8405,9 @@ def _render_overview_area_selector() -> str:
         active_key = query_area
 
     icon_map = {
-        "market_structure": "📊",
-        "company_intelligence": "🏢",
-        "signals_context": "🗣️",
+        "market_structure": "",
+        "company_intelligence": "",
+        "signals_context": "",
     }
     per_row = 3
     for row_start in range(0, len(_OVERVIEW_AREA_CONFIG), per_row):

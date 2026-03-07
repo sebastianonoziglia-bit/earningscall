@@ -682,11 +682,30 @@ def apply_theme(enable_dom_patch: bool = True):
         }
 
         /* Buttons */
-        .stButton button,
-        .stDownloadButton button {
-            background: var(--app-surface) !important;
-            color: var(--app-text) !important;
-            border: 1px solid var(--app-border) !important;
+        .stButton > button,
+        .stDownloadButton > button {
+            text-align: center !important;
+            justify-content: center !important;
+            display: flex !important;
+            align-items: center !important;
+            width: 100% !important;
+            background: rgba(37, 99, 235, 0.12) !important;
+            border: 1px solid rgba(37, 99, 235, 0.28) !important;
+            color: #FFFFFF !important;
+            border-radius: 8px !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.02em !important;
+            transition: background 0.2s ease, border-color 0.2s ease !important;
+            padding: 10px 20px !important;
+        }
+        .stButton > button:hover,
+        .stDownloadButton > button:hover {
+            background: rgba(37, 99, 235, 0.22) !important;
+            border-color: rgba(37, 99, 235, 0.5) !important;
+        }
+        .stButton > button:active,
+        .stDownloadButton > button:active {
+            background: rgba(37, 99, 235, 0.32) !important;
         }
 
         /* Plotly text styling is left to Plotly to avoid conflicts. */
