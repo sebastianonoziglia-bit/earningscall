@@ -34,6 +34,12 @@ HIGHLIGHT_TYPES = {
 
 NUMBER_RE = re.compile(r"\b\d[\d,.]*(?:\.?\d+)?\b|\$\s*\d|\d\s*%", re.IGNORECASE)
 TRANSCRIPT_FILE_RE = re.compile(r"^Q([1-4])\.txt$", re.IGNORECASE)
+UNKNOWN_SPEAKER_VALUES = {"", "unknown", "n/a", "none", "nan"}
+ROLE_LABELS = {
+    "CEO": "Chief Executive Officer",
+    "CFO": "Chief Financial Officer",
+    "COO": "Chief Operating Officer",
+}
 
 
 def _norm_col(name: str) -> str:
@@ -69,6 +75,26 @@ def split_sentences(text: str) -> Iterable[str]:
         s = sentence.strip()
         if len(s) >= 24:
             yield s
+
+
+def resolve_speaker_label(
+    *,
+    speaker: str = "",
+    name: str = "",
+    executive: str = "",
+    who: str = "",
+    rolebucket: str = "",
+    role: str = "",
+) -> str:
+    for raw in (speaker, name, executive, who):
+        value = str(raw or "").strip()
+        if value and value.lower() not in UNKNOWN_SPEAKER_VALUES:
+            return value
+
+    role_value = str(rolebucket or "").strip() or str(role or "").strip()
+    if role_value:
+        return ROLE_LABELS.get(role_value.upper(), role_value)
+    return "Executive"
 
 
 def speaker_bucket(speaker: str, role: str) -> str | None:
@@ -239,8 +265,12 @@ def load_transcript_rows(path: str, sheet_name: str) -> pd.DataFrame:
         "company": ["company", "player", "ticker", "symbol"],
         "year": ["year"],
         "quarter": ["quarter", "qtr", "q"],
-        "speaker": ["speaker", "speaker_name", "executive", "name"],
+        "speaker": ["speaker", "speaker_name"],
+        "name": ["name"],
+        "executive": ["executive"],
+        "who": ["who"],
         "role": ["role", "title", "speaker_role", "position"],
+        "rolebucket": ["rolebucket", "role_bucket"],
         "text": ["text", "transcript", "content", "body", "quote", "commentary"],
     }
 
@@ -253,8 +283,23 @@ def load_transcript_rows(path: str, sheet_name: str) -> pd.DataFrame:
     out["year"] = out["year"].apply(_coerce_year)
     out["quarter"] = out["quarter"].apply(_coerce_quarter)
     out["speaker"] = out["speaker"].astype(str).str.strip()
+    out["name"] = out["name"].astype(str).str.strip()
+    out["executive"] = out["executive"].astype(str).str.strip()
+    out["who"] = out["who"].astype(str).str.strip()
     out["role"] = out["role"].astype(str).str.strip()
+    out["rolebucket"] = out["rolebucket"].astype(str).str.strip()
     out["text"] = out["text"].astype(str).str.strip()
+    out["speaker"] = out.apply(
+        lambda r: resolve_speaker_label(
+            speaker=r.get("speaker", ""),
+            name=r.get("name", ""),
+            executive=r.get("executive", ""),
+            who=r.get("who", ""),
+            rolebucket=r.get("rolebucket", ""),
+            role=r.get("role", ""),
+        ),
+        axis=1,
+    )
 
     out = out.dropna(subset=["year", "quarter"])
     out = out[(out["company"] != "") & (out["text"] != "")]
@@ -353,6 +398,14 @@ def build_highlights(rows_df: pd.DataFrame, per_bucket_limit: int = 8) -> pd.Dat
 
     for row in rows_df.itertuples(index=False):
         role_bucket = speaker_bucket(row.speaker, row.role)
+        speaker_label = resolve_speaker_label(
+            speaker=getattr(row, "speaker", ""),
+            name=getattr(row, "name", ""),
+            executive=getattr(row, "executive", ""),
+            who=getattr(row, "who", ""),
+            rolebucket=role_bucket or getattr(row, "rolebucket", ""),
+            role=getattr(row, "role", ""),
+        )
 
         for sentence in split_sentences(row.text):
             base = sentence_score(sentence)
@@ -373,7 +426,7 @@ def build_highlights(rows_df: pd.DataFrame, per_bucket_limit: int = 8) -> pd.Dat
                         "year": int(row.year),
                         "quarter": int(row.quarter),
                         "highlight_type": highlight_type,
-                        "speaker": str(row.speaker).strip() or "Unknown",
+                        "speaker": speaker_label,
                         "text": quote,
                         "relevance_score": score,
                         # Backward-compatible columns consumed by current app views/scripts:

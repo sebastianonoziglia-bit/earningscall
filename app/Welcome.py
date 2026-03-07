@@ -465,6 +465,34 @@ def _company_variants(company: str) -> list[str]:
     return sorted({v.strip() for v in variants if v and str(v).strip()})
 
 
+_UNKNOWN_SPEAKER_VALUES = {"", "unknown", "n/a", "none", "nan"}
+_ROLE_SPEAKER_LABELS = {
+    "CEO": "Chief Executive Officer",
+    "CFO": "Chief Financial Officer",
+    "COO": "Chief Operating Officer",
+}
+
+
+def _resolve_speaker_label(
+    *,
+    speaker: Any = "",
+    name: Any = "",
+    executive: Any = "",
+    who: Any = "",
+    rolebucket: Any = "",
+    role: Any = "",
+) -> str:
+    for raw in (speaker, name, executive, who):
+        value = str(raw or "").strip()
+        if value and value.lower() not in _UNKNOWN_SPEAKER_VALUES:
+            return value
+
+    role_value = str(rolebucket or "").strip() or str(role or "").strip()
+    if role_value:
+        return _ROLE_SPEAKER_LABELS.get(role_value.upper(), role_value)
+    return "Executive"
+
+
 def _split_company_tokens(raw: Any) -> list[str]:
     tokens = re.split(r"[|,;/]", str(raw or ""))
     return [token.strip() for token in tokens if token and token.strip()]
@@ -1094,8 +1122,13 @@ def _normalize_quotes_frame(raw: pd.DataFrame) -> pd.DataFrame:
         "company": ["company", "ticker", "service"],
         "year": ["year"],
         "quarter": ["quarter", "qtr"],
-        "speaker": ["speaker", "speaker_name", "executive", "name"],
-        "role_bucket": ["role_bucket", "role", "speaker_role"],
+        "speaker": ["speaker", "speaker_name"],
+        "name": ["name"],
+        "executive": ["executive"],
+        "who": ["who"],
+        "role_bucket": ["role_bucket", "rolebucket", "speaker_role", "role"],
+        "rolebucket": ["rolebucket", "role_bucket"],
+        "role": ["role", "title", "speaker_role", "position"],
         "highlight_type": ["highlight_type"],
         "quote": ["quote", "text", "highlight", "comment", "insight"],
         "score": ["score", "relevance_score", "importance", "rank_score"],
@@ -1112,11 +1145,16 @@ def _normalize_quotes_frame(raw: pd.DataFrame) -> pd.DataFrame:
     out["year"] = pd.to_numeric(out["year"], errors="coerce")
     out["quarter"] = out["quarter"].apply(_normalize_quarter_label)
     out["speaker"] = out["speaker"].astype(str).str.strip()
+    out["name"] = out["name"].astype(str).str.strip()
+    out["executive"] = out["executive"].astype(str).str.strip()
+    out["who"] = out["who"].astype(str).str.strip()
     out["quote"] = out["quote"].astype(str).str.strip()
     out["score"] = pd.to_numeric(out["score"], errors="coerce")
 
     def _role_from_row(r: pd.Series) -> str:
         role_text = str(r.get("role_bucket", "") or "").strip().upper()
+        if role_text not in {"CEO", "CFO"}:
+            role_text = str(r.get("rolebucket", "") or "").strip().upper()
         if role_text in {"CEO", "CFO"}:
             return role_text
         hl = str(r.get("highlight_type", "") or "").strip().lower()
@@ -1127,6 +1165,17 @@ def _normalize_quotes_frame(raw: pd.DataFrame) -> pd.DataFrame:
         return ""
 
     out["role_bucket"] = out.apply(_role_from_row, axis=1)
+    out["speaker"] = out.apply(
+        lambda r: _resolve_speaker_label(
+            speaker=r.get("speaker", ""),
+            name=r.get("name", ""),
+            executive=r.get("executive", ""),
+            who=r.get("who", ""),
+            rolebucket=r.get("rolebucket", "") or r.get("role_bucket", ""),
+            role=r.get("role", ""),
+        ),
+        axis=1,
+    )
     out = out.dropna(subset=["year"]).copy()
     out = out[(out["company"] != "") & (out["quote"] != "")].copy()
     if out.empty:
@@ -1920,8 +1969,28 @@ body.theme-dark .wm-narrative-text {{
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    color: #94a3b8;
     font-size: 0.75rem;
+}}
+
+.wm-pulse-meta .wm-mini-logo {{
+    width: 96px;
+    height: 96px;
+    max-width: 100%;
+    border-radius: 50%;
+    object-fit: contain;
+    background: rgba(148, 163, 184, 0.16);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    padding: 6px;
+    flex-shrink: 0;
+}}
+
+.wm-pulse-company {{
+    color: #FFFFFF !important;
+    font-weight: 700;
+}}
+
+.wm-pulse-speaker {{
+    color: rgba(255,255,255,0.75) !important;
 }}
 
 @keyframes wmPulseScroll {{
@@ -2353,7 +2422,14 @@ else:
     pulse_items: list[str] = []
     for row in pulse_df.itertuples(index=False):
         company = _normalize_company_name(getattr(row, "company", ""))
-        speaker = str(getattr(row, "speaker", "") or "Unknown").strip()
+        speaker = _resolve_speaker_label(
+            speaker=getattr(row, "speaker", ""),
+            name=getattr(row, "name", ""),
+            executive=getattr(row, "executive", ""),
+            who=getattr(row, "who", ""),
+            rolebucket=getattr(row, "rolebucket", "") or getattr(row, "role_bucket", ""),
+            role=getattr(row, "role", ""),
+        )
         quote = str(getattr(row, "quote", "") or "").strip()
         if not quote:
             continue
@@ -2366,7 +2442,8 @@ else:
         pulse_items.append(
             "<div class='wm-pulse-item'>"
             f"<div class='wm-pulse-quote'>“{escape(quote)}”</div>"
-            f"<div class='wm-pulse-meta'>{logo_html}<span>{escape(company)} · {escape(speaker)}</span></div>"
+            f"<div class='wm-pulse-meta'>{logo_html}<span class='wm-pulse-company'>{escape(company)}</span>"
+            f"<span class='wm-pulse-speaker'>— {escape(speaker)}</span></div>"
             "</div>"
         )
     if not pulse_items:
