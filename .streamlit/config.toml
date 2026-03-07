@@ -1,11 +1,7 @@
-[server]
-port = 8501
-headless = false
-fileWatcherType = "none"
-
-[browser]
-gatherUsageStats = false
-serverAddress = "localhost"
-
-[runner]
-fastReruns = false
+[theme]
+base = "dark"
+backgroundColor = "#0d1117"
+secondaryBackgroundColor = "#0f1f35"
+primaryColor = "#ff5b1f"
+textColor = "#e6edf3"
+font = "sans serif"
