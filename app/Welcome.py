@@ -1383,640 +1383,190 @@ def _build_rank_cards(block: pd.DataFrame, value_col: str, formatter) -> list[di
     return cards
 
 # Styling
-bg_color = "#0B1220" if is_dark else "#F5F8FF"
-text_color = "#E2E8F0" if is_dark else "#0F172A"
-muted_color = "#94A3B8" if is_dark else "#475569"
-surface_color = "#111827" if is_dark else "#FFFFFF"
-border_color = "rgba(148,163,184,0.28)" if is_dark else "rgba(15,23,42,0.10)"
-
 st.markdown(
-    f"""
+    """
 <style>
-[data-testid="stSidebarNav"] {{
-    display: none !important;
-}}
-
-.wm-wrap {{
+section[data-testid="stMain"] > div {
+    background-color: #0d1117 !important;
+}
+section[data-testid="stMain"] {
+    background-color: #0d1117 !important;
+}
+section[data-testid="stMain"] p,
+section[data-testid="stMain"] span,
+section[data-testid="stMain"] div,
+section[data-testid="stMain"] label {
+    color: rgba(255,255,255,0.85);
+}
+section[data-testid="stMain"] .stCaption p {
+    color: rgba(255,255,255,0.45) !important;
+    font-size: 0.82rem;
+}
+.wm-wrap {
     max-width: 1500px;
     margin: 0 auto;
-    margin-top: 0;
-    padding-top: 0;
     padding: 0 14px 36px;
-}}
-
-.wm-hero {{
-    position: relative;
-    overflow: hidden;
-    border-radius: 22px;
-    padding: 38px 40px;
-    margin: 8px 0 26px;
-    background: linear-gradient(135deg, #0073FF 0%, #00A3FF 55%, #00C2FF 100%);
-    box-shadow: 0 20px 48px rgba(0, 115, 255, 0.30);
-}}
-
-.wm-hero::before {{
-    content: "";
-    position: absolute;
-    inset: -40% -30%;
-    background: radial-gradient(circle at 28% 38%, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.0) 54%);
-    animation: wmPulse 7.5s ease-in-out infinite;
-    pointer-events: none;
-}}
-
-@keyframes wmPulse {{
-    0%, 100% {{ transform: translate(0, 0) scale(1); opacity: 0.62; }}
-    50% {{ transform: translate(8%, 8%) scale(1.08); opacity: 0.38; }}
-}}
-
-.wm-status {{
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 9px;
-    padding: 6px 14px;
-    border-radius: 999px;
-    background: rgba(2, 6, 23, 0.20);
-    color: #D1FAE5;
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+}
+.sv {
+    opacity: 0;
+    transform: translateY(22px);
+    transition: opacity .6s ease, transform .6s ease;
+}
+.sv.sv-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+.beat-divider {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    margin: 48px 0;
+}
+.beat-label {
+    color: #ff5b1f;
+    font-size: 0.72rem;
+    letter-spacing: 0.28em;
     text-transform: uppercase;
-}}
-
-.wm-status-dot {{
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #22C55E;
-    animation: wmDotPulse 1.9s ease-in-out infinite;
-}}
-
-@keyframes wmDotPulse {{
-    0%, 100% {{ opacity: 1; transform: scale(1); }}
-    50% {{ opacity: 0.45; transform: scale(1.25); }}
-}}
-
-.wm-title {{
-    position: relative;
-    margin: 12px 0 10px;
-    color: #FFFFFF;
-    font-size: clamp(2rem, 3.2vw, 3.1rem);
-    line-height: 1.08;
-    font-weight: 900;
-}}
-
-.wm-subtitle {{
-    position: relative;
-    margin: 0 0 26px;
-    color: rgba(255, 255, 255, 0.94);
-    font-size: 1.06rem;
-    line-height: 1.55;
-    max-width: 1100px;
-}}
-
-.wm-kpi-grid {{
-    position: relative;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-    gap: 15px;
-}}
-
-.wm-kpi-card {{
-    border-radius: 15px;
-    padding: 16px 18px;
-    border: 1px solid rgba(255,255,255,0.28);
-    background: rgba(255,255,255,0.16);
-    backdrop-filter: blur(9px);
-    transition: transform 0.22s ease, background 0.22s ease;
-}}
-
-.wm-kpi-card:hover {{
-    transform: translateY(-3px);
-    background: rgba(255,255,255,0.22);
-}}
-
-.wm-kpi-label {{
-    color: rgba(255,255,255,0.84);
-    font-size: 0.76rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-}}
-
-.wm-kpi-value {{
-    color: #FFFFFF;
-    margin-top: 6px;
-    font-size: clamp(1.35rem, 2.5vw, 1.85rem);
-    font-weight: 900;
-    line-height: 1.1;
-}}
-
-.wm-kpi-change {{
-    color: rgba(255,255,255,0.94);
-    font-size: 0.83rem;
-    font-weight: 600;
-    margin-top: 7px;
-}}
-
-.wm-nav-grid {{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
-    margin: 0 0 28px;
-}}
-
-.wm-nav-btn {{
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    text-decoration: none !important;
-    border-radius: 14px;
-    padding: 14px 14px;
-    color: #fff !important;
-    background: rgba(37, 99, 235, 0.12);
-    border: 1px solid rgba(37, 99, 235, 0.28);
-    transition: background 0.2s ease, border-color 0.2s ease, transform 0.16s ease;
-}}
-
-.wm-nav-btn:hover {{
-    background: rgba(37, 99, 235, 0.22);
-    border-color: rgba(37, 99, 235, 0.5);
-    transform: translateY(-2px);
-}}
-
-.wm-nav-btn:active {{
-    background: rgba(37, 99, 235, 0.32);
-}}
-
-.wm-nav-title {{
-    font-size: 0.98rem;
-    font-weight: 800;
-    line-height: 1.2;
-}}
-
-.wm-nav-desc {{
-    margin-top: 4px;
-    font-size: 0.79rem;
-    font-weight: 500;
-    opacity: 0.94;
-}}
-
-.wm-nav-overview {{ background: rgba(37, 99, 235, 0.12); border-color: rgba(37, 99, 235, 0.28); }}
-.wm-nav-earnings {{ background: rgba(37, 99, 235, 0.12); border-color: rgba(37, 99, 235, 0.28); }}
-.wm-nav-stocks {{ background: rgba(37, 99, 235, 0.12); border-color: rgba(37, 99, 235, 0.28); }}
-.wm-nav-genie {{ background: rgba(37, 99, 235, 0.12); border-color: rgba(37, 99, 235, 0.28); }}
-
-.wm-section-title {{
-    margin: 28px 0 14px;
-    color: {muted_color};
-    font-size: 0.76rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    font-weight: 800;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}}
-
-.wm-section-title::before {{
-    content: "";
-    width: 4px;
-    height: 18px;
-    border-radius: 2px;
-    background: linear-gradient(180deg, #0073ff 0%, #00c2ff 100%);
-}}
-
-.wm-insight-grid {{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
-    gap: 14px;
-}}
-
-.wm-insight-card {{
-    background: {surface_color};
-    border: 1px solid {border_color};
-    border-radius: 16px;
-    padding: 18px 18px 17px;
-    color: {text_color};
-    box-shadow: 0 8px 24px rgba(2, 6, 23, 0.06);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}}
-
-.wm-insight-card:hover {{
-    transform: translateY(-4px);
-    box-shadow: 0 14px 36px rgba(0, 115, 255, 0.16);
-}}
-
-.wm-priority {{
-    display: inline-block;
-    border-radius: 999px;
-    padding: 3px 10px;
-    font-size: 0.69rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-}}
-
-.wm-priority-high {{ background: rgba(239,68,68,0.15); color: #ef4444; }}
-.wm-priority-medium {{ background: rgba(249,115,22,0.15); color: #f97316; }}
-.wm-priority-low {{ background: rgba(59,130,246,0.15); color: #3b82f6; }}
-
-.wm-priority-legend {{
-    margin: 4px 0 14px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: 1px solid {border_color};
-    background: {'rgba(15,23,42,0.04)' if is_dark else 'rgba(15,23,42,0.03)'};
-    color: {muted_color};
-    font-size: 0.8rem;
-    line-height: 1.5;
-}}
-
-.wm-insight-title {{
-    color: {text_color};
-    font-size: 1.05rem;
-    line-height: 1.35;
-    font-weight: 750;
-    margin: 0 0 8px;
-}}
-
-.wm-insight-text {{
-    color: {muted_color};
-    font-size: 0.9rem;
-    line-height: 1.6;
-    margin: 0;
-}}
-
-.quote-pill {{
-    background: rgba(255,255,255,0.04);
-    border-left: 3px solid #3b82f6;
-    padding: 10px 14px;
-    margin-top: 12px;
-    border-radius: 0 8px 8px 0;
-    font-size: 0.82rem;
-}}
-
-.quote-text {{
-    font-style: italic;
-    color: {'#cbd5e1' if is_dark else '#334155'};
-}}
-
-.quote-meta {{
+    margin-bottom: 6px;
     display: block;
-    margin-top: 6px;
-    color: {'#64748b' if is_dark else '#475569'};
-    font-size: 0.75rem;
-}}
-
-body.theme-dark .wm-insight-card a {{
-    color: #93C5FD !important;
-}}
-
-.wm-narrative-block {{
-    margin: 0 0 28px;
-    padding: 20px 24px;
-    border-radius: 14px;
-    border-left: 4px solid #0073FF;
-    background: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(15, 23, 42, 0.1);
-    border-left: 4px solid #0073FF;
-}}
-
-body.theme-dark .wm-narrative-block {{
-    background: rgba(15, 23, 42, 0.55);
-    border-color: rgba(148, 163, 184, 0.18);
-    border-left-color: #0073FF;
-}}
-
-.wm-narrative-label {{
-    font-size: 0.7rem;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #0073FF;
-    margin-bottom: 8px;
-}}
-
-.wm-narrative-text {{
-    font-size: 0.97rem;
-    line-height: 1.7;
-    color: #1E293B;
-    margin: 0;
-}}
-
-body.theme-dark .wm-narrative-text {{
-    color: #CBD5E1;
-}}
-
-.wm-insight-logos {{
-    display: flex;
-    gap: 6px;
-    margin-bottom: 10px;
-    align-items: center;
-    flex-wrap: wrap;
-}}
-
-.wm-mini-logo-wrap {{
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(148, 163, 184, 0.15);
-    border: 1px solid {border_color};
-}}
-
-.wm-mini-logo {{
-    width: 16px;
-    height: 16px;
-    object-fit: contain;
-}}
-
-.wm-company-grid {{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-    gap: 14px;
-}}
-
-.wm-strip-header {{
-    margin: 14px 0 8px;
-}}
-
-.wm-strip-title {{
-    color: {text_color};
-    font-size: 0.97rem;
-    font-weight: 780;
-    line-height: 1.2;
-}}
-
-.wm-strip-subtitle {{
-    color: {muted_color};
-    font-size: 0.78rem;
-    line-height: 1.35;
-    margin-top: 3px;
-}}
-
-.wm-hscroll {{
-    display: flex;
-    gap: 12px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 4px 2px 12px 2px;
-    scroll-snap-type: x mandatory;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(148,163,184,0.55) transparent;
-}}
-
-.wm-hscroll::-webkit-scrollbar {{
-    height: 8px;
-}}
-
-.wm-hscroll::-webkit-scrollbar-thumb {{
-    border-radius: 8px;
-    background: rgba(148,163,184,0.45);
-}}
-
-.wm-company-card {{
-    background: {surface_color};
-    border: 1px solid {border_color};
-    border-left: 4px solid var(--wm-color, #0073ff);
-    border-radius: 14px;
-    padding: 16px;
-    position: relative;
-    box-shadow: 0 8px 20px rgba(2, 6, 23, 0.06);
-    transition: transform 0.18s ease;
-}}
-
-.wm-company-card:hover {{ transform: translateY(-3px); }}
-
-.wm-strip-card {{
-    flex: 0 0 248px;
-    min-width: 248px;
-    max-width: 248px;
-    scroll-snap-align: start;
-}}
-
-.wm-rank {{
-    position: absolute;
-    right: 12px;
-    top: 10px;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8rem;
-    font-weight: 900;
-    color: #fff;
-    background: linear-gradient(135deg, #0073ff 0%, #00c2ff 100%);
-}}
-
-.wm-company-head {{
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 8px;
-    min-height: 26px;
-}}
-
-.wm-company-logo {{
-    width: 22px;
-    height: 22px;
-    object-fit: contain;
-}}
-
-.wm-company-name {{
-    font-size: 1rem;
-    font-weight: 760;
-    color: {text_color};
-}}
-
-.wm-company-value {{
-    font-size: 1.6rem;
-    font-weight: 900;
-    line-height: 1.1;
-    color: var(--wm-color, #0073ff);
-    margin-top: 5px;
-}}
-
-.wm-company-yoy {{
-    font-size: 0.8rem;
-    font-weight: 700;
-    margin-top: 3px;
-}}
-
-.wm-more-indicator {{
-    flex: 0 0 120px;
-    min-width: 120px;
-    max-width: 120px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0,115,255,0.08);
-    border: 2px dashed rgba(0,115,255,0.35);
-    border-radius: 14px;
-    cursor: default;
-}}
-
-.wm-more-arrow {{
-    font-size: 2rem;
-    color: #0073ff;
-    font-weight: 900;
-}}
-
-.wm-more-label {{
-    font-size: 0.75rem;
-    color: #0073ff;
-    text-align: center;
-    margin-top: 6px;
-    font-weight: 700;
-    line-height: 1.35;
-}}
-
-.wm-company-caption {{
-    margin-top: 5px;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.09em;
-    color: {muted_color};
-    font-weight: 650;
-}}
-
-.wm-cta {{
-    margin-top: 34px;
-    border-radius: 18px;
-    border: 1px solid {border_color};
-    padding: 28px 26px;
-    background: linear-gradient(140deg, {'#182235' if is_dark else '#f8fbff'} 0%, {'#0f172a' if is_dark else '#e8f0ff'} 100%);
-}}
-
-.wm-cta-title {{
+}
+.beat-headline {
+    color: white;
     font-size: 1.55rem;
-    font-weight: 820;
-    color: {'#F8FAFC' if is_dark else '#0f172a'};
-    margin: 0 0 8px;
-}}
-
-.wm-cta-text {{
-    font-size: 0.98rem;
-    line-height: 1.55;
-    color: {'#cbd5e1' if is_dark else '#475569'};
-    margin: 0 0 16px;
-}}
-
-.wm-cta-actions {{
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}}
-
-.wm-cta-btn {{
-    display: inline-block;
-    text-decoration: none !important;
-    border-radius: 10px;
-    padding: 11px 16px;
-    color: #fff !important;
     font-weight: 700;
-    font-size: 0.92rem;
-    background: linear-gradient(135deg, #0073ff 0%, #00c2ff 100%);
-}}
-
-.wm-cta-btn.wm-ghost {{
-    color: {'#f8fafc' if is_dark else '#0f172a'} !important;
-    background: {'rgba(255,255,255,0.12)' if is_dark else 'rgba(0,115,255,0.12)'};
-    border: 1px solid {border_color};
-}}
-
-.wm-foot {{
-    margin-top: 32px;
-    padding-top: 14px;
-    border-top: 1px solid {border_color};
-    color: {muted_color};
-    font-size: 0.84rem;
+    line-height: 1.25;
+    margin-bottom: 20px;
+    display: block;
+}
+.beat-body {
+    color: rgba(255,255,255,0.6);
+    font-size: 1rem;
+    line-height: 1.8;
+    margin-bottom: 20px;
+}
+.kpi-card {
+    background: rgba(30, 60, 100, 0.35);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 28px 20px;
     text-align: center;
-}}
-
-.wm-pulse-strip {{
+    margin-bottom: 8px;
+}
+.ticker-val {
+    color: #ff5b1f;
+    font-family: monospace;
+    font-size: 1.6rem;
+    font-weight: 800;
+}
+.sub-row {
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.wm-mini-logo {
+    width: 42px;
+    height: 42px;
+    object-fit: contain;
+    border-radius: 50%;
+    background: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.26);
+    padding: 4px;
+}
+.wm-pulse-strip,
+.wm-stock-strip {
     width: 100%;
     overflow: hidden;
     border-radius: 12px;
-    border: 1px solid rgba(148,163,184,0.25);
-    background: #060b14;
-    padding: 12px 0;
-}}
-
-.wm-pulse-track {{
+    border: 1px solid rgba(148,163,184,0.24);
+    background: rgba(6,11,20,0.92);
+    padding: 10px 0;
+}
+.wm-stock-strip {
+    padding: 7px 0;
+}
+.wm-pulse-track,
+.wm-stock-track {
     display: flex;
     align-items: stretch;
     gap: 12px;
     width: max-content;
     animation: wmPulseScroll 42s linear infinite;
-}}
-
-.wm-pulse-item {{
+}
+.wm-stock-track {
+    animation-duration: 36s;
+}
+.wm-pulse-item {
     width: min(420px, 82vw);
     flex: 0 0 auto;
     border-radius: 10px;
     border: 1px solid rgba(148,163,184,0.22);
     background: rgba(15,23,42,0.72);
     padding: 10px 12px;
-}}
-
-.wm-pulse-quote {{
+}
+.wm-stock-item {
+    width: min(300px, 78vw);
+    flex: 0 0 auto;
+    border-radius: 10px;
+    border: 1px solid rgba(148,163,184,0.22);
+    background: rgba(15,23,42,0.72);
+    padding: 7px 10px;
+}
+.wm-pulse-quote {
     color: #e2e8f0;
     font-style: italic;
     font-size: 0.85rem;
     line-height: 1.45;
-}}
-
-.wm-pulse-meta {{
+}
+.wm-pulse-meta,
+.wm-stock-meta {
     margin-top: 8px;
     display: inline-flex;
     align-items: center;
     gap: 8px;
     font-size: 0.75rem;
-}}
-
-.wm-pulse-meta .wm-mini-logo {{
-    width: 96px;
-    height: 96px;
-    max-width: 100%;
-    border-radius: 50%;
-    object-fit: contain;
-    background: rgba(148, 163, 184, 0.16);
-    border: 1px solid rgba(148, 163, 184, 0.3);
-    padding: 6px;
-    flex-shrink: 0;
-}}
-
-.wm-pulse-company {{
+}
+.wm-stock-meta {
+    margin-top: 0;
+}
+.wm-pulse-company {
     color: #FFFFFF !important;
     font-weight: 700;
-}}
-
-.wm-pulse-speaker {{
+}
+.wm-pulse-speaker {
     color: rgba(255,255,255,0.75) !important;
-}}
-
-@keyframes wmPulseScroll {{
-    from {{ transform: translateX(0); }}
-    to {{ transform: translateX(-50%); }}
-}}
-
-@media (max-width: 768px) {{
-    .wm-wrap {{ padding: 0 6px 24px; }}
-    .wm-hero {{ padding: 28px 20px; }}
-    .wm-title {{ font-size: 2rem; }}
-    .wm-insight-grid {{ grid-template-columns: 1fr; }}
-    .wm-kpi-grid {{ grid-template-columns: 1fr; }}
-}}
+}
+.wm-stock-price {
+    margin-left: auto;
+    color: #ffffff !important;
+    font-family: monospace;
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+.wm-stock-change {
+    color: rgba(255,255,255,0.64) !important;
+    font-size: 0.72rem;
+}
+.wm-foot {
+    margin-top: 32px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(148,163,184,0.25);
+    color: rgba(255,255,255,0.45);
+    font-size: 0.84rem;
+    text-align: center;
+}
+.gateway-btn-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 24px;
+}
+@keyframes wmPulseScroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+@media (max-width: 768px) {
+    .wm-wrap { padding: 0 6px 24px; }
+}
 </style>
 """,
     unsafe_allow_html=True,
@@ -2050,94 +1600,39 @@ selected_quarter = _select_latest_quarter_for_year(macro_df, effective_year)
 st.components.v1.html(
     """
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('is-visible');
-      }
-    });
-  }, { threshold: 0.12 });
-  document.querySelectorAll('.scroll-reveal').forEach(el => observer.observe(el));
+const _revealObs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) e.target.classList.add('sv-visible');
+  });
+}, { threshold: 0.08 });
+document.querySelectorAll('.sv').forEach(el => _revealObs.observe(el));
 
-  window._tickerStart = Date.now();
-  function updateTickers() {
-    const elapsed = (Date.now() - window._tickerStart) / 1000;
+function _startTicker() {
+  const els = document.querySelectorAll('[data-rps]');
+  if (!els.length) { setTimeout(_startTicker, 300); return; }
+  const t0 = Date.now();
+  setInterval(() => {
+    const elapsed = (Date.now() - t0) / 1000;
     document.querySelectorAll('[data-rps]').forEach(el => {
       const rps = parseFloat(el.getAttribute('data-rps'));
-      const val = rps * elapsed;
-      el.textContent = '$' + val.toLocaleString('en-US', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-      });
+      el.textContent = '$' + (rps * elapsed).toLocaleString('en-US',
+        {minimumFractionDigits:0, maximumFractionDigits:0});
     });
-  }
-  setInterval(updateTickers, 100);
-});
+  }, 120);
+}
+_startTicker();
 </script>
-<style>
-.scroll-reveal {
-  opacity: 0;
-  transform: translateY(28px);
-  transition: opacity 0.75s cubic-bezier(.4,0,.2,1),
-              transform 0.75s cubic-bezier(.4,0,.2,1);
-}
-.scroll-reveal.is-visible { opacity: 1; transform: translateY(0); }
-.story-beat {
-  background: rgba(37, 99, 235, 0.14);
-  border: 1px solid rgba(37, 99, 235, 0.25);
-  border-radius: 12px;
-  padding: 48px 40px;
-  margin-bottom: 32px;
-}
-.kpi-card {
-  background: rgba(37, 99, 235, 0.18);
-  border: 1px solid rgba(37, 99, 235, 0.3);
-  border-radius: 12px;
-  padding: 28px 20px;
-  text-align: center;
-}
-.beat-label {
-  color: #ff5b1f;
-  font-size: 0.75rem;
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
-  margin-bottom: 12px;
-}
-.beat-headline {
-  color: white;
-  font-size: 1.6rem;
-  font-weight: 700;
-  line-height: 1.3;
-  margin-bottom: 16px;
-}
-.beat-body {
-  color: rgba(255,255,255,0.6);
-  font-size: 1rem;
-  line-height: 1.8;
-}
-.ticker-val {
-  color: #ff5b1f;
-  font-family: monospace;
-  font-size: 1.8rem;
-  font-weight: 800;
-}
-</style>
 """,
     height=0,
 )
 
 
 def _yr(df, year, year_col="year"):
-    if df is None or df.empty or year_col not in df.columns:
-        return pd.DataFrame()
-    series = pd.to_numeric(df[year_col], errors="coerce")
-    row = df[series == int(year)]
-    if row.empty:
-        valid = series.dropna()
-        if valid.empty:
-            return pd.DataFrame()
-        row = df[series == int(valid.max())]
+    row = df[df[year_col] == year] if (df is not None and not df.empty and year_col in df.columns) else pd.DataFrame()
+    if row.empty and isinstance(df, pd.DataFrame) and not df.empty and year_col in df.columns:
+        max_year = pd.to_numeric(df[year_col], errors="coerce").max()
+        if pd.notna(max_year):
+            row = df[pd.to_numeric(df[year_col], errors="coerce") == int(max_year)]
     return row
 
 
@@ -2148,24 +1643,20 @@ def _yoy(current, previous):
 
 
 def _yoy_vec(current_series, prev_series):
-    current = pd.to_numeric(current_series, errors="coerce")
-    previous = pd.to_numeric(prev_series, errors="coerce")
-    return ((current - previous) / previous * 100).where(previous > 0, np.nan)
+    return ((pd.to_numeric(current_series, errors="coerce") - pd.to_numeric(prev_series, errors="coerce"))
+            / pd.to_numeric(prev_series, errors="coerce") * 100).where(pd.to_numeric(prev_series, errors="coerce") > 0, np.nan)
 
 
 def _yoy_html(yoy):
-    if yoy is None:
+    if yoy is None or pd.isna(yoy):
         return ""
     arrow = "▲" if yoy >= 0 else "▼"
     color = "#22c55e" if yoy >= 0 else "#ef4444"
-    return (
-        f'<span style="color:{color};font-size:0.85rem;">'
-        f"{arrow} {abs(yoy):.1f}% YoY</span>"
-    )
+    return f'<span style="color:{color};font-size:0.85rem;">{arrow} {abs(float(yoy)):.1f}% YoY</span>'
 
 
 def _comment_growth(metric_name, yoy):
-    if yoy is None:
+    if yoy is None or pd.isna(yoy):
         return ""
     if yoy >= 15:
         return f"{metric_name} surged <strong style='color:#22c55e;'>+{yoy:.1f}%</strong> — an exceptional year."
@@ -2178,36 +1669,118 @@ def _comment_growth(metric_name, yoy):
     return f"{metric_name} contracted sharply <strong style='color:#ef4444;'>{yoy:.1f}%</strong> — a difficult macro year."
 
 
-def _beat(content_fn, label=None, headline=None):
-    parts = ["<div class='scroll-reveal story-beat'>"]
-    if label:
-        parts.append(f"<div class='beat-label'>{escape(str(label))}</div>")
-    if headline:
-        parts.append(f"<div class='beat-headline'>{escape(str(headline))}</div>")
-    st.markdown("".join(parts), unsafe_allow_html=True)
-    content_fn()
-    st.markdown("</div>", unsafe_allow_html=True)
+def _beat_header(label, headline):
+    st.markdown(
+        f"<div class='sv'>"
+        f"<span class='beat-label' style='color:#ff5b1f;'>{escape(str(label))}</span>"
+        f"<span class='beat-headline' style='color:#ffffff;'>{escape(str(headline))}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 
-def _find_groupm_col(df: pd.DataFrame, include_terms: list[str], exclude_terms: Optional[list[str]] = None) -> str:
+def _beat_body(text):
+    st.markdown(
+        f"<div class='beat-body' style='color:rgba(255,255,255,0.6);'>{text}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _beat_divider():
+    st.markdown("<hr class='beat-divider'>", unsafe_allow_html=True)
+
+
+def _kpi_card(title, value_str, yoy_html, subtitle):
+    return f"""
+    <div class="kpi-card">
+      <div style="color:rgba(255,255,255,0.4);font-size:0.72rem;
+                  letter-spacing:0.12em;text-transform:uppercase;
+                  margin-bottom:10px;">{escape(str(title))}</div>
+      <div style="color:#ff5b1f;font-size:2.2rem;font-weight:900;
+                  font-family:monospace;margin-bottom:8px;">{escape(str(value_str))}</div>
+      <div style="min-height:20px;">{yoy_html}</div>
+      <div style="color:rgba(255,255,255,0.25);font-size:0.7rem;
+                  margin-top:10px;">{escape(str(subtitle))}</div>
+    </div>
+    """
+
+
+def _find_col(df: pd.DataFrame, includes: list[str], excludes: Optional[list[str]] = None) -> str:
     if df is None or df.empty:
         return ""
-    excludes = [str(x).lower() for x in (exclude_terms or [])]
+    excludes = excludes or []
     for col in df.columns:
         norm = re.sub(r"[^a-z0-9]+", "", str(col).lower())
-        if all(term.lower().replace(" ", "") in norm for term in include_terms):
-            if any(ex.lower().replace(" ", "") in norm for ex in excludes):
+        if all(re.sub(r"[^a-z0-9]+", "", x.lower()) in norm for x in includes):
+            if any(re.sub(r"[^a-z0-9]+", "", x.lower()) in norm for x in excludes):
                 continue
             return str(col)
     return ""
 
 
-def _render_transcript_pulse_strip() -> None:
+def _chart_layout(height: int, extra: Optional[dict] = None) -> dict:
+    base = dict(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(10,20,40,0.5)",
+        font=dict(color="white"),
+        height=height,
+    )
+    if extra:
+        base.update(extra)
+    return base
+
+
+def _normalize_market_feed(raw: pd.DataFrame) -> pd.DataFrame:
+    if raw is None or raw.empty:
+        return pd.DataFrame()
+    df = raw.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    date_col = _find_col(df, ["date"]) or _find_col(df, ["time"])
+    price_col = _find_col(df, ["price"]) or _find_col(df, ["close"])
+    tag_col = _find_col(df, ["tag"]) or _find_col(df, ["ticker"]) or _find_col(df, ["symbol"])
+    asset_col = _find_col(df, ["asset"]) or _find_col(df, ["company"]) or _find_col(df, ["name"])
+    change_col = _find_col(df, ["change"]) or _find_col(df, ["chg"])
+    if not date_col or not price_col:
+        return pd.DataFrame()
+    out = pd.DataFrame(
+        {
+            "date": pd.to_datetime(df[date_col], errors="coerce"),
+            "price": pd.to_numeric(df[price_col], errors="coerce"),
+            "tag": df[tag_col].astype(str).str.strip().str.upper() if tag_col else "",
+            "asset": df[asset_col].astype(str).str.strip() if asset_col else "",
+            "change": pd.to_numeric(df[change_col].astype(str).str.replace("%", "", regex=False), errors="coerce") if change_col else np.nan,
+        }
+    )
+    out = out.dropna(subset=["date", "price"]).copy()
+    return out.sort_values("date")
+
+
+def _load_market_feed() -> pd.DataFrame:
+    if not excel_path:
+        return pd.DataFrame()
+    minute_raw = _read_excel_sheet_cached(excel_path, "Minute", source_stamp)
+    daily_raw = _read_excel_sheet_cached(excel_path, "Daily", source_stamp)
+    minute_df = _normalize_market_feed(minute_raw)
+    daily_df = _normalize_market_feed(daily_raw)
+    combined = pd.concat([minute_df, daily_df], ignore_index=True)
+    if combined.empty:
+        return pd.DataFrame()
+    combined = combined.sort_values("date")
+    dedup_keys = ["date"]
+    if "tag" in combined.columns:
+        dedup_keys.append("tag")
+    if "asset" in combined.columns:
+        dedup_keys.append("asset")
+    combined = combined.drop_duplicates(subset=dedup_keys, keep="last")
+    return combined
+
+
+def _render_transcript_pulse_strip(current_year: int, current_quarter: str) -> None:
     pulse_df, pulse_source = _load_transcript_pulse_quotes(
         repo_root_path=str(ROOT_DIR),
         db_path=str(db_path),
-        selected_year=int(effective_year),
-        selected_quarter=selected_quarter,
+        selected_year=int(current_year),
+        selected_quarter=current_quarter,
         limit=5,
     )
     if pulse_df.empty:
@@ -2231,460 +1804,448 @@ def _render_transcript_pulse_strip() -> None:
         logo_html = (
             f"<img class='wm-mini-logo' src='data:image/png;base64,{logo_b64}' alt='{escape(company)} logo' />"
             if logo_b64
-            else "<span class='wm-mini-logo' style='display:inline-flex;align-items:center;justify-content:center;'>•</span>"
+            else "<span class='wm-mini-logo' style='display:inline-flex;align-items:center;justify-content:center;color:#fff;'>•</span>"
         )
         pulse_items.append(
             "<div class='wm-pulse-item'>"
-            f"<div class='wm-pulse-quote'>“{escape(quote)}”</div>"
-            f"<div class='wm-pulse-meta'>{logo_html}<span class='wm-pulse-company'>{escape(company)}</span>"
-            f"<span class='wm-pulse-speaker'>— {escape(speaker)}</span></div>"
+            f"<div class='wm-pulse-quote' style='color:#e2e8f0;'>“{escape(quote)}”</div>"
+            f"<div class='wm-pulse-meta'>{logo_html}<span class='wm-pulse-company' style='color:#fff;'>{escape(company)}</span>"
+            f"<span class='wm-pulse-speaker' style='color:rgba(255,255,255,0.75);'>— {escape(speaker)}</span></div>"
             "</div>"
         )
     if not pulse_items:
         st.info("No transcript data available yet — run the intelligence pipeline first.")
         return
-    track = "".join(pulse_items + pulse_items)
     st.markdown(
-        f"<div class='wm-pulse-strip'><div class='wm-pulse-track'>{track}</div></div>",
+        f"<div class='wm-pulse-strip'><div class='wm-pulse-track'>{''.join(pulse_items + pulse_items)}</div></div>",
         unsafe_allow_html=True,
     )
     if pulse_source:
         st.caption(f"Source: {pulse_source}")
 
 
+def _render_stock_price_strip(feed_df: pd.DataFrame) -> None:
+    if feed_df is None or feed_df.empty:
+        st.info("Market ticker unavailable.")
+        return
+    company_ticker_fallback = {
+        "Alphabet": "GOOGL",
+        "Meta Platforms": "META",
+        "Amazon": "AMZN",
+        "Apple": "AAPL",
+        "Microsoft": "MSFT",
+        "Netflix": "NFLX",
+        "Disney": "DIS",
+        "Comcast": "CMCSA",
+        "Spotify": "SPOT",
+        "Roku": "ROKU",
+        "Warner Bros. Discovery": "WBD",
+        "Paramount Global": "PARA",
+    }
+    items = []
+    for company, ticker in company_ticker_fallback.items():
+        subset = feed_df[feed_df["tag"].astype(str).str.upper() == ticker]
+        if subset.empty:
+            subset = feed_df[feed_df["asset"].astype(str).str.lower().str.contains(company.lower(), na=False)]
+        if subset.empty:
+            continue
+        last = subset.sort_values("date").iloc[-1]
+        price = float(last.get("price", np.nan))
+        if pd.isna(price):
+            continue
+        change = pd.to_numeric(pd.Series([last.get("change", np.nan)]), errors="coerce").iloc[0]
+        change_txt = f"{change:+.2f}%" if pd.notna(change) else "n/a"
+        logo_b64 = _resolve_logo(company, logos)
+        logo_html = (
+            f"<img class='wm-mini-logo' src='data:image/png;base64,{logo_b64}' alt='{escape(company)} logo' />"
+            if logo_b64
+            else "<span class='wm-mini-logo' style='display:inline-flex;align-items:center;justify-content:center;color:#fff;'>•</span>"
+        )
+        items.append(
+            "<div class='wm-stock-item'>"
+            f"<div class='wm-stock-meta'>{logo_html}"
+            f"<span style='color:#fff;font-weight:700;font-size:0.8rem;'>{escape(company)}</span>"
+            f"<span class='wm-stock-price' style='color:#fff;'>${price:,.2f}</span></div>"
+            f"<div class='wm-stock-change' style='color:rgba(255,255,255,0.64);'>{escape(change_txt)} · {escape(ticker)}</div>"
+            "</div>"
+        )
+    if not items:
+        st.info("Market ticker unavailable.")
+        return
+    st.markdown(
+        f"<div class='wm-stock-strip'><div class='wm-stock-track'>{''.join(items + items)}</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
 metrics = metrics_df.copy() if isinstance(metrics_df, pd.DataFrame) else pd.DataFrame()
 if not metrics.empty:
-    metrics["year"] = pd.to_numeric(metrics["year"], errors="coerce").astype("Int64")
-    for col in ["revenue", "operating_income", "market_cap", "rd", "net_income"]:
-        if col in metrics.columns:
-            metrics[col] = pd.to_numeric(metrics[col], errors="coerce")
+    metrics.columns = [str(c).strip() for c in metrics.columns]
+    if "year" in metrics.columns:
+        metrics["year"] = pd.to_numeric(metrics["year"], errors="coerce")
     metrics = metrics.dropna(subset=["year", "company"]).copy()
     metrics["year"] = metrics["year"].astype(int)
+for col in ["revenue", "operating_income", "market_cap", "rd", "net_income"]:
+    if col in metrics.columns:
+        metrics[col] = pd.to_numeric(metrics[col], errors="coerce")
+
+mcap_col = next((c for c in metrics.columns if "market" in c.lower() and "cap" in c.lower()), "market_cap")
+if mcap_col not in metrics.columns and "market_cap" in metrics.columns:
+    mcap_col = "market_cap"
 
 groupm_df = _read_excel_sheet_cached(excel_path, "Global Advertising (GroupM)", source_stamp) if excel_path else pd.DataFrame()
 if not groupm_df.empty:
-    groupm_df = groupm_df.copy()
     groupm_df.columns = [str(c).strip() for c in groupm_df.columns]
-groupm_year_col = _find_groupm_col(groupm_df, ["year"]) if not groupm_df.empty else ""
-groupm_total_col = _find_groupm_col(groupm_df, ["total"]) if not groupm_df.empty else ""
+groupm_year_col = _find_col(groupm_df, ["year"]) if not groupm_df.empty else ""
+groupm_total_col = _find_col(groupm_df, ["total"]) if not groupm_df.empty else ""
 if not groupm_df.empty and groupm_year_col and not groupm_total_col:
-    numeric_cols = []
+    numeric_candidates = []
     for c in groupm_df.columns:
         if c == groupm_year_col:
             continue
-        numeric = pd.to_numeric(groupm_df[c], errors="coerce")
-        if numeric.notna().sum() > 0:
-            numeric_cols.append(c)
-            groupm_df[c] = numeric
-    if numeric_cols:
-        groupm_df["_computed_total"] = groupm_df[numeric_cols].sum(axis=1, min_count=1)
+        vals = pd.to_numeric(groupm_df[c], errors="coerce")
+        if vals.notna().sum() > 0:
+            groupm_df[c] = vals
+            numeric_candidates.append(c)
+    if numeric_candidates:
+        groupm_df["_computed_total"] = groupm_df[numeric_candidates].sum(axis=1, min_count=1)
         groupm_total_col = "_computed_total"
 
 groupm_b = None
 groupm_yoy = None
+effective_year_groupm = effective_year
 if not groupm_df.empty and groupm_year_col and groupm_total_col:
     g_row = _yr(groupm_df, effective_year, groupm_year_col)
-    g_prev = _yr(groupm_df, effective_year - 1, groupm_year_col)
     if not g_row.empty:
+        effective_year_groupm = int(pd.to_numeric(g_row[groupm_year_col], errors="coerce").iloc[0])
         groupm_b = float(pd.to_numeric(g_row[groupm_total_col], errors="coerce").iloc[0])
-        if not g_prev.empty:
-            prev_val = float(pd.to_numeric(g_prev[groupm_total_col], errors="coerce").iloc[0])
-            groupm_yoy = _yoy(groupm_b, prev_val)
+    g_prev = _yr(groupm_df, effective_year_groupm - 1, groupm_year_col)
+    if not g_prev.empty and groupm_b is not None:
+        groupm_prev_b = float(pd.to_numeric(g_prev[groupm_total_col], errors="coerce").iloc[0])
+        groupm_yoy = _yoy(groupm_b, groupm_prev_b)
 
 rev_b = None
 rev_yoy = None
 mcap_b = None
 mcap_yoy = None
-if not metrics.empty:
+if not metrics.empty and "revenue" in metrics.columns and mcap_col in metrics.columns:
     yr = metrics[metrics["year"] == effective_year].copy()
     py = metrics[metrics["year"] == (effective_year - 1)].copy()
     if not yr.empty:
-        rev_m = float(pd.to_numeric(yr.get("revenue", pd.Series(dtype=float)), errors="coerce").sum())
-        mcap_m = float(pd.to_numeric(yr.get("market_cap", pd.Series(dtype=float)), errors="coerce").sum())
+        rev_m = float(pd.to_numeric(yr["revenue"], errors="coerce").sum())
+        mcap_m = float(pd.to_numeric(yr[mcap_col], errors="coerce").sum())
         rev_b = rev_m / 1e3 if rev_m else None
         mcap_b = mcap_m / 1e3 if mcap_m else None
         if not py.empty:
-            prev_rev_m = float(pd.to_numeric(py.get("revenue", pd.Series(dtype=float)), errors="coerce").sum())
-            prev_mcap_m = float(pd.to_numeric(py.get("market_cap", pd.Series(dtype=float)), errors="coerce").sum())
+            prev_rev_m = float(pd.to_numeric(py["revenue"], errors="coerce").sum())
+            prev_mcap_m = float(pd.to_numeric(py[mcap_col], errors="coerce").sum())
             rev_yoy = _yoy(rev_m, prev_rev_m)
             mcap_yoy = _yoy(mcap_m, prev_mcap_m)
 
+ad_df = _load_company_ad_revenue_sheet(excel_path, source_stamp) if excel_path else pd.DataFrame()
+if not ad_df.empty:
+    ad_df = ad_df.copy()
+    ad_df.columns = [str(c).replace("*", "").strip() for c in ad_df.columns]
+    if "Year" in ad_df.columns:
+        ad_df["Year"] = pd.to_numeric(ad_df["Year"], errors="coerce").astype("Int64")
 ad_lookup = _load_ad_revenue_by_company(excel_path, source_stamp, effective_year) if excel_path else {}
 total_tracked_musd = float(sum(float(v.get("ad_revenue_musd", 0.0)) for v in ad_lookup.values()))
 total_tracked_b = total_tracked_musd / 1e3 if total_tracked_musd else 0.0
-big_tech = ["Alphabet", "Meta Platforms", "Amazon", "Apple", "Microsoft"]
-big_tech_musd = float(sum(float(ad_lookup.get(c, {}).get("ad_revenue_musd", 0.0)) for c in big_tech))
-big_tech_b = big_tech_musd / 1e3 if big_tech_musd else 0.0
+big_tech_names = ["Alphabet", "Meta Platforms", "Amazon", "Apple", "Microsoft"]
+big_tech_b = sum(float(ad_lookup.get(c, {}).get("ad_revenue_musd", 0.0)) for c in big_tech_names) / 1e3
 other_b = max(total_tracked_b - big_tech_b, 0.0)
 global_ad_denom = groupm_b if groupm_b else total_tracked_b
 untracked_b = max((global_ad_denom or 0) - total_tracked_b, 0.0)
+market_feed_df = _load_market_feed()
 
-# Screen 1
+# Screen 1 — Hero
 st.markdown(
     """
 <div style="
-  background: linear-gradient(135deg, rgba(37,99,235,0.2) 0%, #0a0a0a 100%);
-  color:white; padding:120px 60px; text-align:center;
-  border-radius:16px; margin-bottom:32px;
+  background: linear-gradient(160deg, #0d1117 0%, #0f1f35 60%, #0d1117 100%);
+  color: white;
+  padding: 100px 48px 80px;
+  text-align: center;
+  border-radius: 16px;
+  margin: -16px -16px 0 -16px;
 ">
-  <div class="beat-label">The Attention Economy</div>
-  <div style="font-size:3.8rem;font-weight:900;line-height:1.1;margin-bottom:24px;">
+  <div style="color:#ff5b1f;font-size:0.72rem;letter-spacing:0.3em;
+              text-transform:uppercase;margin-bottom:16px;">
+    The Attention Economy
+  </div>
+  <div style="font-size:clamp(2rem,5vw,3.8rem);font-weight:900;
+              line-height:1.1;margin-bottom:20px;color:white;">
     14 companies.<br>One dashboard.
   </div>
-  <div style="color:rgba(255,255,255,0.35);font-size:1rem;letter-spacing:0.08em;">
+  <div style="color:rgba(255,255,255,0.3);font-size:0.95rem;
+              letter-spacing:0.1em;">
     ↓ Scroll to explore
   </div>
 </div>
 """,
     unsafe_allow_html=True,
 )
+_beat_divider()
 
+# Screen 2 — KPI strip + comment
+_beat_header("The Scale", f"The world's attention, in numbers — {effective_year}")
+k1, k2, k3 = st.columns(3)
+with k1:
+    st.markdown(_kpi_card("Global Ad Spend", f"${groupm_b:.0f}B" if groupm_b else "—", _yoy_html(groupm_yoy), f"{effective_year_groupm} · GroupM"), unsafe_allow_html=True)
+with k2:
+    rev_display = f"${(rev_b/1e3):.1f}T" if rev_b and rev_b >= 1000 else (f"${rev_b:.0f}B" if rev_b else "—")
+    st.markdown(_kpi_card("Tracked Revenue", rev_display, _yoy_html(rev_yoy), f"{effective_year} · 14 companies"), unsafe_allow_html=True)
+with k3:
+    mcap_display = f"${(mcap_b/1e3):.1f}T" if mcap_b and mcap_b >= 1000 else (f"${mcap_b:.0f}B" if mcap_b else "—")
+    st.markdown(_kpi_card("Combined Market Cap", mcap_display, _yoy_html(mcap_yoy), f"{effective_year} · 14 companies"), unsafe_allow_html=True)
+parts = []
+if groupm_b:
+    parts.append(f"In {effective_year_groupm}, the world spent <strong style='color:white;'>${groupm_b:.0f}B</strong> on advertising.")
+if rev_yoy is not None:
+    parts.append(_comment_growth("Tracked company revenues", rev_yoy))
+if mcap_yoy is not None:
+    if mcap_yoy >= 15:
+        parts.append(f"Markets rewarded them: combined market cap surged <strong style='color:#22c55e;'>+{mcap_yoy:.1f}%</strong>.")
+    elif mcap_yoy >= 0:
+        parts.append(f"Markets were measured: combined market cap rose <strong style='color:#22c55e;'>+{mcap_yoy:.1f}%</strong>.")
+    else:
+        parts.append(f"Markets were skeptical: combined market cap fell <strong style='color:#ef4444;'>{mcap_yoy:.1f}%</strong>.")
+if parts:
+    _beat_body(" ".join(parts))
+_beat_divider()
 
-# Screen 2
-def _screen2():
-    col1, col2, col3 = st.columns(3)
-    rev_display = "—"
-    if rev_b is not None:
-        rev_display = f"${(rev_b / 1e3):.1f}T" if rev_b >= 1000 else f"${rev_b:.0f}B"
-    mcap_display = "—"
-    if mcap_b is not None:
-        mcap_display = f"${(mcap_b / 1e3):.1f}T" if mcap_b >= 1000 else f"${mcap_b:.0f}B"
-    cards = [
-        ("Global Ad Spend", f"${groupm_b:.0f}B" if groupm_b is not None else "—", _yoy_html(groupm_yoy), f"{effective_year} · GroupM"),
-        ("Tracked Revenue", rev_display, _yoy_html(rev_yoy), f"{effective_year} · 14 companies"),
-        ("Combined Market Cap", mcap_display, _yoy_html(mcap_yoy), f"{effective_year} · 14 companies"),
-    ]
-    for col, (title, val, yoy_html, sub) in zip([col1, col2, col3], cards):
-        with col:
-            st.markdown(
-                f"""
-                <div class="kpi-card">
-                  <div style="color:rgba(255,255,255,0.45);font-size:0.75rem;
-                              letter-spacing:0.1em;text-transform:uppercase;
-                              margin-bottom:8px;">{escape(title)}</div>
-                  <div style="color:white;font-size:2.2rem;font-weight:900;
-                              font-family:monospace;margin-bottom:6px;">{escape(val)}</div>
-                  {yoy_html}
-                  <div style="color:rgba(255,255,255,0.3);font-size:0.7rem;
-                              margin-top:8px;">{escape(sub)}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    parts = []
-    if groupm_b is not None:
-        parts.append(
-            f"In {effective_year}, the world spent <strong style='color:white;'>${groupm_b:.0f}B</strong> on advertising."
-        )
-    if rev_yoy is not None:
-        parts.append(_comment_growth("Tracked company revenues", rev_yoy))
-    if mcap_yoy is not None:
-        if mcap_yoy >= 15:
-            parts.append(
-                f"Markets rewarded them: combined market cap surged <strong style='color:#22c55e;'>+{mcap_yoy:.1f}%</strong>."
-            )
-        elif mcap_yoy >= 0:
-            parts.append(
-                f"Markets were measured: combined market cap rose <strong style='color:#22c55e;'>+{mcap_yoy:.1f}%</strong>."
-            )
-        else:
-            parts.append(
-                f"Markets were skeptical: combined market cap fell <strong style='color:#ef4444;'>{mcap_yoy:.1f}%</strong>."
-            )
-    if parts:
-        st.markdown(
-            f"<div class='beat-body' style='margin-top:24px;'>{' '.join(parts)}</div>",
-            unsafe_allow_html=True,
-        )
-
-
-_beat(_screen2, label="The Scale", headline=f"The world's attention, in numbers — {effective_year}")
-
-
-# Screen 3
-def _screen3():
-    try:
-        country_df = _read_excel_sheet_cached(excel_path, "Country_Totals_vs_GDP", source_stamp) if excel_path else pd.DataFrame()
-        if country_df.empty:
-            st.info("Global map unavailable — open Overview to see the full map.")
-            return
-        country_df = country_df.copy()
+# Screen 3 — Global map
+_beat_header("The World", "Every dollar. Every country. One map.")
+if groupm_b:
+    st.markdown(
+        f"""
+        <div style="
+          background: linear-gradient(90deg,rgba(255,91,31,0.12),transparent);
+          border-left: 3px solid #ff5b1f;
+          padding: 16px 20px;
+          border-radius: 0 8px 8px 0;
+          margin-bottom: 20px;
+        ">
+          <span style="color:white;font-size:1.4rem;font-weight:700;">
+            ${groupm_b:.0f}B
+          </span>
+          <span style="color:rgba(255,255,255,0.5);font-size:0.9rem;margin-left:10px;">
+            total global ad spend in {effective_year_groupm} — Source: GroupM
+          </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+try:
+    country_df = _read_excel_sheet_cached(excel_path, "Country_Totals_vs_GDP", source_stamp) if excel_path else pd.DataFrame()
+    if country_df.empty:
+        st.info("Global map unavailable.")
+    else:
         country_df.columns = [str(c).strip() for c in country_df.columns]
-        country_col = ""
-        for candidate in country_df.columns:
-            if re.sub(r"[^a-z0-9]+", "", candidate.lower()) in {"country", "countryname"}:
-                country_col = candidate
-                break
-        year_col = ""
-        for candidate in country_df.columns:
-            if "year" in candidate.lower():
-                year_col = candidate
-                break
-        value_col = ""
-        preferred = ["ad_vs_gdp_%", "ad_vs_gdp", "adspendpctgdp", "ad_share_gdp"]
-        norm_map = {re.sub(r"[^a-z0-9]+", "", c.lower()): c for c in country_df.columns}
-        for key in preferred:
-            if key in norm_map:
-                value_col = norm_map[key]
-                break
-        if not value_col:
-            numeric_candidates = []
-            for c in country_df.columns:
-                if c in {country_col, year_col}:
-                    continue
-                numeric = pd.to_numeric(country_df[c], errors="coerce")
-                if numeric.notna().sum() > 0:
-                    numeric_candidates.append(c)
-            value_col = numeric_candidates[0] if numeric_candidates else ""
+        country_col = _find_col(country_df, ["country"]) or _find_col(country_df, ["name"])
+        year_col = _find_col(country_df, ["year"])
+        value_col = _find_col(country_df, ["ad", "gdp"]) or _find_col(country_df, ["value"])
+        scoped_map = _yr(country_df, effective_year, year_col) if year_col else country_df.copy()
+        if scoped_map.empty or not country_col or not value_col:
+            st.info("Global map unavailable.")
+        else:
+            scoped_map[value_col] = pd.to_numeric(scoped_map[value_col], errors="coerce")
+            scoped_map = scoped_map.dropna(subset=[country_col, value_col]).copy()
+            if scoped_map.empty:
+                st.info("Global map unavailable.")
+            else:
+                map_fig = px.choropleth(
+                    scoped_map,
+                    locations=country_col,
+                    locationmode="country names",
+                    color=value_col,
+                    color_continuous_scale="Blues",
+                )
+                map_fig.update_layout(
+                    **_chart_layout(
+                        470,
+                        dict(
+                            geo=dict(showframe=False, showcoastlines=False, projection_type="natural earth"),
+                            margin=dict(l=0, r=0, t=8, b=0),
+                        ),
+                    )
+                )
+                st.plotly_chart(map_fig, use_container_width=True)
+except Exception:
+    st.info("Global map unavailable.")
+st.caption("Map shows advertising spend by country as a % of GDP. Darker = higher ad market intensity.")
+_beat_divider()
 
-        if not country_col or not value_col:
-            st.info("Global map unavailable — open Overview to see the full map.")
-            return
-
-        scoped = country_df.copy()
-        if year_col:
-            scoped = _yr(country_df, effective_year, year_col)
-        if scoped.empty:
-            st.info("Global map unavailable — open Overview to see the full map.")
-            return
-        scoped[value_col] = pd.to_numeric(scoped[value_col], errors="coerce")
-        scoped = scoped.dropna(subset=[country_col, value_col]).copy()
-        if scoped.empty:
-            st.info("Global map unavailable — open Overview to see the full map.")
-            return
-
-        fig = px.choropleth(
-            scoped,
-            locations=country_col,
-            locationmode="country names",
-            color=value_col,
-            color_continuous_scale="Blues",
-            labels={value_col: "Ad vs GDP %"},
-        )
-        fig.update_layout(
-            geo=dict(showframe=False, showcoastlines=False, projection_type="natural earth"),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            margin=dict(l=0, r=0, t=8, b=0),
-            height=460,
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    except Exception:
-        st.info("Global map unavailable — open Overview to see the full map.")
-
-
-_beat(_screen3, label="The World", headline="Every country. Every dollar. One map.")
-
-
-# Screen 4
-def _screen4():
-    if total_tracked_b <= 0 and (groupm_b is None or groupm_b <= 0):
-        st.info("Ad revenue data not available.")
-        return
+# Screen 4 — Big Tech vs world
+_beat_header("The Concentration", "Most of it went to very few hands.")
+if total_tracked_b <= 0 and (groupm_b is None or groupm_b <= 0):
+    st.info("Ad revenue data not available.")
+else:
     import plotly.graph_objects as go
-
     denom = global_ad_denom if global_ad_denom else total_tracked_b
-    segments = [
+    bar_fig = go.Figure()
+    for name, val, color in [
         ("Big Tech (Alphabet, Meta, Amazon, Apple, Microsoft)", big_tech_b, "#ff5b1f"),
         ("Other Tracked Companies", other_b, "#3b82f6"),
         ("Rest of World (untracked)", untracked_b, "#1f2937"),
-    ]
-    fig = go.Figure()
-    for name, val, color in segments:
+    ]:
         pct = (val / denom * 100) if denom else 0
-        fig.add_trace(
+        bar_fig.add_trace(
             go.Bar(
-                x=[val],
-                y=[""],
-                name=name,
-                orientation="h",
+                x=[val], y=[""], name=name, orientation="h",
                 marker=dict(color=color),
                 customdata=[[pct]],
                 text=f"${val:.0f}B  {pct:.1f}%" if pct > 7 else "",
                 textposition="inside",
-                insidetextanchor="middle",
-                textfont=dict(color="white", size=11),
                 hovertemplate=f"{name}: $%{{x:.0f}}B — %{{customdata[0]:.1f}}% of global<extra></extra>",
             )
         )
-    fig.update_layout(
-        barmode="stack",
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="top", y=-0.3, font=dict(color="white", size=11)),
-        xaxis=dict(visible=False),
-        yaxis=dict(visible=False),
-        margin=dict(l=0, r=0, t=8, b=100),
-        height=160,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="white"),
+    bar_fig.update_layout(
+        **_chart_layout(
+            170,
+            dict(
+                barmode="stack",
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="top", y=-0.32, font=dict(color="white", size=11)),
+                margin=dict(l=0, r=0, t=8, b=100),
+            ),
+        )
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(bar_fig, use_container_width=True)
     big_pct = (big_tech_b / denom * 100) if denom else 0
     tracked_pct = (total_tracked_b / denom * 100) if denom else 0
     st.caption(
-        f"Of the ${denom:.0f}B spent globally on advertising in {effective_year}, "
+        f"Of the ${denom:.0f}B spent globally on advertising in {effective_year_groupm}, "
         f"just 5 Big Tech companies captured ${big_tech_b:.0f}B ({big_pct:.1f}%). "
         f"Our full tracked universe held ${total_tracked_b:.0f}B ({tracked_pct:.1f}% of global). "
         f"The remaining ${untracked_b:.0f}B went to thousands of other publishers worldwide."
     )
+_beat_divider()
 
-
-_beat(_screen4, label="The Concentration", headline="Most of it went to very few hands.")
-
-
-# Screen 5
-def _screen5():
-    try:
-        if metrics.empty:
-            st.info("Revenue treemap unavailable.")
-            return
-        yr_df = metrics[metrics["year"] == effective_year].copy()
-        if yr_df.empty:
-            st.info("Revenue treemap unavailable.")
-            return
-        prev_df = metrics[metrics["year"] == (effective_year - 1)][["company", "revenue"]].rename(columns={"revenue": "prev_rev"})
-        yr_df = yr_df.merge(prev_df, on="company", how="left")
-        yr_df["rev_yoy"] = _yoy_vec(yr_df["revenue"], yr_df["prev_rev"])
-        yr_df["revenue_b"] = pd.to_numeric(yr_df["revenue"], errors="coerce") / 1e3
-        yr_df = yr_df.dropna(subset=["company", "revenue_b"]).copy()
-        if yr_df.empty:
-            st.info("Revenue treemap unavailable.")
-            return
-        fig = px.treemap(
-            yr_df,
-            path=["company"],
-            values="revenue_b",
-            color="rev_yoy",
-            color_continuous_scale=["#ef4444", "#1f2937", "#22c55e"],
-            color_continuous_midpoint=0,
-            custom_data=["rev_yoy", "revenue_b"],
-            title=f"Revenue by Company — {effective_year}",
-        )
-        fig.update_traces(
-            hovertemplate=(
-                "<b>%{label}</b><br>"
-                "Revenue: $%{customdata[1]:.0f}B<br>"
-                "YoY: %{customdata[0]:+.1f}%<extra></extra>"
-            ),
-            textfont=dict(color="white"),
-        )
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            height=400,
-            margin=dict(l=0, r=0, t=40, b=0),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption("Rectangle size = total revenue. Color = YoY growth (green = growth, red = decline). Hover for details.")
-    except Exception:
+# Screen 5 — Revenue treemap
+_beat_header("The Revenue Map", "Not all revenue is equal. See who grew.")
+try:
+    if metrics.empty or "revenue" not in metrics.columns:
         st.info("Revenue treemap unavailable.")
+    else:
+        treemap_df = metrics[metrics["year"] == effective_year].copy()
+        prev_df = metrics[metrics["year"] == (effective_year - 1)][["company", "revenue"]].rename(columns={"revenue": "prev_rev"})
+        treemap_df = treemap_df.merge(prev_df, on="company", how="left")
+        treemap_df["revenue_b"] = pd.to_numeric(treemap_df["revenue"], errors="coerce") / 1e3
+        treemap_df["rev_yoy"] = _yoy_vec(treemap_df["revenue"], treemap_df["prev_rev"])
+        treemap_df = treemap_df.dropna(subset=["company", "revenue_b"])
+        if treemap_df.empty:
+            st.info("Revenue treemap unavailable.")
+        else:
+            t_fig = px.treemap(
+                treemap_df,
+                path=["company"],
+                values="revenue_b",
+                color="rev_yoy",
+                color_continuous_scale=["#ef4444", "#1f2937", "#22c55e"],
+                color_continuous_midpoint=0,
+                custom_data=["rev_yoy", "revenue_b"],
+                title=f"Revenue by Company — {effective_year}",
+            )
+            t_fig.update_traces(
+                hovertemplate="<b>%{label}</b><br>Revenue: $%{customdata[1]:.0f}B<br>YoY: %{customdata[0]:+.1f}%<extra></extra>",
+                textfont=dict(color="white"),
+            )
+            t_fig.update_layout(**_chart_layout(420, dict(margin=dict(l=0, r=0, t=46, b=0))))
+            st.plotly_chart(t_fig, use_container_width=True)
+            st.caption("Rectangle size = total revenue. Color = YoY growth (green = growth, red = decline). Hover for details.")
+except Exception:
+    st.info("Revenue treemap unavailable.")
+_beat_divider()
 
-
-_beat(_screen5, label="The Revenue Map", headline="Not all revenue is equal. See who grew.")
-
-
-# Screen 6
-def _screen6():
-    try:
-        import plotly.graph_objects as go
-
-        if metrics.empty:
-            st.info("Ad dependency chart unavailable.")
-            return
-        yr_metrics = metrics[metrics["year"] == effective_year].copy()
-        if yr_metrics.empty:
-            st.info("Ad dependency chart unavailable.")
-            return
-        rows = []
-        for _, m_row in yr_metrics.iterrows():
-            company = str(m_row.get("company", ""))
-            total_rev = float(pd.to_numeric(pd.Series([m_row.get("revenue", np.nan)]), errors="coerce").iloc[0] or 0.0)
-            ad_rev_musd = float(ad_lookup.get(company, {}).get("ad_revenue_musd", 0.0))
-            ad_pct = (ad_rev_musd / total_rev * 100) if total_rev > 0 else 0.0
-            rows.append(
+# Screen 6 — Ad dependency
+_beat_header("The Dependency", "Some live and die by advertising. Others barely care.")
+try:
+    import plotly.graph_objects as go
+    if metrics.empty or "revenue" not in metrics.columns:
+        st.info("Ad dependency chart unavailable.")
+    else:
+        dep_rows = []
+        for _, row in metrics[metrics["year"] == effective_year].iterrows():
+            company = str(row.get("company", ""))
+            total_rev = float(pd.to_numeric(pd.Series([row.get("revenue", np.nan)]), errors="coerce").iloc[0] or 0.0)
+            ad_rev = float(ad_lookup.get(company, {}).get("ad_revenue_musd", 0.0))
+            ad_pct = min((ad_rev / total_rev * 100) if total_rev > 0 else 0.0, 100.0)
+            dep_rows.append(
                 {
                     "company": company,
-                    "ad_pct": min(max(ad_pct, 0.0), 100.0),
-                    "non_ad_pct": max(100.0 - min(max(ad_pct, 0.0), 100.0), 0.0),
-                    "ad_rev_b": ad_rev_musd / 1e3,
+                    "ad_pct": ad_pct,
+                    "non_ad_pct": max(100 - ad_pct, 0),
+                    "ad_rev_b": ad_rev / 1e3,
                     "total_rev_b": total_rev / 1e3,
                 }
             )
-        if not rows:
+        dep_rows = [r for r in dep_rows if r["company"]]
+        if not dep_rows:
             st.info("Ad dependency chart unavailable.")
-            return
-        rows.sort(key=lambda r: r["ad_pct"], reverse=True)
-        companies = [r["company"] for r in rows]
-
-        fig = go.Figure()
-        fig.add_trace(
-            go.Bar(
-                y=companies,
-                x=[r["ad_pct"] for r in rows],
-                name="Ad Revenue %",
-                orientation="h",
-                marker=dict(color="#ff5b1f"),
-                customdata=[[r["ad_rev_b"], r["total_rev_b"]] for r in rows],
-                hovertemplate=(
-                    "<b>%{y}</b><br>"
-                    "Ad Revenue: $%{customdata[0]:.1f}B (%{x:.1f}%)<br>"
-                    "Total Revenue: $%{customdata[1]:.1f}B<extra></extra>"
-                ),
+        else:
+            dep_rows.sort(key=lambda x: x["ad_pct"], reverse=True)
+            dep_fig = go.Figure()
+            dep_fig.add_trace(
+                go.Bar(
+                    y=[r["company"] for r in dep_rows],
+                    x=[r["ad_pct"] for r in dep_rows],
+                    name="Ad Revenue %",
+                    orientation="h",
+                    marker=dict(color="#ff5b1f"),
+                    customdata=[[r["ad_rev_b"], r["total_rev_b"]] for r in dep_rows],
+                    hovertemplate="<b>%{y}</b><br>Ad Revenue: $%{customdata[0]:.1f}B (%{x:.1f}%)<br>Total Revenue: $%{customdata[1]:.1f}B<extra></extra>",
+                )
             )
-        )
-        fig.add_trace(
-            go.Bar(
-                y=companies,
-                x=[r["non_ad_pct"] for r in rows],
-                name="Non-Ad Revenue %",
-                orientation="h",
-                marker=dict(color="rgba(255,255,255,0.08)"),
-                hoverinfo="skip",
+            dep_fig.add_trace(
+                go.Bar(
+                    y=[r["company"] for r in dep_rows],
+                    x=[r["non_ad_pct"] for r in dep_rows],
+                    name="Non-Ad Revenue %",
+                    orientation="h",
+                    marker=dict(color="rgba(255,255,255,0.08)"),
+                    hoverinfo="skip",
+                )
             )
-        )
-        fig.update_layout(
-            barmode="stack",
-            xaxis=dict(range=[0, 100], ticksuffix="%", gridcolor="rgba(255,255,255,0.05)", color="rgba(255,255,255,0.4)"),
-            yaxis=dict(color="white"),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            legend=dict(font=dict(color="white")),
-            height=420,
-            margin=dict(l=120, r=0, t=8, b=40),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        most_dep = rows[0]
-        least_dep = rows[-1]
-        st.caption(
-            f"{most_dep['company']} derives {most_dep['ad_pct']:.0f}% of its revenue from advertising — "
-            f"it is, functionally, an advertising company. {least_dep['company']} sits at "
-            f"{least_dep['ad_pct']:.1f}% — barely reliant on ads despite its scale."
-        )
-    except Exception:
-        st.info("Ad dependency chart unavailable.")
+            dep_fig.update_layout(
+                **_chart_layout(
+                    430,
+                    dict(
+                        barmode="stack",
+                        xaxis=dict(range=[0, 100], ticksuffix="%", gridcolor="rgba(255,255,255,0.05)", color="rgba(255,255,255,0.4)"),
+                        yaxis=dict(color="white"),
+                        margin=dict(l=120, r=0, t=8, b=40),
+                        legend=dict(font=dict(color="white")),
+                    ),
+                )
+            )
+            st.plotly_chart(dep_fig, use_container_width=True)
+            most_dep = dep_rows[0]
+            least_dep = dep_rows[-1]
+            st.caption(
+                f"{most_dep['company']} derives {most_dep['ad_pct']:.0f}% of its revenue from advertising — it is, functionally, an advertising company. "
+                f"{least_dep['company']} sits at {least_dep['ad_pct']:.1f}% — barely reliant on ads despite its scale."
+            )
+except Exception:
+    st.info("Ad dependency chart unavailable.")
+_beat_divider()
 
-
-_beat(_screen6, label="The Dependency", headline="Some live and die by advertising. Others barely care.")
-
-
-# Screen 7
-def _screen7():
-    try:
-        import plotly.graph_objects as go
-
-        if total_tracked_b <= 0:
-            st.info("Duopoly chart unavailable.")
-            return
-        duo_musd = float(ad_lookup.get("Alphabet", {}).get("ad_revenue_musd", 0.0))
-        duo_musd += float(ad_lookup.get("Meta Platforms", {}).get("ad_revenue_musd", 0.0))
-        duo_b = duo_musd / 1e3
+# Screen 7 — Duopoly donut
+_beat_header("The Duopoly", "Two companies. One grip.")
+try:
+    import plotly.graph_objects as go
+    if total_tracked_b <= 0:
+        st.info("Duopoly chart unavailable.")
+    else:
+        duo_b = (
+            float(ad_lookup.get("Alphabet", {}).get("ad_revenue_musd", 0.0))
+            + float(ad_lookup.get("Meta Platforms", {}).get("ad_revenue_musd", 0.0))
+        ) / 1e3
         rest_b = max(total_tracked_b - duo_b, 0.0)
-        duo_pct = duo_b / total_tracked_b * 100 if total_tracked_b else 0
-        fig = go.Figure(
+        duo_pct = duo_b / total_tracked_b * 100 if total_tracked_b else 0.0
+        d_fig = go.Figure(
             go.Pie(
                 values=[duo_b, rest_b],
                 labels=["Alphabet + Meta", "Everyone Else"],
@@ -2694,596 +2255,416 @@ def _screen7():
                 hovertemplate="%{label}: $%{value:.0f}B (%{percent})<extra></extra>",
             )
         )
-        fig.update_layout(
-            annotations=[
+        d_fig.update_layout(
+            **_chart_layout(
+                350,
                 dict(
-                    text=f"<b>{duo_pct:.1f}%</b><br><span style='font-size:10px'>Duopoly</span>",
-                    x=0.5,
-                    y=0.5,
-                    font_size=22,
-                    font_color="white",
-                    showarrow=False,
-                )
-            ],
-            paper_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            legend=dict(font=dict(color="white")),
-            height=340,
-            margin=dict(l=0, r=0, t=8, b=0),
+                    annotations=[dict(text=f"<b>{duo_pct:.1f}%</b><br><span style='font-size:10px'>Duopoly</span>", x=0.5, y=0.5, showarrow=False, font_size=22, font_color="white")],
+                    margin=dict(l=0, r=0, t=8, b=0),
+                    legend=dict(font=dict(color="white")),
+                ),
+            )
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(d_fig, use_container_width=True)
         st.caption(
             f"Alphabet and Meta together controlled {duo_pct:.1f}% of all tracked digital ad revenue in {effective_year}. "
             f"Combined: ${duo_b:.0f}B. The rest of the tracked universe: ${rest_b:.0f}B."
         )
-    except Exception:
-        st.info("Duopoly chart unavailable.")
+except Exception:
+    st.info("Duopoly chart unavailable.")
+_beat_divider()
 
-
-_beat(_screen7, label="The Duopoly", headline="Two companies. One grip.")
-
-
-# Screen 8
-def _screen8():
-    try:
-        import plotly.graph_objects as go
-
-        if m2_yearly_df.empty or groupm_df.empty or not groupm_year_col or not groupm_total_col:
-            st.info("M2 vs Ad Spend chart unavailable.")
-            return
-        m2_df = m2_yearly_df.copy()
-        m2_df["year"] = pd.to_numeric(m2_df["year"], errors="coerce").astype("Int64")
-        m2_df["m2_value"] = pd.to_numeric(m2_df["m2_value"], errors="coerce")
-        m2_df = m2_df.dropna(subset=["year", "m2_value"]).copy()
-        if m2_df.empty:
-            st.info("M2 vs Ad Spend chart unavailable.")
-            return
-        m2_df["year"] = m2_df["year"].astype(int)
-
-        g_years = groupm_df[[groupm_year_col, groupm_total_col]].copy()
-        g_years.columns = ["year", "ad_total"]
-        g_years["year"] = pd.to_numeric(g_years["year"], errors="coerce").astype("Int64")
-        g_years["ad_total"] = pd.to_numeric(g_years["ad_total"], errors="coerce")
-        g_years = g_years.dropna(subset=["year", "ad_total"]).copy()
-        if g_years.empty:
-            st.info("M2 vs Ad Spend chart unavailable.")
-            return
-        g_years["year"] = g_years["year"].astype(int)
-
-        merged = m2_df.merge(g_years, on="year", how="inner")
+# Screen 8 — M2 vs Ad spend
+_beat_header("The Money Printer", "When central banks print, ad markets follow.")
+try:
+    import plotly.graph_objects as go
+    if m2_yearly_df.empty or groupm_df.empty or not groupm_year_col or not groupm_total_col:
+        st.info("M2 vs Ad Spend chart unavailable.")
+    else:
+        m2_scoped = m2_yearly_df.copy()
+        m2_scoped["year"] = pd.to_numeric(m2_scoped["year"], errors="coerce")
+        m2_scoped["m2_value"] = pd.to_numeric(m2_scoped["m2_value"], errors="coerce")
+        m2_scoped = m2_scoped.dropna(subset=["year", "m2_value"])
+        gm = groupm_df[[groupm_year_col, groupm_total_col]].copy()
+        gm.columns = ["year", "ad_total"]
+        gm["year"] = pd.to_numeric(gm["year"], errors="coerce")
+        gm["ad_total"] = pd.to_numeric(gm["ad_total"], errors="coerce")
+        gm = gm.dropna(subset=["year", "ad_total"])
+        merged = m2_scoped.merge(gm, on="year", how="inner")
         merged = merged[merged["year"] >= 2010].sort_values("year")
         if merged.empty:
             st.info("M2 vs Ad Spend chart unavailable.")
-            return
-        base_year = 2010 if (merged["year"] == 2010).any() else int(merged["year"].min())
-        base_m2 = float(merged[merged["year"] == base_year]["m2_value"].iloc[0])
-        base_ad = float(merged[merged["year"] == base_year]["ad_total"].iloc[0])
-        if base_m2 <= 0 or base_ad <= 0:
-            st.info("M2 vs Ad Spend chart unavailable.")
-            return
-        merged["m2_idx"] = merged["m2_value"] / base_m2 * 100
-        merged["ad_idx"] = merged["ad_total"] / base_ad * 100
-
-        fig = go.Figure()
-        fig.add_trace(
-            go.Scatter(
-                x=merged["year"],
-                y=merged["m2_idx"],
-                name="M2 Money Supply (indexed)",
-                line=dict(color="#3b82f6", width=2.5),
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=merged["year"],
-                y=merged["ad_idx"],
-                name="Global Ad Spend (indexed)",
-                line=dict(color="#ff9900", width=2.5),
-                yaxis="y2",
-            )
-        )
-        fig.add_vrect(
-            x0=2020,
-            x1=2021,
-            fillcolor="rgba(255,255,255,0.05)",
-            line_width=0,
-            annotation_text="2020 stimulus",
-            annotation_font_color="rgba(255,255,255,0.4)",
-        )
-        fig.update_layout(
-            yaxis=dict(title="M2 (indexed, 2010=100)", color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
-            yaxis2=dict(title="Ad Spend (indexed)", overlaying="y", side="right", color="rgba(255,255,255,0.4)"),
-            xaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            legend=dict(font=dict(color="white")),
-            height=360,
-            margin=dict(l=0, r=60, t=8, b=40),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption(
-            "Both M2 money supply and global ad spend indexed to 2010 = 100. "
-            "The near-perfect correlation shows macro liquidity as a leading indicator for ad market growth."
-        )
-    except Exception:
-        st.info("M2 vs Ad Spend chart unavailable.")
-
-
-_beat(_screen8, label="The Money Printer", headline="When central banks print, ad markets follow.")
-
-
-# Screen 9
-def _screen9():
-    try:
-        import plotly.graph_objects as go
-
-        if groupm_df.empty or not groupm_year_col:
-            st.info("Structural shift chart unavailable.")
-            return
-        g_df = groupm_df.copy()
-        g_df[groupm_year_col] = pd.to_numeric(g_df[groupm_year_col], errors="coerce")
-        g_df = g_df.dropna(subset=[groupm_year_col]).copy()
-        g_df[groupm_year_col] = g_df[groupm_year_col].astype(int)
-        g_df = g_df[g_df[groupm_year_col] >= 2010].sort_values(groupm_year_col)
-        if g_df.empty:
-            st.info("Structural shift chart unavailable.")
-            return
-
-        channels = {
-            "Traditional TV": ("#4472c4", _find_groupm_col(g_df, ["traditional", "tv"])),
-            "Connected TV": ("#00bcd4", _find_groupm_col(g_df, ["connected", "tv"])),
-            "Search": ("#ff9900", _find_groupm_col(g_df, ["search"], ["non"])),
-            "Non-Search": ("#ffd600", _find_groupm_col(g_df, ["non", "search"])),
-            "Retail Media": ("#22c55e", _find_groupm_col(g_df, ["retail"])),
-            "Traditional OOH": ("#888888", _find_groupm_col(g_df, ["traditional", "ooh"])),
-            "Digital OOH": ("#26a69a", _find_groupm_col(g_df, ["digital", "ooh"])),
-        }
-        fig = go.Figure()
-        for channel, (color, col_match) in channels.items():
-            if not col_match:
-                continue
-            values = pd.to_numeric(g_df[col_match], errors="coerce")
-            if values.notna().sum() == 0:
-                continue
-            fig.add_trace(
-                go.Scatter(
-                    x=g_df[groupm_year_col],
-                    y=values,
-                    name=channel,
-                    stackgroup="one",
-                    line=dict(width=0),
-                    fillcolor=color,
-                    hovertemplate=f"{channel}: $%{{y:.0f}}B<extra></extra>",
+        else:
+            base_year = 2010 if (merged["year"] == 2010).any() else int(merged["year"].min())
+            base_m2 = float(merged[merged["year"] == base_year]["m2_value"].iloc[0])
+            base_ad = float(merged[merged["year"] == base_year]["ad_total"].iloc[0])
+            if base_m2 <= 0 or base_ad <= 0:
+                st.info("M2 vs Ad Spend chart unavailable.")
+            else:
+                merged["m2_idx"] = merged["m2_value"] / base_m2 * 100
+                merged["ad_idx"] = merged["ad_total"] / base_ad * 100
+                m2_fig = go.Figure()
+                m2_fig.add_trace(go.Scatter(x=merged["year"], y=merged["m2_idx"], name="M2 Money Supply (indexed)", line=dict(color="#3b82f6", width=2.5)))
+                m2_fig.add_trace(go.Scatter(x=merged["year"], y=merged["ad_idx"], name="Global Ad Spend (indexed)", line=dict(color="#ff9900", width=2.5), yaxis="y2"))
+                m2_fig.add_vrect(x0=2020, x1=2021, fillcolor="rgba(255,255,255,0.05)", line_width=0, annotation_text="2020 stimulus", annotation_font_color="rgba(255,255,255,0.4)")
+                m2_fig.update_layout(
+                    **_chart_layout(
+                        370,
+                        dict(
+                            yaxis=dict(title="M2 (indexed, 2010=100)", color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
+                            yaxis2=dict(title="Ad Spend (indexed)", overlaying="y", side="right", color="rgba(255,255,255,0.4)"),
+                            xaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
+                            margin=dict(l=0, r=60, t=8, b=40),
+                            legend=dict(font=dict(color="white")),
+                        ),
+                    )
                 )
-            )
-        if not fig.data:
-            st.info("Structural shift chart unavailable.")
-            return
-        retail_col = channels.get("Retail Media", ("", ""))[1]
-        if retail_col:
-            retail_2022 = g_df[g_df[groupm_year_col] == 2022][retail_col]
-            if not retail_2022.empty and pd.notna(retail_2022.iloc[0]):
-                fig.add_annotation(
-                    x=2022,
-                    y=float(retail_2022.iloc[0]),
-                    text="Retail Media emerges",
-                    showarrow=True,
-                    arrowcolor="white",
-                    font=dict(color="white", size=11),
-                    arrowhead=2,
-                )
-        fig.update_layout(
-            xaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
-            yaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)", ticksuffix="B"),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            legend=dict(font=dict(color="white")),
-            height=380,
-            margin=dict(l=0, r=0, t=8, b=40),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption(
-            "Linear TV declining while Search and Retail Media accelerate. "
-            "CTV growing but from a small base. Retail Media as a category barely existed before 2018."
-        )
-    except Exception:
+                st.plotly_chart(m2_fig, use_container_width=True)
+                st.caption("Both M2 money supply and global ad spend indexed to 2010 = 100. The near-perfect correlation shows macro liquidity as a leading indicator for ad market growth.")
+except Exception:
+    st.info("M2 vs Ad Spend chart unavailable.")
+_beat_divider()
+
+# Screen 9 — Structural shift
+_beat_header("The Structural Shift", "The ad market didn't just grow. It transformed.")
+try:
+    import plotly.graph_objects as go
+    if groupm_df.empty or not groupm_year_col:
         st.info("Structural shift chart unavailable.")
+    else:
+        gdf = groupm_df.copy()
+        gdf[groupm_year_col] = pd.to_numeric(gdf[groupm_year_col], errors="coerce")
+        gdf = gdf.dropna(subset=[groupm_year_col])
+        gdf[groupm_year_col] = gdf[groupm_year_col].astype(int)
+        gdf = gdf[gdf[groupm_year_col] >= 2010].sort_values(groupm_year_col)
+        if gdf.empty:
+            st.info("Structural shift chart unavailable.")
+        else:
+            channels = {
+                "Traditional TV": ("#4472c4", _find_col(gdf, ["traditional", "tv"])),
+                "Connected TV": ("#00bcd4", _find_col(gdf, ["connected", "tv"])),
+                "Search": ("#ff9900", _find_col(gdf, ["search"], ["non"])),
+                "Non-Search": ("#ffd600", _find_col(gdf, ["non", "search"])),
+                "Retail Media": ("#22c55e", _find_col(gdf, ["retail"])),
+                "Traditional OOH": ("#888888", _find_col(gdf, ["traditional", "ooh"])),
+                "Digital OOH": ("#26a69a", _find_col(gdf, ["digital", "ooh"])),
+            }
+            s_fig = go.Figure()
+            for channel, (color, col) in channels.items():
+                if not col:
+                    continue
+                vals = pd.to_numeric(gdf[col], errors="coerce")
+                if vals.notna().sum() == 0:
+                    continue
+                s_fig.add_trace(go.Scatter(x=gdf[groupm_year_col], y=vals, name=channel, stackgroup="one", line=dict(width=0), fillcolor=color, hovertemplate=f"{channel}: $%{{y:.0f}}B<extra></extra>"))
+            if not s_fig.data:
+                st.info("Structural shift chart unavailable.")
+            else:
+                retail_col = channels.get("Retail Media", ("", ""))[1]
+                if retail_col:
+                    r_2022 = gdf[gdf[groupm_year_col] == 2022][retail_col]
+                    if not r_2022.empty and pd.notna(r_2022.iloc[0]):
+                        s_fig.add_annotation(x=2022, y=float(r_2022.iloc[0]), text="Retail Media emerges", showarrow=True, arrowcolor="white", font=dict(color="white", size=11), arrowhead=2)
+                s_fig.update_layout(
+                    **_chart_layout(
+                        390,
+                        dict(
+                            xaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
+                            yaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)", ticksuffix="B"),
+                            margin=dict(l=0, r=0, t=8, b=40),
+                            legend=dict(font=dict(color="white")),
+                        ),
+                    )
+                )
+                st.plotly_chart(s_fig, use_container_width=True)
+                st.caption("Linear TV declining while Search and Retail Media accelerate. CTV growing but from a small base. Retail Media as a category barely existed before 2018.")
+except Exception:
+    st.info("Structural shift chart unavailable.")
+_beat_divider()
 
-
-_beat(_screen9, label="The Structural Shift", headline="The ad market didn't just grow. It transformed.")
-
-
-# Screen 10
-def _screen10():
-    try:
-        import plotly.graph_objects as go
-
-        if groupm_df.empty or not groupm_year_col:
-            st.info("Search vs Traditional chart unavailable.")
-            return
-        g_row_val = _yr(groupm_df, effective_year, groupm_year_col)
-        if g_row_val.empty:
-            st.info("Search vs Traditional chart unavailable.")
-            return
-        search_col = _find_groupm_col(groupm_df, ["search"], ["non"])
-        if not search_col:
-            st.info("Search vs Traditional chart unavailable.")
-            return
-
+# Screen 10 — Search vs traditional
+_beat_header("Search Dominance", "Search alone beats all traditional media combined.")
+try:
+    import plotly.graph_objects as go
+    if groupm_df.empty or not groupm_year_col:
+        st.info("Search vs Traditional chart unavailable.")
+    else:
+        g_row = _yr(groupm_df, effective_year, groupm_year_col)
+        search_col = _find_col(groupm_df, ["search"], ["non"])
         trad_cols = []
         for c in groupm_df.columns:
-            norm = re.sub(r"[^a-z0-9]+", "", str(c).lower())
-            if c == groupm_year_col or c == search_col:
+            norm = re.sub(r"[^a-z0-9]+", "", c.lower())
+            if c in {groupm_year_col, search_col}:
                 continue
-            if ("traditionaltv" in norm) or ("radio" in norm) or ("print" in norm) or ("newspaper" in norm):
+            if any(x in norm for x in ["traditionaltv", "radio", "print", "newspaper"]):
                 trad_cols.append(c)
-        if not trad_cols:
+        if g_row.empty or not search_col or not trad_cols:
             st.info("Search vs Traditional chart unavailable.")
-            return
-        search_b = float(pd.to_numeric(g_row_val[search_col], errors="coerce").iloc[0] or 0.0)
-        trad_b = 0.0
-        for c in trad_cols:
-            value = pd.to_numeric(g_row_val[c], errors="coerce").iloc[0]
-            if pd.notna(value):
-                trad_b += float(value)
-        if search_b <= 0 and trad_b <= 0:
-            st.info("Search vs Traditional chart unavailable.")
-            return
-        ratio = search_b / trad_b if trad_b > 0 else None
-        fig = go.Figure(
-            go.Bar(
-                x=[search_b, trad_b],
-                y=["Search", "Traditional (TV+Radio+Print)"],
-                orientation="h",
-                marker=dict(color=["#ff9900", "#4472c4"]),
-                text=[f"${search_b:.0f}B", f"${trad_b:.0f}B"],
-                textposition="outside",
-                textfont=dict(color="white"),
-                hovertemplate="%{y}: $%{x:.0f}B<extra></extra>",
-            )
-        )
-        fig.update_layout(
-            xaxis=dict(visible=False),
-            yaxis=dict(color="white"),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            height=200,
-            margin=dict(l=0, r=60, t=8, b=8),
-            showlegend=False,
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        caption = f"Search advertising alone accounts for ${search_b:.0f}B in {effective_year}."
-        if ratio:
-            caption += f" That is {ratio:.1f}× larger than all traditional TV, radio, and print combined."
-        st.caption(caption)
-    except Exception:
-        st.info("Search vs Traditional chart unavailable.")
+        else:
+            search_b = float(pd.to_numeric(g_row[search_col], errors="coerce").iloc[0] or 0.0)
+            trad_b = float(sum(float(pd.to_numeric(g_row[c], errors="coerce").iloc[0] or 0.0) for c in trad_cols))
+            if search_b <= 0 and trad_b <= 0:
+                st.info("Search vs Traditional chart unavailable.")
+            else:
+                ratio = search_b / trad_b if trad_b > 0 else None
+                st_fig = go.Figure(go.Bar(x=[search_b, trad_b], y=["Search", "Traditional (TV+Radio+Print)"], orientation="h", marker=dict(color=["#ff9900", "#4472c4"]), text=[f"${search_b:.0f}B", f"${trad_b:.0f}B"], textposition="outside", textfont=dict(color="white"), hovertemplate="%{y}: $%{x:.0f}B<extra></extra>"))
+                st_fig.update_layout(**_chart_layout(210, dict(xaxis=dict(visible=False), yaxis=dict(color="white"), margin=dict(l=0, r=60, t=8, b=8), showlegend=False)))
+                st.plotly_chart(st_fig, use_container_width=True)
+                caption = f"Search advertising alone accounts for ${search_b:.0f}B in {effective_year}."
+                if ratio:
+                    caption += f" That is {ratio:.1f}× larger than all traditional TV, radio, and print combined."
+                st.caption(caption)
+except Exception:
+    st.info("Search vs Traditional chart unavailable.")
+_beat_divider()
 
-
-_beat(_screen10, label="Search Dominance", headline="Search alone beats all traditional media combined.")
-
-
-# Screen 11
-def _screen11():
-    try:
-        if metrics.empty:
-            st.info("Bubble chart unavailable.")
-            return
-        metric_years = sorted(metrics["year"].dropna().astype(int).unique().tolist())
-        if not metric_years:
-            st.info("Bubble chart unavailable.")
-            return
+# Screen 11 — Gapminder bubble
+_beat_header("The Landscape", "Not all Big Tech is equal. Who won?")
+try:
+    if metrics.empty or "revenue" not in metrics.columns or mcap_col not in metrics.columns:
+        st.info("Bubble chart unavailable.")
+    else:
         all_rows = []
-        for yr_val in metric_years:
-            m = metrics[metrics["year"] == yr_val].copy()
-            p_m = metrics[metrics["year"] == (yr_val - 1)].copy()
-            ad_lookup_year = _load_ad_revenue_by_company(excel_path, source_stamp, int(yr_val)) if excel_path else {}
+        for yr_val in sorted(metrics["year"].dropna().astype(int).unique().tolist()):
+            m = metrics[metrics["year"] == yr_val]
+            p = metrics[metrics["year"] == (yr_val - 1)]
+            ad_lookup_year = _load_ad_revenue_by_company(excel_path, source_stamp, yr_val) if excel_path else {}
             for _, row in m.iterrows():
                 company = str(row.get("company", ""))
                 rev = float(pd.to_numeric(pd.Series([row.get("revenue", np.nan)]), errors="coerce").iloc[0] or 0.0)
-                prev_block = p_m[p_m["company"] == company]
+                prev_rows = p[p["company"] == company]
                 prev_rev = None
-                if not prev_block.empty:
-                    prev_val = pd.to_numeric(pd.Series([prev_block.iloc[0].get("revenue", np.nan)]), errors="coerce").iloc[0]
-                    prev_rev = float(prev_val) if pd.notna(prev_val) else None
+                if not prev_rows.empty:
+                    prev_rev = float(pd.to_numeric(pd.Series([prev_rows.iloc[0].get("revenue", np.nan)]), errors="coerce").iloc[0] or 0.0)
                 rev_yoy = _yoy(rev, prev_rev) or 0.0
-                mcap = float(pd.to_numeric(pd.Series([row.get("market_cap", np.nan)]), errors="coerce").iloc[0] or 0.0)
-                ad_rev_musd = float(ad_lookup_year.get(company, {}).get("ad_revenue_musd", 0.0))
-                ad_pct = min((ad_rev_musd / rev * 100) if rev > 0 else 0.0, 100.0)
+                if rev_yoy is not None and abs(rev_yoy) < 5:
+                    rev_yoy = rev_yoy * 100
+                mcap = float(pd.to_numeric(pd.Series([row.get(mcap_col, np.nan)]), errors="coerce").iloc[0] or 0.0)
+                ad_rev = float(ad_lookup_year.get(company, {}).get("ad_revenue_musd", 0.0))
+                ad_pct = min((ad_rev / rev * 100) if rev > 0 else 0.0, 100.0)
                 all_rows.append(
                     {
-                        "year": str(int(yr_val)),
+                        "year": str(yr_val),
                         "company": company,
                         "rev_yoy": rev_yoy,
                         "market_cap_b": mcap / 1e3,
                         "ad_pct": max(ad_pct, 1.0),
                         "revenue_b": rev / 1e3,
-                        "ad_rev_b": ad_rev_musd / 1e3,
+                        "ad_rev_b": ad_rev / 1e3,
                     }
                 )
-        bubble_df = pd.DataFrame(all_rows).dropna(subset=["company", "year", "market_cap_b", "rev_yoy"])
+        bubble_df = pd.DataFrame(all_rows).dropna(subset=["company", "year", "rev_yoy", "market_cap_b"])
         if bubble_df.empty:
             st.info("Bubble chart unavailable.")
-            return
-        company_colors = {company: _company_color(company) for company in bubble_df["company"].unique()}
-        fig = px.scatter(
-            bubble_df,
-            x="rev_yoy",
-            y="market_cap_b",
-            size="ad_pct",
-            color="company",
-            color_discrete_map=company_colors,
-            animation_frame="year",
-            animation_group="company",
-            hover_name="company",
-            custom_data=["revenue_b", "ad_pct", "ad_rev_b"],
-            size_max=65,
-            labels={"rev_yoy": "Revenue YoY Growth (%)", "market_cap_b": "Market Cap ($B)"},
-        )
-        fig.update_traces(
-            hovertemplate=(
-                "<b>%{hovertext}</b><br>"
-                "Market Cap: $%{y:.0f}B<br>"
-                "Rev YoY: %{x:+.1f}%<br>"
-                "Ad Dependency: %{customdata[1]:.1f}%<br>"
-                "Ad Revenue: $%{customdata[2]:.1f}B<extra></extra>"
+        else:
+            company_colors = {c: _company_color(c) for c in bubble_df["company"].unique()}
+            b_fig = px.scatter(
+                bubble_df,
+                x="rev_yoy",
+                y="market_cap_b",
+                size="ad_pct",
+                color="company",
+                color_discrete_map=company_colors,
+                animation_frame="year",
+                animation_group="company",
+                hover_name="company",
+                custom_data=["revenue_b", "ad_pct", "ad_rev_b"],
+                size_max=65,
+                labels={"rev_yoy": "Revenue YoY Growth (%)", "market_cap_b": "Market Cap ($B)"},
             )
-        )
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            legend=dict(font=dict(color="white")),
-            height=580,
-            margin=dict(l=0, r=0, t=8, b=40),
-            xaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)", zeroline=True, zerolinecolor="rgba(255,255,255,0.15)"),
-            yaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        latest_b = bubble_df[bubble_df["year"] == str(effective_year)]
-        if not latest_b.empty:
-            top_mcap = latest_b.nlargest(1, "market_cap_b").iloc[0]
-            most_ad = latest_b.nlargest(1, "ad_pct").iloc[0]
-            st.caption(
-                f"Bubble size = ad revenue dependency. {top_mcap['company']} leads on market cap at "
-                f"${top_mcap['market_cap_b']:.0f}B. {most_ad['company']} is most ad-dependent at "
-                f"{most_ad['ad_pct']:.1f}% of total revenue."
+            b_fig.update_traces(
+                hovertemplate="<b>%{hovertext}</b><br>Market Cap: $%{y:.0f}B<br>Rev YoY: %{x:+.1f}%<br>Ad Dependency: %{customdata[1]:.1f}%<br>Ad Revenue: $%{customdata[2]:.1f}B<extra></extra>"
             )
-    except Exception:
-        st.info("Bubble chart unavailable.")
+            b_fig.update_layout(
+                **_chart_layout(
+                    590,
+                    dict(
+                        margin=dict(l=0, r=0, t=8, b=40),
+                        legend=dict(font=dict(color="white")),
+                        xaxis=dict(ticksuffix="%", color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)", zeroline=True, zerolinecolor="rgba(255,255,255,0.15)"),
+                        yaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
+                    ),
+                )
+            )
+            st.plotly_chart(b_fig, use_container_width=True)
+            latest = bubble_df[bubble_df["year"] == str(effective_year)]
+            if not latest.empty:
+                top_mcap = latest.nlargest(1, "market_cap_b").iloc[0]
+                most_ad = latest.nlargest(1, "ad_pct").iloc[0]
+                st.caption(
+                    f"Bubble size = ad revenue dependency. {top_mcap['company']} leads on market cap at ${top_mcap['market_cap_b']:.0f}B. "
+                    f"{most_ad['company']} is most ad-dependent at {most_ad['ad_pct']:.1f}% of total revenue."
+                )
+except Exception:
+    st.info("Bubble chart unavailable.")
+_beat_divider()
 
-
-_beat(_screen11, label="The Landscape", headline="Not all Big Tech is equal. Who won?")
-
-
-# Screen 12
-def _screen12():
-    try:
-        import plotly.graph_objects as go
-        from utils.live_stock_feed import build_live_company_ticker_map, infer_company_label, load_live_stock_feed
-
-        if metrics.empty:
-            st.info("Performance chart unavailable.")
-            return
+# Screen 12 — Index beaters
+_beat_header("The Market Bet", "The ad-driven giants didn't just grow. They beat the market.")
+try:
+    import plotly.graph_objects as go
+    company_ticker_fallback = {
+        "Alphabet": "GOOGL",
+        "Meta Platforms": "META",
+        "Amazon": "AMZN",
+        "Apple": "AAPL",
+        "Microsoft": "MSFT",
+        "Netflix": "NFLX",
+        "Disney": "DIS",
+        "Comcast": "CMCSA",
+        "Spotify": "SPOT",
+        "Roku": "ROKU",
+        "Warner Bros. Discovery": "WBD",
+        "Paramount Global": "PARA",
+    }
+    if metrics.empty or mcap_col not in metrics.columns:
+        st.info("Performance chart unavailable.")
+    else:
         min_year = int(metrics["year"].min())
         y_start = max(effective_year - 3, min_year)
-        start_df = metrics[metrics["year"] == y_start][["company", "market_cap"]]
-        end_df = metrics[metrics["year"] == effective_year][["company", "market_cap"]]
-        perf = start_df.merge(end_df, on="company", suffixes=("_start", "_end"))
+        start_df = metrics[metrics["year"] == y_start][["company", mcap_col]].rename(columns={mcap_col: "mcap_start"})
+        end_df = metrics[metrics["year"] == effective_year][["company", mcap_col]].rename(columns={mcap_col: "mcap_end"})
+        perf = start_df.merge(end_df, on="company", how="inner")
+        perf["tsr"] = _yoy_vec(perf["mcap_end"], perf["mcap_start"])
+        perf = perf.dropna(subset=["tsr"])
         if perf.empty:
             st.info("Performance chart unavailable.")
-            return
-        perf["tsr"] = _yoy_vec(perf["market_cap_end"], perf["market_cap_start"])
-        perf = perf.dropna(subset=["tsr"]).copy()
-        if perf.empty:
-            st.info("Performance chart unavailable.")
-            return
-        top3 = perf.nlargest(3, "tsr")["company"].tolist()
-        if not top3:
-            st.info("Performance chart unavailable.")
-            return
+        else:
+            top3 = perf.nlargest(3, "tsr")["company"].tolist()
+            if market_feed_df.empty:
+                st.info("Performance chart unavailable.")
+            else:
+                p_fig = go.Figure()
+                for idx_tag, idx_label, color, dash in [("^GSPC", "S&P 500", "white", "dash"), ("^IXIC", "Nasdaq", "#ff9900", "dot")]:
+                    idx_feed = market_feed_df[market_feed_df["tag"].astype(str).str.upper() == idx_tag]
+                    if idx_feed.empty:
+                        idx_feed = market_feed_df[market_feed_df["asset"].astype(str).str.lower().str.contains(idx_label.lower(), na=False)]
+                    if idx_feed.empty:
+                        continue
+                    idx_feed = idx_feed.sort_values("date")
+                    base = float(idx_feed.iloc[0]["price"])
+                    if base <= 0:
+                        continue
+                    norm = idx_feed["price"] / base * 100
+                    p_fig.add_trace(go.Scatter(x=idx_feed["date"], y=norm, name=idx_label, line=dict(color=color, dash=dash, width=1.5), hovertemplate=f"{idx_label}: %{{y:.0f}}<extra></extra>"))
+                for company in top3:
+                    ticker = company_ticker_fallback.get(company)
+                    if not ticker:
+                        continue
+                    co_feed = market_feed_df[market_feed_df["tag"].astype(str).str.upper() == ticker]
+                    if co_feed.empty:
+                        co_feed = market_feed_df[market_feed_df["asset"].astype(str).str.lower().str.contains(company.lower(), na=False)]
+                    if co_feed.empty:
+                        continue
+                    co_feed = co_feed.sort_values("date")
+                    base = float(co_feed.iloc[0]["price"])
+                    if base <= 0:
+                        continue
+                    norm = co_feed["price"] / base * 100
+                    p_fig.add_trace(go.Scatter(x=co_feed["date"], y=norm, name=company, line=dict(color=_company_color(company), width=2.5), hovertemplate=f"{company}: %{{y:.0f}}<extra></extra>"))
+                if not p_fig.data:
+                    st.info("Performance chart unavailable.")
+                else:
+                    p_fig.update_layout(
+                        **_chart_layout(
+                            370,
+                            dict(
+                                margin=dict(l=0, r=0, t=8, b=40),
+                                legend=dict(font=dict(color="white")),
+                                yaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
+                                xaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
+                            ),
+                        )
+                    )
+                    st.plotly_chart(p_fig, use_container_width=True)
+                    best = perf.nlargest(1, "tsr").iloc[0]
+                    st.caption(
+                        f"Normalized to 100 at start. Top 3 market cap growers vs S&P500 and Nasdaq. "
+                        f"{best['company']} led with +{best['tsr']:.0f}% market cap growth over {y_start}→{effective_year}."
+                    )
+except Exception:
+    st.info("Performance chart unavailable.")
+_beat_divider()
 
-        feed = load_live_stock_feed()
-        if feed.empty:
-            st.info("Performance chart unavailable.")
-            return
-        feed = feed.copy()
-        feed["date"] = pd.to_datetime(feed["date"], errors="coerce")
-        feed["price"] = pd.to_numeric(feed["price"], errors="coerce")
-        feed["tag"] = feed["tag"].astype(str).str.strip()
-        feed = feed.dropna(subset=["date", "price"])
-        if feed.empty:
-            st.info("Performance chart unavailable.")
-            return
-
-        company_ticker_map = {v: k for k, v in build_live_company_ticker_map().items()}
-        if not company_ticker_map:
-            for tag, grp in feed.groupby("tag"):
-                if grp.empty:
-                    continue
-                label = infer_company_label(grp.iloc[-1].get("asset", ""), tag)
-                if label and label not in company_ticker_map:
-                    company_ticker_map[label] = tag
-
-        fig = go.Figure()
-        idx_styles = [("^GSPC", "S&P 500", "white", "dash"), ("^IXIC", "Nasdaq", "#ff9900", "dot")]
-        for ticker, label, color, dash in idx_styles:
-            idx_feed = feed[feed["tag"] == ticker].sort_values("date")
-            if idx_feed.empty:
-                continue
-            base = float(idx_feed.iloc[0]["price"])
-            idx_feed = idx_feed.copy()
-            idx_feed["norm"] = idx_feed["price"] / base * 100
-            fig.add_trace(
-                go.Scatter(
-                    x=idx_feed["date"],
-                    y=idx_feed["norm"],
-                    name=label,
-                    line=dict(color=color, dash=dash, width=1.5),
-                    hovertemplate=f"{label}: %{{y:.0f}}<extra></extra>",
+# Screen 13 — Market cap then vs now
+_beat_header("The Wealth Machine", "The market cap story, then vs now.")
+try:
+    import plotly.graph_objects as go
+    if metrics.empty or mcap_col not in metrics.columns:
+        st.info("Market cap history unavailable.")
+    else:
+        year_pool = sorted(metrics["year"].dropna().astype(int).unique().tolist())
+        earlier = [y for y in year_pool if y < effective_year]
+        y_then = year_pool[0] if year_pool and year_pool[0] < effective_year else (earlier[-1] if earlier else effective_year - 1)
+        y_now = effective_year
+        then_df = metrics[metrics["year"] == y_then][["company", mcap_col]].copy().rename(columns={mcap_col: "mcap_then"})
+        now_df = metrics[metrics["year"] == y_now][["company", mcap_col]].copy().rename(columns={mcap_col: "mcap_now"})
+        if then_df.empty or now_df.empty:
+            st.info("Market cap history unavailable.")
+        else:
+            comp = then_df.merge(now_df, on="company", how="inner")
+            if comp.empty:
+                st.info("Market cap history unavailable.")
+            else:
+                comp = comp.sort_values("mcap_now", ascending=True)
+                mc_fig = go.Figure()
+                mc_fig.add_trace(go.Bar(y=comp["company"], x=comp["mcap_then"] / 1e3, name=str(y_then), orientation="h", marker=dict(color="rgba(255,255,255,0.24)"), hovertemplate=f"%{{y}} {y_then}: $%{{x:.0f}}B<extra></extra>"))
+                mc_fig.add_trace(go.Bar(y=comp["company"], x=comp["mcap_now"] / 1e3, name=str(y_now), orientation="h", marker=dict(color="#ff5b1f"), hovertemplate=f"%{{y}} {y_now}: $%{{x:.0f}}B<extra></extra>"))
+                mc_fig.update_layout(
+                    **_chart_layout(
+                        410,
+                        dict(
+                            barmode="group",
+                            xaxis=dict(tickprefix="$", ticksuffix="B", color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
+                            yaxis=dict(color="white"),
+                            margin=dict(l=120, r=0, t=8, b=40),
+                            legend=dict(font=dict(color="white")),
+                        ),
+                    )
                 )
-            )
-        for company in top3:
-            ticker = company_ticker_map.get(company)
-            if not ticker:
-                continue
-            co_feed = feed[feed["tag"] == ticker].sort_values("date")
-            if co_feed.empty:
-                continue
-            base = float(co_feed.iloc[0]["price"])
-            co_feed = co_feed.copy()
-            co_feed["norm"] = co_feed["price"] / base * 100
-            fig.add_trace(
-                go.Scatter(
-                    x=co_feed["date"],
-                    y=co_feed["norm"],
-                    name=company,
-                    line=dict(color=_company_color(company), width=2.5),
-                    hovertemplate=f"{company}: %{{y:.0f}}<extra></extra>",
-                )
-            )
-        if not fig.data:
-            st.info("Performance chart unavailable.")
-            return
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            legend=dict(font=dict(color="white")),
-            height=360,
-            yaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
-            xaxis=dict(color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
-            margin=dict(l=0, r=0, t=8, b=40),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        best = perf.nlargest(1, "tsr").iloc[0]
-        st.caption(
-            f"Normalized to 100 at start. Top 3 market cap growers vs S&P500 and Nasdaq. "
-            f"{best['company']} led with +{best['tsr']:.0f}% market cap growth over {y_start}→{effective_year}."
-        )
-    except Exception:
-        st.info("Performance chart unavailable.")
+                st.plotly_chart(mc_fig, use_container_width=True)
+                total_then = comp["mcap_then"].sum() / 1e6
+                total_now = comp["mcap_now"].sum() / 1e6
+                growth = _yoy(total_now, total_then)
+                cap = f"Combined market cap grew from ${total_then:.1f}T to ${total_now:.1f}T between {y_then} and {y_now}."
+                if growth is not None:
+                    cap += f" That's a +{growth:.0f}% increase over the period."
+                st.caption(cap)
+except Exception:
+    st.info("Market cap history unavailable.")
+_beat_divider()
 
-
-_beat(_screen12, label="The Market Bet", headline="The ad-driven giants didn't just grow. They beat the market.")
-
-
-# Screen 13
-def _screen13():
-    try:
-        import plotly.graph_objects as go
-
-        if metrics.empty:
-            st.info("Market cap chart unavailable.")
-            return
-        y_then = effective_year - 5
-        then_df = metrics[metrics["year"] == y_then][["company", "market_cap"]]
-        now_df = metrics[metrics["year"] == effective_year][["company", "market_cap"]]
-        comp = then_df.merge(now_df, on="company", suffixes=("_then", "_now"))
-        if comp.empty:
-            st.info("Market cap chart unavailable.")
-            return
-        comp = comp.sort_values("market_cap_now", ascending=True)
-        fig = go.Figure()
-        fig.add_trace(
-            go.Bar(
-                y=comp["company"],
-                x=comp["market_cap_then"] / 1e3,
-                name=str(y_then),
-                orientation="h",
-                marker=dict(color="rgba(255,255,255,0.2)"),
-                hovertemplate="%{y} " + str(y_then) + ": $%{x:.0f}B<extra></extra>",
-            )
-        )
-        fig.add_trace(
-            go.Bar(
-                y=comp["company"],
-                x=comp["market_cap_now"] / 1e3,
-                name=str(effective_year),
-                orientation="h",
-                marker=dict(color="#ff5b1f"),
-                hovertemplate="%{y} " + str(effective_year) + ": $%{x:.0f}B<extra></extra>",
-            )
-        )
-        fig.update_layout(
-            barmode="overlay",
-            xaxis=dict(tickprefix="$", ticksuffix="B", color="rgba(255,255,255,0.4)", gridcolor="rgba(255,255,255,0.05)"),
-            yaxis=dict(color="white"),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            legend=dict(font=dict(color="white")),
-            height=400,
-            margin=dict(l=120, r=0, t=8, b=40),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        total_then = comp["market_cap_then"].sum() / 1e6
-        total_now = comp["market_cap_now"].sum() / 1e6
-        growth = _yoy(total_now, total_then)
-        caption = (
-            f"Combined market cap grew from ${total_then:.1f}T to ${total_now:.1f}T "
-            f"between {y_then} and {effective_year}."
-        )
-        if growth:
-            caption += f" That's a +{growth:.0f}% increase over 5 years."
-        st.caption(caption)
-    except Exception:
-        st.info("Market cap chart unavailable.")
-
-
-_beat(_screen13, label="The Wealth Machine", headline="The market cap story, then vs now.")
-
-
-# Screen 14
-def _screen14():
-    try:
-        sub_df = _read_excel_sheet_cached(excel_path, "Company_subscribers_values", source_stamp) if excel_path else pd.DataFrame()
-        if sub_df.empty:
-            st.info("Subscriber data unavailable.")
-            return
-        sub_df = sub_df.copy()
+# Screen 14 — Subscribers pictogram
+_beat_header("The Human Side", "Behind every dollar: a human being.")
+try:
+    sub_df = _read_excel_sheet_cached(excel_path, "Company_subscribers_values", source_stamp) if excel_path else pd.DataFrame()
+    if sub_df.empty:
+        st.info("Subscriber data unavailable.")
+    else:
         sub_df.columns = [str(c).strip() for c in sub_df.columns]
-        year_col = ""
-        for c in sub_df.columns:
-            if "year" in c.lower():
-                year_col = c
-                break
-        scope = sub_df.copy()
-        if year_col:
-            scope = _yr(sub_df, effective_year, year_col)
-            if scope.empty:
-                scope = sub_df.copy()
-
+        year_col = _find_col(sub_df, ["year"])
+        scope = _yr(sub_df, effective_year, year_col) if year_col else sub_df.copy()
+        if scope.empty:
+            scope = sub_df.copy()
         streaming = ["Netflix", "Spotify", "Disney", "Paramount"]
         rows_html = []
         total_subs = 0.0
-        company_col = ""
-        for c in scope.columns:
-            if c.lower() in {"company", "service", "platform"}:
-                company_col = c
-                break
-        subs_col = ""
-        for c in scope.columns:
-            if "subscriber" in c.lower():
-                subs_col = c
-                break
-
+        company_col = _find_col(scope, ["company"]) or _find_col(scope, ["service"]) or _find_col(scope, ["platform"])
+        subs_col = _find_col(scope, ["subscriber"])
         if company_col and subs_col:
             scope[subs_col] = pd.to_numeric(scope[subs_col], errors="coerce")
-            scope = scope.dropna(subset=[company_col, subs_col]).copy()
+            scope = scope.dropna(subset=[company_col, subs_col])
             for company in streaming:
                 rows = scope[scope[company_col].astype(str).str.lower().str.contains(company.lower(), na=False)]
                 if rows.empty:
                     continue
-                subs_m = float(rows[subs_col].sum())
+                subs_raw = float(rows[subs_col].sum())
+                subs_m = subs_raw / 1000 if subs_raw > 10000 else subs_raw
                 total_subs += subs_m
-                icons = "●" * min(max(int(subs_m / 10), 1), 30)
+                icons = "●" * min(int(subs_m / 10), 30)
                 rows_html.append(
-                    f"<div style='margin-bottom:12px;'>"
-                    f"<span style='color:white;font-weight:600;display:inline-block;width:120px;'>{escape(company)}</span>"
+                    f"<div class='sub-row'>"
+                    f"<span style='color:#ffffff;font-weight:600;display:inline-block;width:120px;'>{escape(company)}</span>"
                     f"<span style='color:#ff5b1f;letter-spacing:2px;'>{icons}</span>"
                     f"<span style='color:rgba(255,255,255,0.5);font-size:0.85rem;margin-left:8px;'>{subs_m:.0f}M</span>"
                     f"</div>"
@@ -3294,155 +2675,181 @@ def _screen14():
                 matches = [c for c in scope.columns if company.lower() in c.lower()]
                 if not matches:
                     continue
-                subs_val = pd.to_numeric(pd.Series([row[matches[0]]]), errors="coerce").iloc[0]
-                if pd.isna(subs_val):
+                subs_raw = pd.to_numeric(pd.Series([row[matches[0]]]), errors="coerce").iloc[0]
+                if pd.isna(subs_raw):
                     continue
-                subs_m = float(subs_val)
+                subs_raw = float(subs_raw)
+                subs_m = subs_raw / 1000 if subs_raw > 10000 else subs_raw
                 total_subs += subs_m
-                icons = "●" * min(max(int(subs_m / 10), 1), 30)
+                icons = "●" * min(int(subs_m / 10), 30)
                 rows_html.append(
-                    f"<div style='margin-bottom:12px;'>"
-                    f"<span style='color:white;font-weight:600;display:inline-block;width:120px;'>{escape(company)}</span>"
+                    f"<div class='sub-row'>"
+                    f"<span style='color:#ffffff;font-weight:600;display:inline-block;width:120px;'>{escape(company)}</span>"
                     f"<span style='color:#ff5b1f;letter-spacing:2px;'>{icons}</span>"
                     f"<span style='color:rgba(255,255,255,0.5);font-size:0.85rem;margin-left:8px;'>{subs_m:.0f}M</span>"
                     f"</div>"
                 )
         if not rows_html:
             st.info("Subscriber data unavailable.")
-            return
-        st.markdown(
-            "<div style='padding:8px 0;'>"
-            + "".join(rows_html)
-            + "<div style='color:rgba(255,255,255,0.3);font-size:0.75rem;margin-top:8px;'>● = 10M subscribers</div>"
-            + "</div>",
-            unsafe_allow_html=True,
-        )
-        china_pop = 1400
-        st.caption(
-            f"Combined paid subscribers: {total_subs:.0f}M — "
-            f"{'more than' if total_subs > china_pop else 'approaching'} the population of China ({china_pop}M)."
-        )
-    except Exception:
-        st.info("Subscriber data unavailable.")
-
-
-_beat(_screen14, label="The Human Side", headline="Behind every dollar: a human being.")
-
-
-# Screen 15
-def _screen15():
-    try:
-        min_df = _read_excel_sheet_cached(excel_path, "Company_minute&dollar_earned", source_stamp) if excel_path else pd.DataFrame()
-        if min_df.empty:
-            st.info("Revenue ticker unavailable.")
-            return
-        min_df = min_df.copy()
-        min_df.columns = [str(c).strip() for c in min_df.columns]
-        year_col = ""
-        for c in min_df.columns:
-            if "year" in c.lower():
-                year_col = c
-                break
-        scoped = min_df.copy()
-        if year_col:
-            scoped = _yr(min_df, effective_year, year_col)
-            if scoped.empty:
-                scoped = min_df.copy()
-        platform_col = ""
-        for c in scoped.columns:
-            if c.lower() in {"platform", "company", "service", "asset"}:
-                platform_col = c
-                break
-        revenue_col = ""
-        for c in scoped.columns:
-            norm = c.lower()
-            if "revenue" in norm and ("$b" in norm or "usd" in norm or "$" in norm):
-                revenue_col = c
-                break
-        if not revenue_col:
-            for c in scoped.columns:
-                if "revenue" in c.lower():
-                    revenue_col = c
-                    break
-        if not platform_col or not revenue_col:
-            st.info("Revenue ticker unavailable.")
-            return
-
-        ticker_companies = ["Alphabet", "Meta", "Amazon", "Apple", "Microsoft"]
-        rows_html = []
-        total_rps = 0.0
-        scoped[revenue_col] = pd.to_numeric(scoped[revenue_col], errors="coerce")
-        for company in ticker_companies:
-            rows = scoped[scoped[platform_col].astype(str).str.lower().str.contains(company.lower(), na=False)]
-            if rows.empty:
-                continue
-            revenue_b = float(rows[revenue_col].iloc[0])
-            if revenue_b <= 0:
-                continue
-            rps = (revenue_b * 1e9) / (365 * 24 * 3600)
-            total_rps += rps
-            rows_html.append(
-                f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"
-                f"border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:12px;'>"
-                f"<span style='color:white;font-weight:600;'>{escape(company)}</span>"
-                f"<span class='ticker-val' data-rps='{rps:.4f}'>$0</span>"
-                f"</div>"
+        else:
+            st.markdown(
+                "<div style='padding:8px 0;'>"
+                + "".join(rows_html)
+                + "<div style='color:rgba(255,255,255,0.3);font-size:0.75rem;margin-top:8px;'>● = 10M subscribers</div>"
+                + "</div>",
+                unsafe_allow_html=True,
             )
-        if not rows_html:
-            st.info("Revenue ticker unavailable.")
-            return
-        rows_html.append(
-            f"<div style='display:flex;justify-content:space-between;align-items:center;margin-top:8px;'>"
-            f"<span style='color:rgba(255,255,255,0.5);font-size:0.9rem;'>Combined</span>"
-            f"<span class='ticker-val' style='color:white;' data-rps='{total_rps:.4f}'>$0</span>"
-            f"</div>"
-        )
-        st.markdown("<div style='padding:8px 0;'>" + "".join(rows_html) + "</div>", unsafe_allow_html=True)
-        st.caption(
-            f"Based on {effective_year} annual revenue ÷ seconds per year. Numbers update every 100ms since you opened this page."
-        )
-    except Exception:
+            china_pop = 1400
+            st.caption(
+                f"Combined paid subscribers: {total_subs:.0f}M — "
+                f"{'more than' if total_subs > china_pop else 'approaching'} "
+                f"the population of China ({china_pop}M)."
+            )
+except Exception:
+    st.info("Subscriber data unavailable.")
+_beat_divider()
+
+# Screen 15 — Live revenue ticker (self-contained component)
+_beat_header("The Clock", "Every second you've been reading this...")
+try:
+    min_df = _read_excel_sheet_cached(excel_path, "Company_minute&dollar_earned", source_stamp) if excel_path else pd.DataFrame()
+    if min_df.empty:
         st.info("Revenue ticker unavailable.")
+    else:
+        min_df.columns = [str(c).strip() for c in min_df.columns]
+        yr_col_m = _find_col(min_df, ["year"])
+        min_row = _yr(min_df, effective_year, yr_col_m) if yr_col_m else min_df.copy()
+        if min_row.empty:
+            min_row = min_df.copy()
+        ticker_companies = ["Alphabet", "Meta", "Amazon", "Apple", "Microsoft"]
+        ticker_data = []
+        total_rps = 0.0
+        platform_col = _find_col(min_row, ["platform"]) or _find_col(min_row, ["company"])
+        revenue_col = _find_col(min_row, ["revenue"])
+        if platform_col and revenue_col:
+            min_row[revenue_col] = pd.to_numeric(min_row[revenue_col], errors="coerce")
+            for company in ticker_companies:
+                rows = min_row[min_row[platform_col].astype(str).str.lower().str.contains(company.lower(), na=False)]
+                if rows.empty:
+                    continue
+                rev_b = float(rows[revenue_col].iloc[0] or 0.0)
+                if rev_b <= 0:
+                    continue
+                rps = (rev_b * 1e9) / (365 * 24 * 3600)
+                total_rps += rps
+                ticker_data.append((company, rps))
+        else:
+            row = min_row.iloc[-1]
+            for company in ticker_companies:
+                matches = [c for c in min_row.columns if company.lower() in c.lower() and c != yr_col_m]
+                if not matches:
+                    continue
+                rpm = pd.to_numeric(pd.Series([row[matches[0]]]), errors="coerce").iloc[0]
+                if pd.isna(rpm):
+                    continue
+                rps = float(rpm) / 60.0
+                total_rps += rps
+                ticker_data.append((company, rps))
+        if not ticker_data:
+            st.info("Revenue ticker unavailable.")
+        else:
+            rows_html = ""
+            for company, rps in ticker_data:
+                rows_html += f"""
+                <div style="display:flex;justify-content:space-between;
+                            align-items:center;padding:14px 0;
+                            border-bottom:1px solid rgba(255,255,255,0.07);">
+                  <span style="color:white;font-weight:600;font-size:1rem;">{escape(company)}</span>
+                  <span id="tick_{escape(company).replace(' ','_')}"
+                        data-rps="{rps:.6f}"
+                        style="color:#ff5b1f;font-family:monospace;
+                               font-size:1.5rem;font-weight:800;">$0</span>
+                </div>
+                """
+            rows_html += f"""
+            <div style="display:flex;justify-content:space-between;
+                        align-items:center;padding:16px 0 0;">
+              <span style="color:rgba(255,255,255,0.4);font-size:0.9rem;">
+                Combined
+              </span>
+              <span id="tick_combined"
+                    data-rps="{total_rps:.6f}"
+                    style="color:white;font-family:monospace;
+                           font-size:1.5rem;font-weight:800;">$0</span>
+            </div>
+            """
+            st.components.v1.html(
+                f"""
+                <div style="background:#0d1117;padding:24px 20px;border-radius:12px;font-family:sans-serif;">
+                  {rows_html}
+                  <div style="color:rgba(255,255,255,0.3);font-size:0.72rem;margin-top:16px;">
+                    Based on {effective_year} annual revenue ÷ seconds per year.
+                    Updates every 120ms since you opened this page.
+                  </div>
+                </div>
+                <script>
+                  (function() {{
+                    var t0 = Date.now();
+                    var els = document.querySelectorAll('[data-rps]');
+                    setInterval(function() {{
+                      var elapsed = (Date.now() - t0) / 1000;
+                      els.forEach(function(el) {{
+                        var rps = parseFloat(el.getAttribute('data-rps'));
+                        el.textContent = '$' + (rps * elapsed).toLocaleString('en-US', {{
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0
+                        }});
+                      }});
+                    }}, 120);
+                  }})();
+                </script>
+                """,
+                height=340,
+            )
+except Exception as exc:
+    st.info(f"Revenue ticker unavailable: {exc}")
+_beat_divider()
 
-
-_beat(_screen15, label="The Clock", headline="Every second you've been reading this...")
-
-
-# Screen 16
-def _screen16():
-    _render_transcript_pulse_strip()
-
-
-_beat(
-    _screen16,
-    label="The Human Voice",
-    headline="Here's what the people running these companies actually said.",
-)
-
-
-# Screen 17
+# Screen 16 — Transcript pulse + market tape
+_beat_header("The Human Voice", "Here's what the people running these companies actually said.")
+_render_transcript_pulse_strip(effective_year, selected_quarter)
 st.markdown(
-    "<div class='scroll-reveal story-beat' style='text-align:center;'>"
-    "<div class='beat-label'>Your Turn</div>"
-    "<div class='beat-headline'>Go deeper.</div>"
-    "<div class='beat-body'>Pick your path.</div>"
+    "<div style='color:#ff5b1f;font-size:0.68rem;letter-spacing:0.22em;text-transform:uppercase;margin:16px 0 8px;'>"
+    "Market Tape"
     "</div>",
     unsafe_allow_html=True,
 )
-col1, col2, col3 = st.columns(3)
-with col1:
-    if st.button("Overview — Macro and Market", key="home_gateway_overview"):
+_render_stock_price_strip(market_feed_df)
+_beat_divider()
+
+# Screen 17 — Gateway
+st.markdown(
+    """
+<div style="text-align:center;padding:48px 0 24px;">
+  <div style="color:#ff5b1f;font-size:0.72rem;letter-spacing:0.28em;
+              text-transform:uppercase;margin-bottom:12px;">Your Turn</div>
+  <div style="color:white;font-size:2.2rem;font-weight:800;
+              margin-bottom:8px;">Go deeper.</div>
+  <div style="color:rgba(255,255,255,0.4);font-size:1rem;
+              margin-bottom:32px;">Pick your path.</div>
+</div>
+""",
+    unsafe_allow_html=True,
+)
+g1, g2, g3 = st.columns(3)
+with g1:
+    if st.button("Overview — Macro and Market", use_container_width=True, key="home_gateway_overview"):
         st.switch_page("pages/00_Overview.py")
-with col2:
-    if st.button("Earnings — Company Deep Dives", key="home_gateway_earnings"):
+with g2:
+    if st.button("Earnings — Company Deep Dives", use_container_width=True, key="home_gateway_earnings"):
         st.switch_page("pages/01_Earnings.py")
-with col3:
-    if st.button("Genie — Ask the Data", key="home_gateway_genie"):
+with g3:
+    if st.button("Genie — Ask the Data", use_container_width=True, key="home_gateway_genie"):
         st.switch_page("pages/04_Genie.py")
 
 source_label = str(workbook_path) if workbook_path else "not found"
 st.markdown(
-    f"<div class='wm-foot'>Source: {escape(source_label)} • Period baseline: {effective_year} {selected_quarter}</div>",
+    f"<div class='wm-foot' style='color:rgba(255,255,255,0.45);'>Source: {escape(source_label)} • Period baseline: {effective_year} {selected_quarter}</div>",
     unsafe_allow_html=True,
 )
 
