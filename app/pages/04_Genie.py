@@ -70,7 +70,8 @@ import json as _json
 def _render_genie_hover_chart(fig, height=520):
     """Render Plotly chart with hover-highlight overlay (Genie light theme).
     Left of cursor = full opacity, right = dimmed."""
-    fig_json_str = fig.to_json()
+    # Sanitize JSON: replace </ with <\/ to prevent premature </script> in HTML
+    fig_json_str = fig.to_json().replace("</", r"<\/")
     dim_color = "255,255,255"   # light theme: white dim
     glow_color = "59,130,246"
     _h = str(height)

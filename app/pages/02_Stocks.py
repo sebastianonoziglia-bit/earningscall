@@ -60,7 +60,8 @@ def _render_hover_highlight_chart(fig, height=520, theme="dark"):
     """Render a Plotly chart inside st.components.v1.html with a premium
     hover-highlight overlay: left of cursor = full opacity, right = dimmed.
     Works for line, candlestick, and all trace types."""
-    fig_json_str = fig.to_json()
+    # Sanitize JSON: replace </ with <\/ to prevent premature </script> in HTML
+    fig_json_str = fig.to_json().replace("</", r"<\/")
     # Background tint for the dim overlay (dark theme vs light)
     if theme == "dark":
         dim_color = "2,8,16"
