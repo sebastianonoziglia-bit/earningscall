@@ -3725,6 +3725,13 @@ var RAW="""
 var LOGOS="""
         + logos_json
         + """;
+/* Diagnostic — visible for 3s then fades, helps debug blank charts */
+var _dbg = document.createElement('div');
+_dbg.style.cssText = 'position:absolute;top:4px;right:8px;z-index:999;font-size:10px;color:#4aaeff;opacity:0.7;font-family:monospace;';
+_dbg.textContent = 'data=' + (Array.isArray(RAW) ? RAW.length : 'N/A') + ' logos=' + Object.keys(LOGOS||{}).length;
+document.getElementById('wa-attn-root').appendChild(_dbg);
+setTimeout(function(){ _dbg.style.transition='opacity 1s'; _dbg.style.opacity='0'; }, 3000);
+
 function logoForName(name) {
   var n = String(name || '').toLowerCase();
   for (var k in LOGOS) {
@@ -3867,7 +3874,13 @@ function countUp(el, target, dur) {
   requestAnimationFrame(step);
 }
 setTimeout(function(){ countUp(document.getElementById('wa-attn-counter'), ytHoursB, 2000); }, 400);
-} catch(err) { console.error('Bubble chart error:', err); document.getElementById('wa-attn-bubbles').innerHTML = '<div style="color:#ff5b1f;padding:20px;">Bubble chart failed: ' + err.message + '</div>'; }
+} catch(err) {
+  console.error('Bubble chart error:', err);
+  var _errEl = document.getElementById('wa-attn-bubbles');
+  if (_errEl) _errEl.innerHTML = '<div style="color:#ff5b1f;padding:40px 20px;font-size:14px;font-family:monospace;"><b>Bubble chart error</b><br>' + String(err.message||err) + '<br><br><span style="opacity:0.5;">RAW type: ' + typeof RAW + ', length: ' + (Array.isArray(RAW)?RAW.length:'N/A') + '</span></div>';
+  var _ctrEl = document.getElementById('wa-attn-counter');
+  if (_ctrEl) _ctrEl.textContent = 'Error';
+}
 </script>
 </body></html>"""
     )
@@ -4075,7 +4088,13 @@ for _c in _human_companies:
         _c["color"] = "#9146FF"
         _c["logo"] = _resolve_logo("Amazon", logos) if logos else ""
 
-_human_json = json.dumps(_human_companies)
+# Sanitise NaN / inf before JSON serialisation (NaN breaks JSON spec)
+import math as _math_mod
+for _hc_clean in _human_companies:
+    for _hk, _hv in list(_hc_clean.items()):
+        if isinstance(_hv, float) and (_math_mod.isnan(_hv) or _math_mod.isinf(_hv)):
+            _hc_clean[_hk] = None
+_human_json = json.dumps(_human_companies, allow_nan=False)
 
 # ── THE HUMAN SIDE — Platform Globe (dynamic from Company_subscribers_values) ─
 @st.cache_data(ttl=300)

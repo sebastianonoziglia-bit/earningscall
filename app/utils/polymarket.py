@@ -256,19 +256,30 @@ def get_all_company_bets_labelled(markets: list[dict[str, Any]] | None = None) -
     Filter `markets` (or fetch top-300 if None) to those matching a tracked
     company OR entertainment/tech/market-cap bets.
     Returns list with extra `matched_company` key, sorted by volume desc.
+    Deduplicates by market_id AND by event slug (so sub-markets of the same
+    event only appear once — the highest-volume one).
     """
     if markets is None:
         markets = fetch_polymarket_top(300)
     result = []
     seen_ids: set[str] = set()
+    seen_slugs: set[str] = set()
     for m in markets:
         if m["market_id"] in seen_ids:
+            continue
+        # Deduplicate by slug (event-level) — keep highest-volume sub-market
+        slug = m.get("slug", "")
+        if slug and slug in seen_slugs:
             continue
         company = match_company(m["question"])
         if company:
             seen_ids.add(m["market_id"])
+            if slug:
+                seen_slugs.add(slug)
             result.append({**m, "matched_company": company})
         elif _is_entertainment_or_market_bet(m["question"]):
             seen_ids.add(m["market_id"])
+            if slug:
+                seen_slugs.add(slug)
             result.append({**m, "matched_company": "Entertainment"})
     return sorted(result, key=lambda x: x.get("volume_total") or 0, reverse=True)
