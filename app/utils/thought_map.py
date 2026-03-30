@@ -1182,19 +1182,21 @@ def render_thought_map(height: int = 620, view_mode: str = "classic"):
         {
           selector: "edge",
           style: {
-            "width": 2.5,
-            "line-color": "rgba(99,179,237,0.55)",
-            "target-arrow-color": "rgba(99,179,237,0.7)",
+            "width": 2,
+            "line-color": "rgba(99,179,237,0.45)",
+            "target-arrow-color": "rgba(99,179,237,0.6)",
             "target-arrow-shape": "triangle",
             "curve-style": "bezier",
-            "arrow-scale": 1.0,
+            "arrow-scale": 0.9,
             "label": "",
             "font-size": "8px",
             "color": "#8ea2bf",
             "text-rotation": "autorotate",
             "text-margin-y": -8,
-            "opacity": 1,
-            "line-style": "solid",
+            "opacity": 0.75,
+            "line-style": "dashed",
+            "line-dash-pattern": [8, 10],
+            "line-dash-offset": 0,
             "transition-property": "opacity, line-color, width",
             "transition-duration": "0.4s"
           }
@@ -1558,10 +1560,10 @@ def render_thought_map(height: int = 620, view_mode: str = "classic"):
       cy.edges().forEach((edge, i) => {
         setTimeout(() => {
           edge.animate(
-            { style: { "width": 4, "line-color": "rgba(56,189,248,0.7)", "target-arrow-color": "rgba(56,189,248,0.8)" } },
+            { style: { "width": 3.5, "line-color": "rgba(56,189,248,0.6)", "target-arrow-color": "rgba(56,189,248,0.7)" } },
             { duration: 400, easing: "ease-out-cubic", complete: () => {
               edge.animate(
-                { style: { "width": 2.5, "line-color": "rgba(99,179,237,0.55)", "target-arrow-color": "rgba(99,179,237,0.7)" } },
+                { style: { "width": 2, "line-color": "rgba(99,179,237,0.45)", "target-arrow-color": "rgba(99,179,237,0.6)" } },
                 { duration: 600, easing: "ease-in-out-cubic" }
               );
             }}
@@ -1628,6 +1630,44 @@ def render_thought_map(height: int = 620, view_mode: str = "classic"):
     updateFocusButtons();
     renderContext();
     renderSelection(null);
+
+    // ── Continuous flowing animation ──
+    // Animate edge dash offsets for flowing line effect
+    let _dashOffset = 0;
+    let _floatPhase = 0;
+    const _nodePhases = new Map();
+
+    function _animLoop(ts) {
+      _dashOffset = (ts * 0.025) % 200;
+      _floatPhase = ts * 0.001;
+
+      // Flowing dashed edges
+      cy.edges().forEach(function(edge) {
+        edge.style("line-dash-offset", -_dashOffset);
+      });
+
+      // Gentle node float (subtle Y oscillation)
+      cy.nodes().forEach(function(node, idx) {
+        if (!_nodePhases.has(node.id())) {
+          _nodePhases.set(node.id(), { offset: Math.random() * Math.PI * 2, amp: 2 + Math.random() * 4 });
+        }
+        var p = _nodePhases.get(node.id());
+        var dy = Math.sin(_floatPhase * 0.4 + p.offset) * p.amp;
+        var pos = node.position();
+        if (!node._baseY) node._baseY = pos.y;
+        node.position("y", node._baseY + dy);
+      });
+
+      requestAnimationFrame(_animLoop);
+    }
+    // Start after layout settles
+    setTimeout(function() {
+      // Capture base positions after layout
+      cy.nodes().forEach(function(node) {
+        node._baseY = node.position("y");
+      });
+      requestAnimationFrame(_animLoop);
+    }, 280 + allNodes.length * 220 + 600);
   </script>
 </body>
 </html>
