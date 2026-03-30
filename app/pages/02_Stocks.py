@@ -14,6 +14,7 @@ apply_page_transition_fix()
 
 from utils.auth import check_password
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 from stock_processor_fix import StockDataProcessor  # Use the fixed version
 from data_processor import FinancialDataProcessor
@@ -511,7 +512,7 @@ def render_all_company_stocks_section():
     with controls[1]:
         view_mode = st.selectbox(
             "View",
-            ["Indexed (base=100)", "Price (USD)", "Price (USD, log scale)"],
+            ["Individual Charts", "Overlay (Indexed)", "Overlay (Price)"],
             index=0,
             key="all_stocks_view_mode",
         )
@@ -532,9 +533,9 @@ def render_all_company_stocks_section():
         st.info("Select at least one company to show the chart.")
         return
 
+    # ── Collect price data for all selected companies ──
+    company_series = {}
     with st.spinner("Loading price histories..."):
-        fig = go.Figure()
-        added = 0
         for company in selected_companies:
             try:
                 stock_data = stock_processor.get_company_data(company, multi_timeframe)
@@ -544,66 +545,168 @@ def render_all_company_stocks_section():
                 series = pd.to_numeric(history.get("Close"), errors="coerce").dropna()
                 if series.empty:
                     continue
-
-                if view_mode == "Indexed (base=100)":
-                    base = float(series.iloc[0]) if float(series.iloc[0]) != 0 else None
-                    if not base:
-                        continue
-                    y = (series / base) * 100.0
-                    hover_y = series
-                    hover_extra = "Price: $%{customdata:.2f}"
-                    y_title = "Index (base=100)"
-                else:
-                    y = series
-                    hover_y = series
-                    hover_extra = "Price: $%{y:.2f}"
-                    y_title = "Price (USD)"
-
-                color = (COMPANY_COLORS.get(company) or COMPANY_COLORS.get(company.strip()) or ("#64748b", ""))[0]
-                fig.add_trace(
-                    go.Scatter(
-                        x=series.index,
-                        y=y,
-                        mode="lines",
-                        name=company,
-                        line=dict(color=color, width=2.6),
-                        customdata=hover_y,
-                        hovertemplate="%{x|%b %d, %Y}<br><b>%{fullData.name}</b><br>"
-                        + hover_extra
-                        + "<extra></extra>",
-                    )
-                )
-                added += 1
+                company_series[company] = series
             except Exception:
                 continue
 
-    if added == 0:
+    if not company_series:
         st.info("No price history available for the selected companies/timeframe.")
         return
 
-    yaxis_type = "log" if view_mode == "Price (USD, log scale)" else "linear"
-    fig.update_layout(
-        height=560,
-        hovermode="x unified",
-        margin=dict(l=10, r=10, t=10, b=10),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        font=dict(
-            family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-            color="#0f172a",
-        ),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-    )
-    fig.update_xaxes(showgrid=False, zeroline=False, showline=False)
-    fig.update_yaxes(
-        title=y_title,
-        type=yaxis_type,
-        showgrid=False,
-        zeroline=False,
-        showline=False,
-    )
-    st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+    if view_mode == "Individual Charts":
+        # ── Trading-terminal style: one mini-chart per company ──
+        n = len(company_series)
+        cols_per_row = 3
+        rows = (n + cols_per_row - 1) // cols_per_row
+        names = list(company_series.keys())
+
+        fig = make_subplots(
+            rows=rows,
+            cols=cols_per_row,
+            subplot_titles=names + [""] * (rows * cols_per_row - n),
+            vertical_spacing=0.08,
+            horizontal_spacing=0.05,
+        )
+
+        for idx, (company, series) in enumerate(company_series.items()):
+            row = idx // cols_per_row + 1
+            col = idx % cols_per_row + 1
+            color = (COMPANY_COLORS.get(company) or COMPANY_COLORS.get(company.strip()) or ("#64748b", ""))[0]
+            # Compute period return for color
+            start_price = float(series.iloc[0])
+            end_price = float(series.iloc[-1])
+            pct_change = ((end_price - start_price) / start_price * 100) if start_price else 0
+            line_color = "#16A34A" if pct_change >= 0 else "#EF4444"
+            # Fill area under the line
+            fig.add_trace(
+                go.Scatter(
+                    x=series.index,
+                    y=series,
+                    mode="lines",
+                    name=company,
+                    showlegend=False,
+                    line=dict(color=line_color, width=2),
+                    fill="tozeroy",
+                    fillcolor=f"rgba({int(line_color[1:3],16)},{int(line_color[3:5],16)},{int(line_color[5:7],16)},0.08)",
+                    hovertemplate="%{x|%b %d, %Y}<br>$%{y:.2f}<extra></extra>",
+                ),
+                row=row,
+                col=col,
+            )
+
+        chart_height = max(320, rows * 240)
+        fig.update_layout(
+            height=chart_height,
+            margin=dict(l=40, r=20, t=40, b=20),
+            font=dict(
+                family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+                size=11,
+                color="#e6edf3",
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            showlegend=False,
+        )
+        # Style each subplot axis
+        for idx in range(len(company_series)):
+            ax_suffix = "" if idx == 0 else str(idx + 1)
+            fig.update_xaxes(
+                showgrid=False, zeroline=False, showline=False,
+                showticklabels=(idx // cols_per_row == rows - 1),  # only bottom row
+                tickfont=dict(size=9, color="#8b949e"),
+                row=idx // cols_per_row + 1,
+                col=idx % cols_per_row + 1,
+            )
+            fig.update_yaxes(
+                showgrid=True,
+                gridcolor="rgba(48,54,61,0.4)",
+                zeroline=False,
+                showline=False,
+                tickprefix="$",
+                tickfont=dict(size=9, color="#8b949e"),
+                row=idx // cols_per_row + 1,
+                col=idx % cols_per_row + 1,
+            )
+        # Style subplot titles (company names)
+        fig.update_annotations(font=dict(size=12, color="#e6edf3"))
+        st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+
+        # Summary strip: show current price + period return for each
+        strip_cols = st.columns(min(len(company_series), 6))
+        for i, (company, series) in enumerate(company_series.items()):
+            col_idx = i % min(len(company_series), 6)
+            start_p = float(series.iloc[0])
+            end_p = float(series.iloc[-1])
+            pct = ((end_p - start_p) / start_p * 100) if start_p else 0
+            sign = "+" if pct >= 0 else ""
+            clr = "#16A34A" if pct >= 0 else "#EF4444"
+            with strip_cols[col_idx]:
+                st.markdown(
+                    f"<div style='text-align:center;padding:6px 0;'>"
+                    f"<div style='font-weight:700;font-size:0.85rem;color:#e6edf3;'>{company}</div>"
+                    f"<div style='font-size:1.05rem;font-weight:600;color:#e6edf3;'>${end_p:.2f}</div>"
+                    f"<div style='font-size:0.82rem;color:{clr};font-weight:600;'>{sign}{pct:.1f}%</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+    else:
+        # ── Overlay mode: all companies on same chart ──
+        is_indexed = view_mode == "Overlay (Indexed)"
+        fig = go.Figure()
+        for company, series in company_series.items():
+            if is_indexed:
+                base = float(series.iloc[0]) if float(series.iloc[0]) != 0 else None
+                if not base:
+                    continue
+                y = (series / base) * 100.0
+                hover_y = series
+                hover_extra = "Price: $%{customdata:.2f}"
+                y_title = "Index (base=100)"
+            else:
+                y = series
+                hover_y = series
+                hover_extra = "Price: $%{y:.2f}"
+                y_title = "Price (USD)"
+
+            color = (COMPANY_COLORS.get(company) or COMPANY_COLORS.get(company.strip()) or ("#64748b", ""))[0]
+            fig.add_trace(
+                go.Scatter(
+                    x=series.index,
+                    y=y,
+                    mode="lines",
+                    name=company,
+                    line=dict(color=color, width=2.6),
+                    customdata=hover_y,
+                    hovertemplate="%{x|%b %d, %Y}<br><b>%{fullData.name}</b><br>"
+                    + hover_extra
+                    + "<extra></extra>",
+                )
+            )
+
+        fig.update_layout(
+            height=560,
+            hovermode="x unified",
+            margin=dict(l=10, r=10, t=10, b=10),
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(color="#e6edf3")),
+            font=dict(
+                family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+                color="#e6edf3",
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        fig.update_xaxes(showgrid=False, zeroline=False, showline=False, tickfont=dict(color="#8b949e"))
+        fig.update_yaxes(
+            title=y_title,
+            showgrid=True,
+            gridcolor="rgba(48,54,61,0.4)",
+            zeroline=False,
+            showline=False,
+            tickfont=dict(color="#8b949e"),
+            title_font=dict(color="#8b949e"),
+        )
+        st.plotly_chart(fig, use_container_width=True, config=plotly_config)
 
 # Create tabs for different views (only Company Details for now)
 tab1, = st.tabs(["Company Details"])
@@ -623,12 +726,12 @@ st.markdown("""
         cursor: pointer;
     }
     .company-card {
-        border: 1px solid #f0f0f0;
+        border: 1px solid rgba(48,54,61,0.6);
         border-radius: 10px;
         padding: 15px;
         margin-bottom: 15px;
-        background-color: white;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        background-color: rgba(22,27,34,0.85);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
         transition: all 0.3s ease;
         cursor: pointer;
     }
@@ -652,10 +755,12 @@ st.markdown("""
     .company-card-name {
         font-weight: 700;
         font-size: 16px;
+        color: #e6edf3;
     }
     .company-card-price {
         font-size: 20px;
         font-weight: 600;
+        color: #e6edf3;
     }
     .company-card-change {
         font-size: 0.9rem;
@@ -669,12 +774,13 @@ st.markdown("""
         height: 40px;
     }
     .company-card:hover {
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.4);
         transform: translateY(-2px);
+        border-color: rgba(88,100,120,0.7);
     }
     .indicator-card {
-        border-color: #d7e3ff;
-        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.08);
+        border-color: rgba(37,99,235,0.35);
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
     }
     /* Hide Streamlit element toolbar overlay that creates dark bar on hover */
     [data-testid="stElementToolbar"],
@@ -717,16 +823,16 @@ st.markdown("""
         -webkit-text-fill-color: #ffffff !important;
     }
     .price-up {
-        color: green;
+        color: #16A34A;
     }
     .price-down {
-        color: red;
+        color: #EF4444;
     }
     .stock-metric-card {
-        background: #ffffff;
+        background: rgba(22,27,34,0.85);
         border-radius: 10px;
-        border: 1px solid #eef0f4;
-        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+        border: 1px solid rgba(48,54,61,0.6);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
         padding: 12px 14px;
         min-height: 76px;
     }
@@ -737,12 +843,12 @@ st.markdown("""
         font-size: 0.72rem;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: #6b7280;
+        color: #8b949e;
     }
     .stock-metric-value {
         font-size: 1.1rem;
         font-weight: 700;
-        color: #111827;
+        color: #e6edf3;
         margin-top: 0.35rem;
     }
 </style>
@@ -852,7 +958,7 @@ with tab1:
                         <div style="display:flex; align-items:center; gap: 0.75rem; margin-bottom: 0.35rem;">
                             <img src="data:image/png;base64,{logo_b64}" alt="{selected_company} logo"
                                  style="height: 54px; width: 54px; object-fit: contain;">
-                            <div style="font-size: 1.05rem; font-weight: 600; color: #111827;">{selected_company}</div>
+                            <div style="font-size: 1.05rem; font-weight: 600; color: #e6edf3;">{selected_company}</div>
                         </div>
                         """,
                         unsafe_allow_html=True,
@@ -864,7 +970,7 @@ with tab1:
                 change = quote.get('change', 0)
                 change_percent = quote.get('change_percent', 0)
 
-                change_color = "green" if change >= 0 else "red"
+                change_color = "#16A34A" if change >= 0 else "#EF4444"
                 change_prefix = "+" if change >= 0 else "−"
 
                 st.markdown(f"<h3 style='margin-bottom: 0;'>${price:.2f}</h3>", unsafe_allow_html=True)
@@ -926,20 +1032,22 @@ with tab1:
                         height=420,
                         title=None,
                         hovermode="x unified",
-                        legend=dict(orientation="h", y=1.02),
+                        legend=dict(orientation="h", y=1.02, font=dict(color="#e6edf3")),
                         margin=dict(l=0, r=10, t=40, b=0),
                         font=dict(
                             family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-                            color="#0f172a",
+                            color="#e6edf3",
                         ),
                         paper_bgcolor="rgba(0,0,0,0)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         yaxis=dict(
                             title="Price ($)",
                             tickprefix="$",
-                            showgrid=False,
+                            showgrid=True,
+                            gridcolor="rgba(48,54,61,0.4)",
                             zeroline=False,
                             showline=False,
+                            tickfont=dict(color="#8b949e"),
                         ),
                         yaxis2=(
                             dict(
@@ -957,11 +1065,12 @@ with tab1:
                             showgrid=False,
                             zeroline=False,
                             showline=False,
+                            tickfont=dict(color="#8b949e"),
                             rangebreaks=[dict(bounds=["sat", "mon"])],
                         ),
                     )
-                    fig.update_xaxes(showgrid=False, zeroline=False, showline=False)
-                    fig.update_yaxes(showgrid=False, zeroline=False, showline=False)
+                    fig.update_xaxes(showgrid=False, zeroline=False, showline=False, tickfont=dict(color="#8b949e"))
+                    fig.update_yaxes(showgrid=True, gridcolor="rgba(48,54,61,0.4)", zeroline=False, showline=False, tickfont=dict(color="#8b949e"))
                     
                     # Add chart zoom effect at the top of the file if not already added
                     if not hasattr(st.session_state, 'chart_css_added'):
