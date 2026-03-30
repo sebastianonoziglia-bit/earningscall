@@ -6113,23 +6113,40 @@ body{background:transparent;}
 .cta-btn:hover .cta-arrow{color:#4aaeff;right:16px;}
 </style>
 <div class="cta-row">
-  <a class="cta-btn" id="cta-overview" href="/Overview" target="_top">
+  <a class="cta-btn" id="cta-overview" href="/Overview" target="_parent">
     <div class="cta-title">Overview</div>
     <div class="cta-desc">Macro trends & market signals</div>
     <span class="cta-arrow">&rarr;</span>
   </a>
-  <a class="cta-btn" id="cta-earnings" href="/Earnings" target="_top">
+  <a class="cta-btn" id="cta-earnings" href="/Earnings" target="_parent">
     <div class="cta-title">Earnings</div>
     <div class="cta-desc">Company deep dives & intelligence</div>
     <span class="cta-arrow">&rarr;</span>
   </a>
-  <a class="cta-btn" id="cta-genie" href="/Genie" target="_top">
+  <a class="cta-btn" id="cta-genie" href="/Genie" target="_parent">
     <div class="cta-title">Genie</div>
     <div class="cta-desc">Ask the data anything</div>
     <span class="cta-arrow">&rarr;</span>
   </a>
 </div>
 <script>
+// CTA button navigation — use JS to reliably navigate parent frame
+document.querySelectorAll('.cta-btn').forEach(function(btn){
+  btn.addEventListener('click', function(e){
+    e.preventDefault();
+    var href = this.getAttribute('href');
+    try {
+      if(window.parent && window.parent.location){
+        window.parent.location.href = href;
+      } else {
+        window.top.location.href = href;
+      }
+    } catch(err) {
+      // Cross-origin fallback
+      window.open(href, '_parent');
+    }
+  });
+});
 // Random pop-out animation at different times
 var btns = document.querySelectorAll('.cta-btn');
 function randomPop(){

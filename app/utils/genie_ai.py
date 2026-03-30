@@ -109,6 +109,17 @@ Paramount, Apple*, Disney*, Comcast*, Netflix*, Twitter/X, TikTok, Snapchat
 - Smartphone shipment data by manufacturer (2010–2024)
 - Average internet time spent per country
 
+## POLYMARKET PREDICTION MARKET DATA (live feed)
+You have access to the current live Polymarket prediction market feed. This includes:
+- Active prediction bets related to tracked companies and the broader tech/media/advertising market
+- Each bet includes: question text, YES/NO probability (0-100%), trading volume, end date, and URL
+- Bets are matched to companies via keyword mapping (e.g. "google" → Alphabet, "facebook" → Meta)
+- Use this data to discuss market sentiment, expected outcomes, and probability-weighted scenarios
+- When the user asks about market expectations, sentiment, or "what the market thinks",
+  reference active Polymarket bets as evidence of crowd-sourced probability estimates
+- Polymarket probabilities reflect real-money predictions — cite them as "prediction market consensus"
+- If polymarket_feed is in the dashboard state, use those bets as primary evidence for forward-looking analysis
+
 ## EARNINGS CALL TRANSCRIPTS
 348 full earnings call transcripts available:
 - Companies: Alphabet, Amazon, Apple, Comcast, Disney, Meta Platforms, Microsoft,
@@ -260,6 +271,34 @@ def build_genie_messages(
     # a one-click "generate Q4 2024 briefing" that summarizes the top forward signals
     # across all companies using call_ai().
 
+    # ── Polymarket prediction feed context ────────────────────────────────
+    polymarket_block = ""
+    poly_feed = dashboard_state.get("polymarket_feed")
+    if poly_feed:
+        _poly_lines = []
+        for _pb in poly_feed[:20]:
+            _pq = str(_pb.get("question", ""))
+            _py = _pb.get("yes_price")
+            _pn = _pb.get("no_price")
+            _pvol = str(_pb.get("volume_fmt", ""))
+            _pend = str(_pb.get("end_date", ""))
+            _pmatch = str(_pb.get("matched_company", ""))
+            _yes_str = f"YES {_py:.0f}%" if _py is not None else "—"
+            _no_str = f"NO {_pn:.0f}%" if _pn is not None else "—"
+            _poly_lines.append(
+                f"- [{_pmatch}] \"{_pq}\" → {_yes_str} / {_no_str}"
+                + (f" | Vol: {_pvol}" if _pvol else "")
+                + (f" | Ends: {_pend}" if _pend else "")
+            )
+        if _poly_lines:
+            polymarket_block = (
+                "\n\n=== LIVE POLYMARKET PREDICTION FEED ===\n"
+                "Active prediction market bets (real-money probabilities).\n"
+                "Use these as evidence of market consensus when discussing outlook.\n"
+                + "\n".join(_poly_lines)
+                + "\n=== END POLYMARKET FEED ===\n"
+            )
+
     db_context_prompt = (
         "You are a financial analyst assistant. Use the following data to answer the user question. "
         f"Metrics: {context.get('metrics', [])}. "
@@ -267,6 +306,7 @@ def build_genie_messages(
         f"Auto-generated insights: {context.get('insights', [])}. "
         f"Transcript excerpt: {transcript_excerpt}"
         + forward_signals_block
+        + polymarket_block
     )
 
     # Inject depth mode into system prompt for thought map quality

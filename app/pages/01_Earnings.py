@@ -104,6 +104,39 @@ def main():
             margin: 0.75rem 0;
         }
 
+        /* ── Fix multiselect pill first-letter clipping ── */
+        [data-baseweb="select"] *,
+        .stMultiSelect * {
+            background-image: none !important;
+        }
+        div[data-testid="stMultiSelect"] div[style*="linear-gradient"],
+        [data-baseweb="select"] > div > div[style*="gradient"] {
+            display: none !important;
+            opacity: 0 !important;
+            width: 0 !important;
+            pointer-events: none !important;
+        }
+        [data-baseweb="tag"] {
+            overflow: visible !important;
+            max-width: none !important;
+            padding: 2px 8px 2px 10px !important;
+            margin-left: 4px !important;
+        }
+        [data-baseweb="tag"] > span,
+        [data-baseweb="tag"] span[dir="auto"] {
+            overflow: visible !important;
+            text-overflow: unset !important;
+            white-space: nowrap !important;
+            max-width: none !important;
+            padding-left: 2px !important;
+        }
+        [data-baseweb="input"],
+        [data-baseweb="select"] > div:first-child {
+            overflow: visible !important;
+            flex-wrap: wrap !important;
+            padding-left: 6px !important;
+        }
+
         .earnings-hero {
             width: 100%;
             margin: 0.5rem 0 1rem;
@@ -138,7 +171,7 @@ def main():
             transition: filter 0.8s ease, opacity 0.8s ease;
         }
         .earnings-hero.is-loaded::before {
-            filter: blur(18px);
+            filter: blur(0px);
             opacity: 0.85;
         }
 
@@ -3875,16 +3908,16 @@ def main():
         key="metrics_year_range",
     )
 
-    metric_toggle_row = st.columns([0.40, 0.25, 0.35])
-    with metric_toggle_row[1]:
+    metric_toggle_row = st.columns([0.45, 0.30, 0.25])
+    with metric_toggle_row[0]:
         metrics_freq = st.radio(
             "Frequency",
             ["Yearly", "Quarterly"],
             horizontal=True,
             key="metrics_frequency",
         )
-    with metric_toggle_row[2]:
-        show_metric_yoy = st.checkbox("Show YoY%", value=True, key="metrics_show_yoy")
+    with metric_toggle_row[1]:
+        show_metric_yoy = st.checkbox("Show YoY %", value=True, key="metrics_show_yoy")
 
     metrics_df = data_processor.df_metrics
     metrics_quarter_col = None
@@ -4385,6 +4418,16 @@ def main():
                     f"white-space:nowrap;'>{p:.0f}% YES</span>"
                 )
 
+            st.markdown("""<style>
+            @keyframes polyPulse { 0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,0);border-left-color:#7c3aed;} 50%{box-shadow:-2px 0 8px 0 rgba(124,58,237,0.15);border-left-color:#a78bfa;} }
+            @keyframes liveDot { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+            @keyframes barPulse { 0%,100%{opacity:1;} 50%{opacity:0.75;} }
+            .poly-bet-card { animation: polyPulse 3s ease-in-out infinite; transition: transform 0.2s, box-shadow 0.2s; }
+            .poly-bet-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,0.12) !important; }
+            .poly-live-dot { display:inline-block;width:6px;height:6px;border-radius:50%;background:#16a34a;margin-right:4px;animation:liveDot 2s ease-in-out infinite; }
+            .poly-bar-fill { animation: barPulse 4s ease-in-out infinite; }
+            </style>""", unsafe_allow_html=True)
+
             _poly_cols = st.columns(2, gap="medium")
             for _pi, _bet in enumerate(_poly_bets[:6]):
                 with _poly_cols[_pi % 2]:
@@ -4407,17 +4450,17 @@ def main():
                     _bar_col = "#16a34a" if _bar_pct >= 65 else ("#d97706" if _bar_pct >= 45 else "#dc2626")
                     st.markdown(
                         f"<a href='{_url}' target='_blank' rel='noopener' style='text-decoration:none;'>"
-                        f"<div style='background:#f9fafb;border:1px solid #e5e7eb;"
+                        f"<div class='poly-bet-card' style='background:#f9fafb;border:1px solid #e5e7eb;"
                         f"border-left:3px solid #7c3aed;border-radius:6px;"
                         f"padding:10px 12px;margin-bottom:8px;'>"
                         f"<div style='display:flex;align-items:flex-start;justify-content:space-between;"
                         f"gap:8px;margin-bottom:7px;'>"
                         f"<p style='margin:0;font-size:0.83rem;color:#111827;"
-                        f"line-height:1.5;font-weight:500;flex:1;'>{html.escape(_bq)}</p>"
+                        f"line-height:1.5;font-weight:500;flex:1;'><span class='poly-live-dot'></span>{html.escape(_bq)}</p>"
                         f"{_yes_html}"
                         f"</div>"
                         f"<div style='background:#e5e7eb;border-radius:999px;height:4px;margin-bottom:6px;'>"
-                        f"<div style='background:{_bar_col};width:{_bar_pct}%;height:4px;border-radius:999px;'></div>"
+                        f"<div class='poly-bar-fill' style='background:{_bar_col};width:{_bar_pct}%;height:4px;border-radius:999px;'></div>"
                         f"</div>"
                         f"<div style='display:flex;align-items:center;gap:4px;font-size:0.7rem;'>"
                         f"{_meta_html}</div>"

@@ -787,19 +787,36 @@ div[data-testid="stButton"] button:hover {
     }
 
     /* ── Fix multiselect pill text clipping ── */
+    [data-baseweb="select"] *,
+    .stMultiSelect * {
+        background-image: none !important;
+    }
+    div[data-testid="stMultiSelect"] div[style*="linear-gradient"],
+    [data-baseweb="select"] > div > div[style*="gradient"] {
+        display: none !important;
+        opacity: 0 !important;
+        width: 0 !important;
+        pointer-events: none !important;
+    }
     [data-testid="stMultiSelect"] [data-baseweb="tag"] {
         overflow: visible !important;
         max-width: none !important;
-        padding-left: 10px !important;
+        padding: 2px 8px 2px 10px !important;
+        margin-left: 4px !important;
     }
-    [data-testid="stMultiSelect"] [data-baseweb="tag"] > span:first-child {
+    [data-testid="stMultiSelect"] [data-baseweb="tag"] > span,
+    [data-testid="stMultiSelect"] [data-baseweb="tag"] span[dir="auto"] {
         overflow: visible !important;
         text-overflow: unset !important;
         white-space: nowrap !important;
+        max-width: none !important;
         padding-left: 2px !important;
     }
-    [data-testid="stMultiSelect"] [data-baseweb="input"] {
+    [data-testid="stMultiSelect"] [data-baseweb="input"],
+    [data-baseweb="select"] > div:first-child {
         overflow: visible !important;
+        flex-wrap: wrap !important;
+        padding-left: 6px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -2930,6 +2947,23 @@ try:
         "Pinterest":["Pinterest Ads","Pinterest Shopping"],
         "Nvidia":["Data Center GPUs (H100/B200)","Gaming GPUs","NVIDIA DRIVE","Omniverse","CUDA"],
     }
+
+    # ── Inject live Polymarket prediction feed into dashboard state ────────
+    try:
+        from utils.polymarket import get_all_company_bets_labelled, fetch_polymarket_top
+        _poly_top = fetch_polymarket_top(limit=40)
+        _poly_labelled = get_all_company_bets_labelled(limit=40)
+        # Merge: labelled (company-matched) first, then general top bets
+        _seen_ids = {b.get("market_id") for b in _poly_labelled}
+        _poly_feed = list(_poly_labelled)
+        for _pb in _poly_top:
+            if _pb.get("market_id") not in _seen_ids:
+                _pb["matched_company"] = ""
+                _poly_feed.append(_pb)
+                _seen_ids.add(_pb.get("market_id"))
+        dashboard_state["polymarket_feed"] = _poly_feed[:50]
+    except Exception:
+        dashboard_state["polymarket_feed"] = []
 except Exception as e:
     st.error(f"Error loading data: {str(e)}")
     st.stop()

@@ -5373,8 +5373,28 @@ def _render_global_media_economy_extras(
             .dropna(subset=["PeopleM"])
         )
         population = population[population["PeopleM"] > 0].copy()
-        year_country = country_totals[country_totals["Year"] == int(map_year)].copy()
+        # Smart year fallback: if selected year yields < 3 countries, try nearby years
+        _pc_year = int(map_year)
+        year_country = country_totals[country_totals["Year"] == _pc_year].copy()
         per_capita = year_country.merge(population, on=["Country", "Year"], how="inner")
+        if len(per_capita) < 3:
+            # Try cross-year: match countries from country_totals at map_year
+            # with population from the nearest available year per country
+            _pop_years = population.groupby("Country")["Year"].apply(list).to_dict()
+            _rows = []
+            for _, cr in year_country.iterrows():
+                _cn = cr["Country"]
+                if _cn in _pop_years:
+                    _available = sorted(_pop_years[_cn], key=lambda y: abs(y - _pc_year))
+                    if _available:
+                        _best_yr = _available[0]
+                        _pop_row = population[(population["Country"] == _cn) & (population["Year"] == _best_yr)]
+                        if not _pop_row.empty:
+                            _row = cr.to_dict()
+                            _row["PeopleM"] = float(_pop_row.iloc[0]["PeopleM"])
+                            _rows.append(_row)
+            if len(_rows) >= 3:
+                per_capita = pd.DataFrame(_rows)
         if not per_capita.empty:
             per_capita["AdPerCapitaUSD"] = per_capita["Value"] / per_capita["PeopleM"]
             rank = per_capita.sort_values("AdPerCapitaUSD", ascending=False).head(20).sort_values("AdPerCapitaUSD")
@@ -5399,6 +5419,15 @@ def _render_global_media_economy_extras(
                 fig_pc.update_xaxes(gridcolor="rgba(148,163,184,0.22)")
                 _apply_light_theme(fig_pc)
                 st.plotly_chart(fig_pc, use_container_width=True, config=plotly_config, key="ov_pc20")
+                # Auto-generated commentary
+                _top_pc = rank.iloc[-1]  # highest per-capita (last after ascending sort)
+                _low_pc = rank.iloc[0]   # lowest per-capita
+                st.caption(
+                    f"💡 {_top_pc['Country']} leads in ad spend per capita at "
+                    f"${_top_pc['AdPerCapitaUSD']:.0f} per person, "
+                    f"while {_low_pc['Country']} sits at ${_low_pc['AdPerCapitaUSD']:.0f}. "
+                    f"Showing {len(rank)} countries for {int(map_year)}."
+                )
                 rendered = True
 
     # Mobile vs Desktop split by region.
@@ -5447,6 +5476,18 @@ def _render_global_media_economy_extras(
             fig_split.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
             _apply_light_theme(fig_split)
             st.plotly_chart(fig_split, use_container_width=True, config=plotly_config, key="ov_pc21")
+            # Auto-generated commentary
+            _mob = reg[reg["DeviceClass"] == "Mobile"]
+            _desk = reg[reg["DeviceClass"] == "Desktop"]
+            if not _mob.empty and not _desk.empty:
+                _top_mob_region = _mob.sort_values("SharePct", ascending=False).iloc[0]["Region"] if not _mob.empty else "N/A"
+                _top_mob_pct = _mob.sort_values("SharePct", ascending=False).iloc[0]["SharePct"] if not _mob.empty else 0
+                _top_desk_region = _desk.sort_values("SharePct", ascending=False).iloc[0]["Region"] if not _desk.empty else "N/A"
+                st.caption(
+                    f"💡 {_top_mob_region} has the highest mobile ad share at {_top_mob_pct:.0f}%, "
+                    f"while {_top_desk_region} leads in desktop. Year: {int(map_year)}."
+                )
+
             rendered = True
 
     return rendered

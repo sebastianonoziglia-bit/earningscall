@@ -929,21 +929,43 @@ def render_company_detail(selected_company, stock_processor, company_logos):
 # MARKET TERMINAL (white/light theme)
 # ══════════════════════════════════════════════════════════════════════════════
 def render_market_terminal():
-    """Market Terminal panel on white background."""
+    """Market Terminal panel — full trading-desk style with regime, F&G, calendar, filter tabs."""
     st.markdown("### Market Terminal")
-    st.caption("Live prices across indices, commodities, forex, crypto, sectors & ad-tech")
+    st.caption("Live prices across 80+ instruments — indices, commodities, forex, crypto, sectors & ad-tech")
 
     try:
         from utils.market_terminal import (
             fetch_bulk_market_data,
             fetch_fear_greed,
             fetch_crypto_top,
+            fetch_economic_calendar,
+            compute_market_regime,
+            compute_adtech_fear_greed,
             build_terminal_html,
         )
         with st.spinner("Loading live market data..."):
             _mt_data = fetch_bulk_market_data()
             _mt_fg = fetch_fear_greed()
-            _mt_crypto = fetch_crypto_top(limit=50)
+            _mt_crypto = fetch_crypto_top(limit=100)
+            _mt_calendar = fetch_economic_calendar()
+            _mt_regime = compute_market_regime(_mt_data, _mt_fg) if _mt_data else None
+            _mt_atfg = compute_adtech_fear_greed(_mt_data, _mt_fg) if _mt_data else None
+
+        # Fetch Polymarket feed for the terminal strip
+        _mt_poly = []
+        try:
+            from utils.polymarket import fetch_polymarket_top, get_all_company_bets_labelled
+            _poly_top = fetch_polymarket_top(limit=30)
+            _poly_labelled = get_all_company_bets_labelled(limit=30)
+            _seen_ids = {b.get("market_id") for b in _poly_labelled}
+            _mt_poly = list(_poly_labelled)
+            for _pb in _poly_top:
+                if _pb.get("market_id") not in _seen_ids:
+                    _pb["matched_company"] = ""
+                    _mt_poly.append(_pb)
+                    _seen_ids.add(_pb.get("market_id"))
+        except Exception:
+            pass
 
         if _mt_data:
             _mt_html = build_terminal_html(
@@ -951,9 +973,15 @@ def render_market_terminal():
                 fear_greed=_mt_fg,
                 crypto_top=_mt_crypto,
                 light_theme=True,
+                economic_calendar=_mt_calendar,
+                market_regime=_mt_regime,
+                adtech_fg=_mt_atfg,
+                polymarket_feed=_mt_poly or None,
             )
-            _n_rows = len(_mt_data) + (min(50, len(_mt_crypto)) if _mt_crypto else 0)
-            _mt_height = max(700, 220 + _n_rows * 22 + (80 if _mt_fg else 0))
+            _n_rows = len(_mt_data) + (min(100, len(_mt_crypto)) if _mt_crypto else 0)
+            _cal_rows = min(15, len(_mt_calendar)) if _mt_calendar else 0
+            _poly_extra = 60 if _mt_poly else 0
+            _mt_height = max(1000, 420 + _n_rows * 22 + (80 if _mt_fg else 0) + _cal_rows * 28 + _poly_extra)
             st.components.v1.html(_mt_html, height=_mt_height, scrolling=True)
         else:
             st.info("Market terminal data unavailable — yfinance may be blocked by your network.")
@@ -1016,17 +1044,6 @@ render_multi_asset_chart()
 # ── Section 3: Market Terminal (white bg) ─────────────────────────────────
 st.divider()
 render_market_terminal()
-
-# ── About section ─────────────────────────────────────────────────────────
-st.divider()
-with st.expander("About Stock Data"):
-    st.markdown("""
-    **Data Sources**:
-    - Historical + live rows from workbook tabs: `Stocks & Crypto`, `Daily`, `Minute`
-    - Market Terminal: live data via yfinance, CoinGecko, CoinMarketCap
-
-    Click on any company card to see detailed performance.
-    """)
 
 # ── Button style override (MutationObserver) ─────────────────────────────
 import streamlit.components.v1 as _comp

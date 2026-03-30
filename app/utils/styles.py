@@ -172,6 +172,7 @@ def load_common_styles():
     [data-baseweb="select"] *,
     .stMultiSelect * {
         background-image: none !important;
+        background: transparent !important;
     }
     [data-baseweb="select"]::before,
     [data-baseweb="select"]::after,
@@ -186,6 +187,18 @@ def load_common_styles():
         width: 0 !important;
         height: 0 !important;
     }
+    /* Kill the scroll-shadow overlay divs that Streamlit positions over tag pills.
+       These are sibling divs of the input with position:absolute and linear-gradient
+       backgrounds that visually clip the first and last characters. */
+    [data-baseweb="select"] > div > div[style*="position"],
+    [data-baseweb="select"] > div > div[style*="gradient"],
+    [data-baseweb="select"] > div > div[style*="linear-gradient"],
+    div[data-testid="stMultiSelect"] div[style*="linear-gradient"] {
+        display: none !important;
+        opacity: 0 !important;
+        width: 0 !important;
+        pointer-events: none !important;
+    }
     /* Tag pill — proper padding so first letter is never clipped */
     [data-baseweb="tag"] {
         overflow: visible !important;
@@ -195,6 +208,7 @@ def load_common_styles():
         text-overflow: unset !important;
         margin-left: 4px !important;
         background-color: var(--app-surface-alt, #f3f4f6) !important;
+        background: var(--app-surface-alt, #f3f4f6) !important;
     }
     [data-baseweb="tag"] > span,
     [data-baseweb="tag"] span[dir="auto"] {
@@ -203,6 +217,7 @@ def load_common_styles():
         white-space: nowrap !important;
         max-width: none !important;
         min-width: 0 !important;
+        padding-left: 2px !important;
     }
     /* Close button inside tag — don't overlap text */
     [data-baseweb="tag"] [role="presentation"] {
@@ -215,11 +230,18 @@ def load_common_styles():
     [data-baseweb="select"] > div:first-child {
         overflow: visible !important;
         flex-wrap: wrap !important;
-        padding-left: 4px !important;
+        padding-left: 6px !important;
     }
     /* Restore the select container's own background (the wildcard above kills it) */
     div[data-baseweb="select"] > div {
         background-color: var(--app-surface, #ffffff) !important;
+        background: var(--app-surface, #ffffff) !important;
+    }
+    /* Restore tag pill background explicitly (wildcard transparent override) */
+    div[data-testid="stMultiSelect"] [data-baseweb="tag"],
+    .stMultiSelect [data-baseweb="tag"] {
+        background: var(--app-surface-alt, #f3f4f6) !important;
+        background-color: var(--app-surface-alt, #f3f4f6) !important;
     }
 
     /* Slider styling */
