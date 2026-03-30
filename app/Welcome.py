@@ -5598,6 +5598,7 @@ try:
                         plot_bgcolor="rgba(13,17,23,0.5)",
                         showlegend=True,
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                                    bgcolor="rgba(0,0,0,0)",
                                     font=dict(color="#e6edf3", size=11)),
                         hoverlabel=dict(
                             bgcolor="rgba(17,24,39,0.92)",
@@ -6060,38 +6061,32 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-# ── CTA navigation — native Streamlit links (no iframe issues) ──
+# ── CTA navigation — st.page_link (Streamlit native, guaranteed to work) ──
 st.markdown("""<style>
-/* Glass CTA card styling */
-a[href="/Overview"],a[href="/Earnings"],a[href="/Genie"]{
-  display:block!important;padding:26px 22px!important;border-radius:16px!important;
+/* Glass CTA card styling for st.page_link */
+div[data-testid="stPageLink"] a {
+  display:block!important;padding:22px 20px!important;border-radius:16px!important;
   background:rgba(74,174,255,0.06)!important;border:1px solid rgba(74,174,255,0.18)!important;
-  text-decoration:none!important;cursor:pointer!important;position:relative!important;
-  overflow:hidden!important;
+  text-decoration:none!important;cursor:pointer!important;
   transition:all .4s cubic-bezier(.22,1,.36,1)!important;
 }
-a[href="/Overview"]:hover,a[href="/Earnings"]:hover,a[href="/Genie"]:hover{
+div[data-testid="stPageLink"] a:hover {
   background:rgba(74,174,255,0.12)!important;border-color:rgba(74,174,255,0.4)!important;
   transform:translateY(-4px) scale(1.02)!important;
   box-shadow:0 8px 32px rgba(74,174,255,0.2),0 0 60px rgba(74,174,255,0.08)!important;
 }
-a[href="/Overview"] b,a[href="/Earnings"] b,a[href="/Genie"] b{
-  display:block!important;color:#4aaeff!important;font-size:1.1rem!important;
-  font-weight:700!important;margin-bottom:6px!important;letter-spacing:.02em!important;
-  font-family:'DM Sans',sans-serif!important;
-}
-a[href="/Overview"] em,a[href="/Earnings"] em,a[href="/Genie"] em{
-  display:block!important;color:rgba(255,255,255,0.45)!important;font-size:0.78rem!important;
-  font-style:normal!important;line-height:1.4!important;font-family:'DM Sans',sans-serif!important;
+div[data-testid="stPageLink"] a span {
+  color:#4aaeff!important;font-size:1.05rem!important;font-weight:700!important;
+  font-family:'DM Sans',sans-serif!important;letter-spacing:.02em!important;
 }
 </style>""", unsafe_allow_html=True)
 _cta_c1, _cta_c2, _cta_c3 = st.columns(3, gap="medium")
 with _cta_c1:
-    st.markdown('<a href="/Overview"><b>Overview</b><em>Macro trends &amp; market signals</em></a>', unsafe_allow_html=True)
+    st.page_link("pages/00_Overview.py", label="Overview  →  Macro trends & market signals", icon="🔭")
 with _cta_c2:
-    st.markdown('<a href="/Earnings"><b>Earnings</b><em>Company deep dives &amp; intelligence</em></a>', unsafe_allow_html=True)
+    st.page_link("pages/01_Earnings.py", label="Earnings  →  Company deep dives & intelligence", icon="📊")
 with _cta_c3:
-    st.markdown('<a href="/Genie"><b>Genie</b><em>Ask the data anything</em></a>', unsafe_allow_html=True)
+    st.page_link("pages/04_Genie.py", label="Genie  →  Ask the data anything", icon="🧞")
 
 source_label = str(workbook_path) if workbook_path else "not found"
 st.markdown(

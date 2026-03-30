@@ -406,8 +406,8 @@ def fetch_crypto_top(limit: int = 50) -> list[dict]:
                     })
             except Exception:
                 pass
-    # Sort by name
-    rows.sort(key=lambda x: x["name"])
+    # Sort by market cap descending (largest first); fall back to name if no mcap
+    rows.sort(key=lambda x: -(float(x.get("market_cap") or 0)), reverse=False)
     return rows[:limit]
 
 
@@ -425,10 +425,10 @@ def fetch_economic_calendar() -> list[dict]:
         if not isinstance(data, list):
             return []
         events = []
-        for item in data[:30]:  # limit to 30 events
+        for item in data[:80]:  # scan more events
             impact = str(item.get("impact", "")).strip()
-            # Only show Medium / High impact
-            if impact not in ("High", "Medium"):
+            # Show High, Medium, and Low impact events
+            if impact not in ("High", "Medium", "Low"):
                 continue
             events.append({
                 "title": str(item.get("title", "")),
@@ -835,15 +835,17 @@ def build_terminal_html(
                 f"</div>"
             )
 
-            # Volume + Market Cap badges (when available)
+            # Volume + Market Cap badges — only for stocks/adtech/sectors (save space for names in other categories)
             vol_badge = ""
             mcap_badge = ""
-            _v = r.get("volume")
-            _m = r.get("market_cap")
-            if _v and float(_v) > 0:
-                vol_badge = f"<span class='mt-vol'>{_fmt_vol(_v)}</span>"
-            if _m and float(_m) > 0:
-                mcap_badge = f"<span class='mt-mcap'>{_fmt_large(_m)}</span>"
+            _show_badges = cat_key in ("stocks", "adtech", "sectors")
+            if _show_badges:
+                _v = r.get("volume")
+                _m = r.get("market_cap")
+                if _v and float(_v) > 0:
+                    vol_badge = f"<span class='mt-vol'>{_fmt_vol(_v)}</span>"
+                if _m and float(_m) > 0:
+                    mcap_badge = f"<span class='mt-mcap'>{_fmt_large(_m)}</span>"
 
             rows_html += (
                 f"<div class='mt-row {cls}'>"
@@ -931,8 +933,8 @@ def build_terminal_html(
     calendar_html = ""
     if economic_calendar:
         cal_rows = ""
-        for ev in economic_calendar[:15]:
-            impact_cls = "high" if ev["impact"] == "High" else "med"
+        for ev in economic_calendar[:25]:
+            impact_cls = "high" if ev["impact"] == "High" else ("med" if ev["impact"] == "Medium" else "low")
             # Parse date
             date_str = ev.get("date", "")
             try:
@@ -1060,7 +1062,7 @@ def build_terminal_html(
     .ftab.active{{background:{accent};border-color:{accent};color:#fff;}}
 
     /* ── Category sections grid ──────────────────── */
-    .mt-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;}}
+    .mt-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px;}}
     .mt-section{{background:{grid_bg};border:1px solid {border};border-radius:8px;padding:10px 12px;min-width:0;
       transition:opacity 0.3s;}}
     .mt-section.hidden{{display:none;}}
@@ -1071,17 +1073,17 @@ def build_terminal_html(
       transition:background 0.15s;}}
     .mt-row:last-child{{border-bottom:none;}}
     .mt-row:hover{{background:{"rgba(0,0,0,0.02)" if light_theme else "rgba(255,255,255,0.02)"};}}
-    .mt-name{{flex:1;color:{text};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
-    .mt-price{{width:85px;text-align:right;color:{text};font-weight:500;font-size:10.5px;}}
-    .mt-pct{{width:75px;text-align:right;font-weight:600;}}
-    .mt-vol{{width:55px;text-align:right;color:{text2};font-size:9px;flex-shrink:0;}}
-    .mt-mcap{{width:65px;text-align:right;color:{text2};font-size:9px;flex-shrink:0;}}
+    .mt-name{{flex:1;min-width:0;color:{text};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;}}
+    .mt-price{{width:70px;text-align:right;color:{text};font-weight:500;font-size:10.5px;flex-shrink:0;}}
+    .mt-pct{{width:62px;text-align:right;font-weight:600;font-size:10.5px;flex-shrink:0;}}
+    .mt-vol{{width:45px;text-align:right;color:{text2};font-size:9px;flex-shrink:0;}}
+    .mt-mcap{{width:50px;text-align:right;color:{text2};font-size:9px;flex-shrink:0;}}
     .mt-row.up .mt-pct{{color:{up};}}
     .mt-row.down .mt-pct{{color:{dn};}}
     .mt-row.flat .mt-pct{{color:{flat_c};}}
 
     /* ── Health bars (all categories) ────────────── */
-    .health-bar-bg{{width:60px;height:5px;background:{border};border-radius:3px;overflow:hidden;flex-shrink:0;}}
+    .health-bar-bg{{width:40px;height:4px;background:{border};border-radius:3px;overflow:hidden;flex-shrink:0;}}
     .health-bar-fill{{height:100%;border-radius:3px;transition:width 0.6s ease;}}
 
     /* ── Crypto table ────────────────────────────── */
@@ -1103,14 +1105,15 @@ def build_terminal_html(
     .cr-row.down .cr-pct{{color:{dn};}}
 
     /* ── Economic Calendar ────────────────────────── */
-    .cal-section{{grid-column:1/-1;background:{grid_bg};border:1px solid {border};border-radius:8px;
-      padding:10px 12px;margin-top:10px;}}
+    .cal-section{{background:{grid_bg};border:1px solid {border};border-radius:8px;
+      padding:10px 12px;margin:10px 0;}}
     .cal-row{{display:flex;align-items:center;gap:8px;padding:5px 0;
       border-bottom:1px solid {"rgba(229,231,235,0.5)" if light_theme else "rgba(30,45,61,0.3)"};font-size:11px;}}
     .cal-row:last-child{{border-bottom:none;}}
     .cal-impact{{width:8px;height:8px;border-radius:50%;flex-shrink:0;}}
     .cal-impact.high{{background:#ef4444;box-shadow:0 0 4px rgba(239,68,68,0.4);}}
     .cal-impact.med{{background:#f97316;}}
+    .cal-impact.low{{background:{text2};}}
     .cal-date{{width:120px;color:{text2};font-size:10px;flex-shrink:0;}}
     .cal-country{{width:30px;font-weight:600;color:{accent};text-transform:uppercase;flex-shrink:0;}}
     .cal-title{{flex:1;color:{text};}}
@@ -1190,9 +1193,9 @@ def build_terminal_html(
         f"{regime_html}{fg_html}{atfg_html}"
         f"</div>"
         f"{tabs_html}"
+        f"{calendar_html}"
         f"<div class='mt-grid'>{''.join(sections_html)}{crypto_html}</div>"
         f"{poly_strip_html}"
-        f"{calendar_html}"
         f"</div>"
         f"{filter_js}"
     )
