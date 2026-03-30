@@ -3718,6 +3718,7 @@ html,body{background:#020810;color:#e6edf3;font-family:'DM Sans','Montserrat',sa
   <div id='wa-attn-bubbles'></div>
 </div>
 <script>
+try {
 var RAW="""
         + human_json_str
         + """;
@@ -3866,6 +3867,7 @@ function countUp(el, target, dur) {
   requestAnimationFrame(step);
 }
 setTimeout(function(){ countUp(document.getElementById('wa-attn-counter'), ytHoursB, 2000); }, 400);
+} catch(err) { console.error('Bubble chart error:', err); document.getElementById('wa-attn-bubbles').innerHTML = '<div style="color:#ff5b1f;padding:20px;">Bubble chart failed: ' + err.message + '</div>'; }
 </script>
 </body></html>"""
     )
@@ -4565,7 +4567,7 @@ for _hc in _human_companies:
 _attn_html = _build_attn_html(_ad_json_str, _global_adv_json_str, _human_json, logos_json=json.dumps(_bubble_logo_map))
 _section("ATTENTION ECONOMY", "Who Owns Your Time", "Each bubble = a platform. Size = subscribers or monthly active users.")
 st.markdown("<div data-ae-section='1' style='width:100%;'>", unsafe_allow_html=True)
-st.components.v1.html(_attn_html, height=520)
+st.components.v1.html(_attn_html, height=560)
 st.markdown("</div>", unsafe_allow_html=True)
 _deep_dive("editorial", "Deep dive into platforms")
 _separator()
