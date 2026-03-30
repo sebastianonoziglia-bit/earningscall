@@ -2579,9 +2579,10 @@ def _render_transcript_pulse_strip(current_year: int, current_quarter: str) -> N
         "<style>@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');"
         "html,body{margin:0;padding:0;background:#020810;}*{box-sizing:border-box;}"
         ".strip{width:100%;overflow:hidden;border-radius:12px;border:1px solid rgba(74,174,255,0.18);background:#020810;padding:12px 0;}"
-        ".track{display:flex;align-items:flex-start;gap:12px;width:max-content;animation:scroll 120s linear infinite;}"
+        ".track{display:flex;align-items:flex-start;gap:12px;width:max-content;animation:scroll 200s linear infinite;}"
         ".track:hover{animation-play-state:paused;}"
-        ".item{width:380px;height:190px;flex:0 0 auto;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(15,23,42,0.72);padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;}"
+        ".item{width:380px;height:190px;flex:0 0 auto;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(15,23,42,0.72);padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;transition:border-color 0.2s, box-shadow 0.2s;}"
+        ".item:hover{border-color:rgba(74,174,255,0.5);box-shadow:0 0 12px rgba(74,174,255,0.15);}"
         ".item-quote{font-style:italic;font-size:0.83rem;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;}"
         ".item-meta{margin-top:8px;display:flex;align-items:center;gap:8px;font-size:0.74rem;flex-shrink:0;}"
         ".logo{width:32px;height:32px;object-fit:contain;border-radius:50%;background:rgba(148,163,184,0.12);border:1px solid rgba(148,163,184,0.26);padding:3px;flex-shrink:0;}"
@@ -3676,6 +3677,9 @@ _deep_dive("overview", "Explore signals in Narrative & Sentiment")
 _separator()
 
 def _build_attn_html(ad_json_str: str, groupm_json_str: str, human_json_str: str = '[]', logos_json: str = '{}') -> str:
+    # Escape </ sequences in JSON to prevent premature </script> closing
+    _safe_human = human_json_str.replace("</", "<\\/")
+    _safe_logos = logos_json.replace("</", "<\\/")
     return (
         """<!DOCTYPE html><html><head><meta charset='utf-8'>
 <style>
@@ -3694,8 +3698,9 @@ html,body{background:#020810;color:#e6edf3;font-family:'DM Sans','Montserrat',sa
 .attn-leg-row{display:flex;align-items:center;gap:8px;font-size:13px;color:#8899aa;}
 .attn-leg-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
 #wa-attn-bubbles{position:absolute;right:0;top:0;width:60%;height:100%;z-index:1;}
-.wa-bubble{position:absolute;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default;transform:scale(0);opacity:0;padding:8px;text-align:center;backdrop-filter:blur(8px);}
+.wa-bubble{position:absolute;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default;transform:scale(0);opacity:0;padding:8px;text-align:center;backdrop-filter:blur(8px);transition:transform 0.5s ease, opacity 0.5s ease;}
 .wa-bubble.pop{animation-fill-mode:forwards;}
+.wa-bubble.visible{transform:scale(1);opacity:1;}
 .wa-bubble .bletter{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.25);font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:#ffffff;margin-bottom:3px;}
 .wa-bubble .blogo-wrap{width:42%;height:42%;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:3px;}
 .wa-bubble .blogo-img{width:72%;height:72%;object-fit:contain;}
@@ -3718,19 +3723,14 @@ html,body{background:#020810;color:#e6edf3;font-family:'DM Sans','Montserrat',sa
   <div id='wa-attn-bubbles'></div>
 </div>
 <script>
+window.addEventListener('load', function(){
 try {
 var RAW="""
-        + human_json_str
+        + _safe_human
         + """;
 var LOGOS="""
-        + logos_json
+        + _safe_logos
         + """;
-/* Diagnostic — visible for 3s then fades, helps debug blank charts */
-var _dbg = document.createElement('div');
-_dbg.style.cssText = 'position:absolute;top:4px;right:8px;z-index:999;font-size:10px;color:#4aaeff;opacity:0.7;font-family:monospace;';
-_dbg.textContent = 'data=' + (Array.isArray(RAW) ? RAW.length : 'N/A') + ' logos=' + Object.keys(LOGOS||{}).length;
-document.getElementById('wa-attn-root').appendChild(_dbg);
-setTimeout(function(){ _dbg.style.transition='opacity 1s'; _dbg.style.opacity='0'; }, 3000);
 
 function logoForName(name) {
   var n = String(name || '').toLowerCase();
@@ -3792,15 +3792,19 @@ var ALL_POS = [
 var FLOATS = ['floatA','floatB','floatC'];
 var bfield = document.getElementById('wa-attn-bubbles');
 var legend = document.getElementById('wa-attn-legend');
+if (!bfield || !legend) {
+  throw new Error('DOM elements not found: bfield=' + !!bfield + ' legend=' + !!legend);
+}
 var ytData = DATA.find(function(d){ return String(d.name||'').toLowerCase().indexOf('youtube') !== -1; });
 var ytHoursB = 1.0;
 if (ytData && ytData.mins) {
   ytHoursB = ytData.mins * 1e12 / 365 / 60 / 1e9;
   if (ytHoursB < 0.1) ytHoursB = 1.0;
 }
+var allBubbles = [];
 DATA.forEach(function(item, i) {
   var normVal = maxVal > 0 ? (item.val || 1) / maxVal : 0.01;
-  /* Reduce inter-bubble gap by 20%: multiplier 112 → 90 */
+  /* Reduce inter-bubble gap by 20%: multiplier 112 -> 90 */
   var size = Math.max(70, Math.round(28 + Math.sqrt(normVal) * 90));
   var radius = size / 2;
   var pos = ALL_POS[i] || {l: (5 + (i % 4) * 22) + '%', t: (5 + Math.floor(i / 4) * 30) + '%'};
@@ -3821,7 +3825,7 @@ DATA.forEach(function(item, i) {
   /* Semi-transparent backdrop style for text readability */
   var backdropStyle = 'text-shadow:0 0 6px rgba(0,0,0,0.8),0 1px 3px rgba(0,0,0,0.9);';
   var fs2 = Math.max(fs - 3, 6);
-  /* Consistent stack: name → users (always) → revenue (if any) → rpm (if any) */
+  /* Consistent stack: name -> users (always) -> revenue (if any) -> rpm (if any) */
   var commonLines = ''
     + (item.users && radius >= 40 ? '<div class="busers" style="font-size:' + Math.max(fs - 2, 7) + 'px;' + backdropStyle + '">' + item.users + '</div>' : '')
     + (revStr && radius >= 45 ? '<div class="brevenue" style="font-size:' + fs2 + 'px;' + backdropStyle + '">' + revStr + '</div>' : '')
@@ -3847,21 +3851,36 @@ DATA.forEach(function(item, i) {
     + ';border:1.5px solid ' + item.color + '55;box-shadow:0 0 ' + Math.round(size / 3) + 'px ' + item.color + '44;cursor:pointer;';
   b.innerHTML = innerHtml;
   b.title = 'Explore ' + item.name + ' on Editorial';
-  (function(platformName){ b.addEventListener('click', function(){ var bUrl=window.parent.location.pathname.replace(/[/][^/]*$/,'/'); window.parent.location.href = bUrl+'Editorial?company=' + encodeURIComponent(platformName); }); })(item.name);
+  (function(platformName){ b.addEventListener('click', function(){ try{ var bUrl=window.parent.location.pathname.replace(/[/][^/]*$/,'/'); window.parent.location.href = bUrl+'Editorial?company=' + encodeURIComponent(platformName); }catch(e){} }); })(item.name);
   bfield.appendChild(b);
-  var delay = i * 80;
-  var floatAnim = FLOATS[i % 3];
-  var floatDur = 3000 + i * 220;
-  setTimeout(function(el, fa, fd) {
-    el.style.animation = 'popIn 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards,' + fa + ' ' + fd + 'ms ease-in-out ' + (600 + el._idx * 80) + 'ms infinite';
-    el.classList.add('pop');
-  }, delay, b, floatAnim, floatDur);
   b._idx = i;
+  allBubbles.push({el:b, idx:i, floatAnim:FLOATS[i%3], floatDur:3000+i*220});
   var row = document.createElement('div');
   row.className = 'attn-leg-row';
   row.innerHTML = '<div class="attn-leg-dot" style="background:' + item.color + ';"></div><span>' + item.name + (item.users ? ' \u2014 ' + item.users : '') + '</span>';
   legend.appendChild(row);
 });
+/* Animate bubbles in — use requestAnimationFrame for reliable timing in iframes */
+function animateBubbles() {
+  allBubbles.forEach(function(info) {
+    var delay = info.idx * 80;
+    setTimeout(function() {
+      var el = info.el;
+      el.style.animation = 'popIn 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards,' + info.floatAnim + ' ' + info.floatDur + 'ms ease-in-out ' + (600 + info.idx * 80) + 'ms infinite';
+      el.classList.add('pop');
+    }, delay);
+  });
+  /* Safety net: if animations haven't triggered after 2s, force-show all bubbles */
+  setTimeout(function() {
+    allBubbles.forEach(function(info) {
+      var cs = window.getComputedStyle(info.el);
+      if (cs.opacity === '0' || cs.transform.indexOf('matrix(0') === 0) {
+        info.el.classList.add('visible');
+      }
+    });
+  }, 2000);
+}
+requestAnimationFrame(animateBubbles);
 function countUp(el, target, dur) {
   var start = performance.now();
   function step(now) {
@@ -3881,6 +3900,7 @@ setTimeout(function(){ countUp(document.getElementById('wa-attn-counter'), ytHou
   var _ctrEl = document.getElementById('wa-attn-counter');
   if (_ctrEl) _ctrEl.textContent = 'Error';
 }
+});
 </script>
 </body></html>"""
     )
@@ -3939,45 +3959,53 @@ def _parse_trillion_minutes(value) -> float:
 # Beat — The Human Side (before Scale of Attention)
 _human_df = _read_excel_sheet_cached(excel_path, "Company_minute&dollar_earned", source_stamp) if excel_path else pd.DataFrame()
 _human_companies: list[dict] = []
-if not _human_df.empty:
-    _human_df.columns = [str(c).strip() for c in _human_df.columns]
-    _h_plat = _find_col(_human_df, ["platform"]) or _find_col(_human_df, ["company"]) or _find_col(_human_df, ["name"])
-    _h_usr = (_find_col(_human_df, ["user"]) or _find_col(_human_df, ["subscrib"])
-              or _find_col(_human_df, ["mau"]) or _find_col(_human_df, ["active"]))
-    _h_mins = (_find_col(_human_df, ["total", "minutes"]) or _find_col(_human_df, ["minutes", "watched"])
-               or _find_col(_human_df, ["minute"]) or _find_col(_human_df, ["avg", "time"]))
-    _h_rev = _find_col(_human_df, ["revenue"])
-    _h_rpm = (_find_col(_human_df, ["per", "minute"]) or _find_col(_human_df, ["dollar", "minute"])
-              or _find_col(_human_df, ["rpm"]) or _find_col(_human_df, ["min", "earn"]))
-    _h_lbl = _find_col(_human_df, ["label"]) or _find_col(_human_df, ["note"])
-    if _h_plat and _h_usr:
-        _human_df[_h_usr] = _human_df[_h_usr].apply(_parse_human_count_millions)
-        if _h_mins:
-            _human_df[_h_mins] = _human_df[_h_mins].apply(_parse_trillion_minutes)
-        if _h_rev:
-            _human_df[_h_rev] = _human_df[_h_rev].apply(_parse_billions)
-        _human_df = _human_df.dropna(subset=[_h_plat, _h_usr])
-        _human_df = _human_df[_human_df[_h_usr] > 0].sort_values(_h_usr, ascending=False)
-        for _, _hr in _human_df.iterrows():
-            _hname = str(_hr[_h_plat]).strip()
-            _hval = float(_hr[_h_usr])
-            _hmins = float(_hr.get(_h_mins, np.nan)) if _h_mins and not pd.isna(_hr.get(_h_mins, np.nan)) else np.nan
-            _hrev = float(_hr.get(_h_rev, np.nan)) if _h_rev and not pd.isna(_hr.get(_h_rev, np.nan)) else np.nan
-            _hrpm = float(_hr.get(_h_rpm, np.nan)) if _h_rpm and not pd.isna(_hr.get(_h_rpm, np.nan)) else np.nan
-            _hlbl = (str(_hr[_h_lbl]).strip() if _h_lbl and not pd.isna(_hr.get(_h_lbl, np.nan)) else
-                     (f"{_hval/1000:.1f}B" if _hval >= 1000 else f"{_hval:.0f}M"))
-            _human_companies.append(
-                {
-                    "name": _hname,
-                    "val": _hval,
-                    "mins": _hmins if not np.isnan(_hmins) else None,
-                    "revenue": _hrev if not np.isnan(_hrev) else None,
-                    "rpm": _hrpm if not np.isnan(_hrpm) else None,
-                    "users": _hlbl,
-                    "color": _company_color(_hname),
-                    "label": _hlbl,
-                }
-            )
+try:
+    if not _human_df.empty:
+        _human_df.columns = [str(c).strip() for c in _human_df.columns]
+        _h_plat = _find_col(_human_df, ["platform"]) or _find_col(_human_df, ["company"]) or _find_col(_human_df, ["name"])
+        _h_usr = (_find_col(_human_df, ["user"]) or _find_col(_human_df, ["subscrib"])
+                  or _find_col(_human_df, ["mau"]) or _find_col(_human_df, ["active"]))
+        _h_mins = (_find_col(_human_df, ["total", "minutes"]) or _find_col(_human_df, ["minutes", "watched"])
+                   or _find_col(_human_df, ["minute"]) or _find_col(_human_df, ["avg", "time"]))
+        _h_rev = _find_col(_human_df, ["revenue"])
+        _h_rpm = (_find_col(_human_df, ["per", "minute"]) or _find_col(_human_df, ["dollar", "minute"])
+                  or _find_col(_human_df, ["rpm"]) or _find_col(_human_df, ["min", "earn"]))
+        _h_lbl = _find_col(_human_df, ["label"]) or _find_col(_human_df, ["note"])
+        if _h_plat and _h_usr:
+            _human_df[_h_usr] = _human_df[_h_usr].apply(_parse_human_count_millions)
+            if _h_mins:
+                _human_df[_h_mins] = _human_df[_h_mins].apply(_parse_trillion_minutes)
+            if _h_rev:
+                _human_df[_h_rev] = _human_df[_h_rev].apply(_parse_billions)
+            if _h_rpm:
+                _human_df[_h_rpm] = pd.to_numeric(_human_df[_h_rpm].astype(str).str.replace(r'[^0-9.\-eE]', '', regex=True), errors='coerce')
+            _human_df = _human_df.dropna(subset=[_h_plat, _h_usr])
+            _human_df = _human_df[_human_df[_h_usr] > 0].sort_values(_h_usr, ascending=False)
+            for _, _hr in _human_df.iterrows():
+                try:
+                    _hname = str(_hr[_h_plat]).strip()
+                    _hval = float(_hr[_h_usr])
+                    _hmins = _safe_float(_hr.get(_h_mins, np.nan)) if _h_mins else np.nan
+                    _hrev = _safe_float(_hr.get(_h_rev, np.nan)) if _h_rev else np.nan
+                    _hrpm = _safe_float(_hr.get(_h_rpm, np.nan)) if _h_rpm else np.nan
+                    _hlbl = (str(_hr[_h_lbl]).strip() if _h_lbl and not pd.isna(_hr.get(_h_lbl, np.nan)) else
+                             (f"{_hval/1000:.1f}B" if _hval >= 1000 else f"{_hval:.0f}M"))
+                    _human_companies.append(
+                        {
+                            "name": _hname,
+                            "val": _hval,
+                            "mins": _hmins if _hmins != 0.0 and not np.isnan(_hmins) else None,
+                            "revenue": _hrev if _hrev != 0.0 and not np.isnan(_hrev) else None,
+                            "rpm": _hrpm if _hrpm != 0.0 and not np.isnan(_hrpm) else None,
+                            "users": _hlbl,
+                            "color": _company_color(_hname),
+                            "label": _hlbl,
+                        }
+                    )
+                except Exception:
+                    continue  # skip malformed rows rather than crashing the page
+except Exception:
+    pass  # fall through to hardcoded fallback below
 if not _human_companies:
     _human_companies = [
         {"name": "YouTube", "val": 2500, "mins": 1000, "revenue": 36.1, "users": "2.5B users", "color": "#ff0000", "label": "2.5B users"},
@@ -4089,11 +4117,13 @@ for _c in _human_companies:
         _c["logo"] = _resolve_logo("Amazon", logos) if logos else ""
 
 # Sanitise NaN / inf AND convert numpy types before JSON serialisation
+# Also strip 'logo' key — it's a large base64 blob not used by the bubble chart JS
 import math as _math_mod
 for _hc_clean in _human_companies:
+    _hc_clean.pop("logo", None)
     for _hk, _hv in list(_hc_clean.items()):
         # Convert numpy types to native Python (json.dumps can't handle np.int64/float64)
-        if hasattr(_hv, 'item'):  # numpy scalar → python scalar
+        if hasattr(_hv, 'item'):  # numpy scalar -> python scalar
             _hc_clean[_hk] = _hv.item()
             _hv = _hc_clean[_hk]
         if isinstance(_hv, float) and (_math_mod.isnan(_hv) or _math_mod.isinf(_hv)):
