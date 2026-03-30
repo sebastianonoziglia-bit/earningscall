@@ -65,6 +65,57 @@ st.session_state["active_nav_page"] = "genie"
 st.session_state["_active_nav_page"] = "genie"
 render_header()
 
+import json as _json
+
+def _render_genie_hover_chart(fig, height=520):
+    """Render Plotly chart with hover-highlight overlay (Genie light theme).
+    Left of cursor = full opacity, right = dimmed."""
+    fig_json_str = fig.to_json()
+    dim_color = "255,255,255"   # light theme: white dim
+    glow_color = "59,130,246"
+    _h = str(height)
+    html = "\n".join([
+        '<!DOCTYPE html><html><head><meta charset="utf-8">',
+        '<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>',
+        '<style>',
+        '*{margin:0;padding:0;box-sizing:border-box;}',
+        'html,body{background:transparent;overflow:hidden;}',
+        '#cw{position:relative;width:100%;height:' + _h + 'px;}',
+        '#ch{width:100%;height:100%;}',
+        '#hdim{position:absolute;pointer-events:none;z-index:5;display:none;',
+        'background:linear-gradient(to right,transparent 0%,rgba(' + dim_color + ',0.42) 16px,rgba(' + dim_color + ',0.58) 100%);',
+        'border-left:1px solid rgba(' + glow_color + ',0.18);',
+        'box-shadow:-4px 0 14px rgba(' + glow_color + ',0.06);}',
+        '#hglow{position:absolute;pointer-events:none;z-index:6;display:none;width:2px;',
+        'background:linear-gradient(to bottom,transparent 0%,rgba(' + glow_color + ',0.15) 10%,',
+        'rgba(' + glow_color + ',0.28) 50%,rgba(' + glow_color + ',0.15) 90%,transparent 100%);}',
+        '</style></head><body>',
+        '<div id="cw"><div id="ch"></div><div id="hdim"></div><div id="hglow"></div></div>',
+        '<script>',
+        'var F=' + fig_json_str + ';',
+        'var gd=document.getElementById("ch");',
+        'Plotly.newPlot(gd,F.data,F.layout,{displayModeBar:false,responsive:true,scrollZoom:false}).then(function(){',
+        '  var dim=document.getElementById("hdim"),gl=document.getElementById("hglow");',
+        '  function pos(mx){',
+        '    var xa=gd._fullLayout.xaxis,ya=gd._fullLayout.yaxis;',
+        '    if(!xa||!ya)return;',
+        '    var pL=xa._offset,pR=pL+xa._length,pT=ya._offset,pH=ya._length;',
+        '    if(mx>=pL&&mx<=pR){',
+        '      dim.style.display="block";dim.style.left=mx+"px";dim.style.top=pT+"px";',
+        '      dim.style.height=pH+"px";dim.style.width=(pR-mx)+"px";',
+        '      gl.style.display="block";gl.style.left=mx+"px";gl.style.top=pT+"px";',
+        '      gl.style.height=pH+"px";',
+        '    }else{dim.style.display="none";gl.style.display="none";}',
+        '  }',
+        '  function hide(){dim.style.display="none";gl.style.display="none";}',
+        '  gd.addEventListener("mousemove",function(e){var r=gd.getBoundingClientRect();pos(e.clientX-r.left);});',
+        '  gd.addEventListener("mouseleave",hide);',
+        '});',
+        '</script></body></html>',
+    ])
+    st.components.v1.html(html, height=height + 6, scrolling=False)
+
+
 def _render_ai_settings_controls(key_prefix: str = "sidebar"):
     ant_key = st.text_input(
         "Anthropic API Key",
@@ -2733,10 +2784,8 @@ if (
         """, unsafe_allow_html=True)
         st.session_state.genie_chart_css_added = True
     
-    # Display the plot with zoom effect
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Display with hover-highlight overlay (dim right of cursor)
+    _render_genie_hover_chart(fig, height=520)
 
     # Generate data-driven insight for displayed chart
     _chart_insights = []

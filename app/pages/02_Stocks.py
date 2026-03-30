@@ -54,6 +54,63 @@ plotly_config = {
     'displaylogo': False
 }
 
+import json as _json
+
+def _render_hover_highlight_chart(fig, height=520, theme="dark"):
+    """Render a Plotly chart inside st.components.v1.html with a premium
+    hover-highlight overlay: left of cursor = full opacity, right = dimmed.
+    Works for line, candlestick, and all trace types."""
+    fig_json_str = fig.to_json()
+    # Background tint for the dim overlay (dark theme vs light)
+    if theme == "dark":
+        dim_color = "2,8,16"
+        glow_color = "74,174,255"
+    else:
+        dim_color = "255,255,255"
+        glow_color = "59,130,246"
+    _h = str(height)
+    # Build HTML parts and join — keeps script tags intact for srcdoc rendering
+    html = "\n".join([
+        '<!DOCTYPE html><html><head><meta charset="utf-8">',
+        '<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>',
+        '<style>',
+        '*{margin:0;padding:0;box-sizing:border-box;}',
+        'html,body{background:transparent;overflow:hidden;}',
+        '#cw{position:relative;width:100%;height:' + _h + 'px;}',
+        '#ch{width:100%;height:100%;}',
+        '#hdim{position:absolute;pointer-events:none;z-index:5;display:none;',
+        'background:linear-gradient(to right,transparent 0%,rgba(' + dim_color + ',0.45) 16px,rgba(' + dim_color + ',0.62) 100%);',
+        'border-left:1px solid rgba(' + glow_color + ',0.22);',
+        'box-shadow:-4px 0 14px rgba(' + glow_color + ',0.08);}',
+        '#hglow{position:absolute;pointer-events:none;z-index:6;display:none;width:2px;',
+        'background:linear-gradient(to bottom,transparent 0%,rgba(' + glow_color + ',0.18) 10%,',
+        'rgba(' + glow_color + ',0.32) 50%,rgba(' + glow_color + ',0.18) 90%,transparent 100%);}',
+        '</style></head><body>',
+        '<div id="cw"><div id="ch"></div><div id="hdim"></div><div id="hglow"></div></div>',
+        '<script>',
+        'var F=' + fig_json_str + ';',
+        'var gd=document.getElementById("ch");',
+        'Plotly.newPlot(gd,F.data,F.layout,{displayModeBar:false,responsive:true,scrollZoom:false}).then(function(){',
+        '  var dim=document.getElementById("hdim"),gl=document.getElementById("hglow");',
+        '  function pos(mx){',
+        '    var xa=gd._fullLayout.xaxis,ya=gd._fullLayout.yaxis;',
+        '    if(!xa||!ya)return;',
+        '    var pL=xa._offset,pR=pL+xa._length,pT=ya._offset,pH=ya._length;',
+        '    if(mx>=pL&&mx<=pR){',
+        '      dim.style.display="block";dim.style.left=mx+"px";dim.style.top=pT+"px";',
+        '      dim.style.height=pH+"px";dim.style.width=(pR-mx)+"px";',
+        '      gl.style.display="block";gl.style.left=mx+"px";gl.style.top=pT+"px";',
+        '      gl.style.height=pH+"px";',
+        '    }else{dim.style.display="none";gl.style.display="none";}',
+        '  }',
+        '  function hide(){dim.style.display="none";gl.style.display="none";}',
+        '  gd.addEventListener("mousemove",function(e){var r=gd.getBoundingClientRect();pos(e.clientX-r.left);});',
+        '  gd.addEventListener("mouseleave",hide);',
+        '});',
+        '</script></body></html>',
+    ])
+    st.components.v1.html(html, height=height + 6, scrolling=False)
+
 # ── Initialize processors ─────────────────────────────────────────────────
 if 'data_processor' not in st.session_state:
     data_processor = FinancialDataProcessor()
@@ -672,7 +729,7 @@ def render_multi_asset_chart():
                     font=dict(color="#e6edf3", size=12)),
         font=dict(family="system-ui, -apple-system, sans-serif", color="#e6edf3"),
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(13,17,23,0.6)",
+        plot_bgcolor="rgba(0,0,0,0)",
         hoverlabel=dict(
             bgcolor="rgba(17,24,39,0.92)",
             bordercolor="rgba(99,179,237,0.4)",
@@ -702,7 +759,8 @@ def render_multi_asset_chart():
     if chart_type == "Candlestick":
         fig.update_layout(xaxis_rangeslider_visible=False)
 
-    st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+    # ── Render with hover-highlight overlay (dim right of cursor) ──
+    _render_hover_highlight_chart(fig, height=520)
 
     # Summary strip
     n_cols = min(len(company_series), 6)

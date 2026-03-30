@@ -3723,7 +3723,10 @@ html,body{background:#020810;color:#e6edf3;font-family:'DM Sans','Montserrat',sa
   <div id='wa-attn-bubbles'></div>
 </div>
 <script>
-window.addEventListener('load', function(){
+(function _initBubbles(){
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',_run);return;}
+_run();
+function _run(){
 try {
 var RAW="""
         + _safe_human
@@ -3900,7 +3903,7 @@ setTimeout(function(){ countUp(document.getElementById('wa-attn-counter'), ytHou
   var _ctrEl = document.getElementById('wa-attn-counter');
   if (_ctrEl) _ctrEl.textContent = 'Error';
 }
-});
+}})();
 </script>
 </body></html>"""
     )
@@ -6057,107 +6060,38 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-# Animated glass CTA buttons
-st.components.v1.html("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700&display=swap');
-*{box-sizing:border-box;margin:0;padding:0;}
-body{background:transparent;}
-.cta-row{display:flex;gap:16px;justify-content:center;padding:12px 24px;flex-wrap:wrap;}
-.cta-btn{
-  position:relative;flex:1;min-width:200px;max-width:360px;
-  padding:28px 24px;border-radius:16px;cursor:pointer;overflow:hidden;
-  background:rgba(74,174,255,0.06);
-  border:1px solid rgba(74,174,255,0.18);
-  transition:all 0.4s cubic-bezier(0.22,1,0.36,1);
-  text-decoration:none;display:block;
+# ── CTA navigation — native Streamlit links (no iframe issues) ──
+st.markdown("""<style>
+/* Glass CTA card styling */
+a[href="/Overview"],a[href="/Earnings"],a[href="/Genie"]{
+  display:block!important;padding:26px 22px!important;border-radius:16px!important;
+  background:rgba(74,174,255,0.06)!important;border:1px solid rgba(74,174,255,0.18)!important;
+  text-decoration:none!important;cursor:pointer!important;position:relative!important;
+  overflow:hidden!important;
+  transition:all .4s cubic-bezier(.22,1,.36,1)!important;
 }
-.cta-btn:hover{
-  background:rgba(74,174,255,0.12);
-  border-color:rgba(74,174,255,0.4);
-  transform:translateY(-4px) scale(1.02);
-  box-shadow:0 8px 32px rgba(74,174,255,0.2),0 0 60px rgba(74,174,255,0.08);
-  z-index:2;
+a[href="/Overview"]:hover,a[href="/Earnings"]:hover,a[href="/Genie"]:hover{
+  background:rgba(74,174,255,0.12)!important;border-color:rgba(74,174,255,0.4)!important;
+  transform:translateY(-4px) scale(1.02)!important;
+  box-shadow:0 8px 32px rgba(74,174,255,0.2),0 0 60px rgba(74,174,255,0.08)!important;
 }
-/* Glass reflection sweep */
-.cta-btn::before{
-  content:'';position:absolute;top:-50%;left:-60%;width:40%;height:200%;
-  background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,0.08) 45%,rgba(255,255,255,0.15) 50%,rgba(255,255,255,0.08) 55%,transparent 60%);
-  transform:rotate(25deg);transition:none;pointer-events:none;
+a[href="/Overview"] b,a[href="/Earnings"] b,a[href="/Genie"] b{
+  display:block!important;color:#4aaeff!important;font-size:1.1rem!important;
+  font-weight:700!important;margin-bottom:6px!important;letter-spacing:.02em!important;
+  font-family:'DM Sans',sans-serif!important;
 }
-.cta-btn:hover::before{
-  animation:glassReflection 0.8s ease-out forwards;
+a[href="/Overview"] em,a[href="/Earnings"] em,a[href="/Genie"] em{
+  display:block!important;color:rgba(255,255,255,0.45)!important;font-size:0.78rem!important;
+  font-style:normal!important;line-height:1.4!important;font-family:'DM Sans',sans-serif!important;
 }
-/* Random pulse pop animation */
-@keyframes glassReflection{
-  0%{left:-60%;}
-  100%{left:120%;}
-}
-@keyframes popPulse{
-  0%,100%{transform:translateY(0) scale(1);box-shadow:none;}
-  50%{transform:translateY(-3px) scale(1.015);box-shadow:0 4px 20px rgba(74,174,255,0.15);}
-}
-.cta-btn.pop{animation:popPulse 0.6s ease-out;}
-.cta-title{
-  color:#4aaeff;font-size:1.1rem;font-weight:700;font-family:'DM Sans',sans-serif;
-  margin-bottom:6px;letter-spacing:0.02em;
-}
-.cta-desc{
-  color:rgba(255,255,255,0.45);font-size:0.78rem;font-family:'DM Sans',sans-serif;
-  line-height:1.4;
-}
-.cta-arrow{
-  position:absolute;right:20px;top:50%;transform:translateY(-50%);
-  color:rgba(74,174,255,0.3);font-size:1.3rem;transition:all 0.3s;
-}
-.cta-btn:hover .cta-arrow{color:#4aaeff;right:16px;}
-</style>
-<div class="cta-row">
-  <a class="cta-btn" id="cta-overview" href="/Overview" target="_parent">
-    <div class="cta-title">Overview</div>
-    <div class="cta-desc">Macro trends & market signals</div>
-    <span class="cta-arrow">&rarr;</span>
-  </a>
-  <a class="cta-btn" id="cta-earnings" href="/Earnings" target="_parent">
-    <div class="cta-title">Earnings</div>
-    <div class="cta-desc">Company deep dives & intelligence</div>
-    <span class="cta-arrow">&rarr;</span>
-  </a>
-  <a class="cta-btn" id="cta-genie" href="/Genie" target="_parent">
-    <div class="cta-title">Genie</div>
-    <div class="cta-desc">Ask the data anything</div>
-    <span class="cta-arrow">&rarr;</span>
-  </a>
-</div>
-<script>
-// CTA button navigation — use JS to reliably navigate parent frame
-document.querySelectorAll('.cta-btn').forEach(function(btn){
-  btn.addEventListener('click', function(e){
-    e.preventDefault();
-    var href = this.getAttribute('href');
-    try {
-      if(window.parent && window.parent.location){
-        window.parent.location.href = href;
-      } else {
-        window.top.location.href = href;
-      }
-    } catch(err) {
-      // Cross-origin fallback
-      window.open(href, '_parent');
-    }
-  });
-});
-// Random pop-out animation at different times
-var btns = document.querySelectorAll('.cta-btn');
-function randomPop(){
-  var idx = Math.floor(Math.random()*btns.length);
-  btns[idx].classList.add('pop');
-  btns[idx].addEventListener('animationend',function(){this.classList.remove('pop');},{once:true});
-  setTimeout(randomPop, 2000 + Math.random()*4000);
-}
-setTimeout(randomPop, 1500);
-</script>
-""", height=160, scrolling=False)
+</style>""", unsafe_allow_html=True)
+_cta_c1, _cta_c2, _cta_c3 = st.columns(3, gap="medium")
+with _cta_c1:
+    st.markdown('<a href="/Overview"><b>Overview</b><em>Macro trends &amp; market signals</em></a>', unsafe_allow_html=True)
+with _cta_c2:
+    st.markdown('<a href="/Earnings"><b>Earnings</b><em>Company deep dives &amp; intelligence</em></a>', unsafe_allow_html=True)
+with _cta_c3:
+    st.markdown('<a href="/Genie"><b>Genie</b><em>Ask the data anything</em></a>', unsafe_allow_html=True)
 
 source_label = str(workbook_path) if workbook_path else "not found"
 st.markdown(
