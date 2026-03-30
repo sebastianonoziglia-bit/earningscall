@@ -534,12 +534,18 @@ def render_multi_asset_chart():
             key="multi_chart_type",
         )
     with c3:
-        # Start empty — user picks what they want
+        # Default to Alphabet if no prior selection
         default_sel = st.session_state.get("multi_chart_companies")
         if default_sel:
             default_sel = [n for n in default_sel if n in companies_all]
         if not default_sel:
-            default_sel = []
+            # Pick first available from preferred defaults
+            for _pref in ["Alphabet", "Apple", "Meta Platforms", "Microsoft"]:
+                if _pref in companies_all:
+                    default_sel = [_pref]
+                    break
+            if not default_sel and companies_all:
+                default_sel = [companies_all[0]]
         selected = st.multiselect(
             "Assets",
             options=companies_all,
