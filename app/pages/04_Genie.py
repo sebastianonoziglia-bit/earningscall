@@ -2631,11 +2631,17 @@ if (
 
     fig.update_layout(**layout_dict)
     fig.update_layout(
+        hovermode="x",  # Per-trace hover labels (Polymarket-style)
         font=dict(family="DM Sans, Inter, sans-serif", size=12, color="#111827"),
-        xaxis=dict(showgrid=True, gridcolor='rgba(0,0,0,0.06)', showline=False,
-                   zeroline=False, tickfont=dict(size=11, color="#111827")),
+        xaxis=dict(
+            showgrid=True, gridcolor='rgba(0,0,0,0.06)', showline=False,
+            zeroline=False, tickfont=dict(size=11, color="#111827"),
+            showspikes=True, spikemode="across",
+            spikecolor="rgba(107,114,128,0.3)", spikethickness=1,
+            spikedash="solid",
+        ),
         legend=dict(font=dict(color="#111827")),
-        hoverlabel=dict(bgcolor="rgba(17,24,39,0.95)", bordercolor="rgba(99,179,237,0.4)",
+        hoverlabel=dict(bgcolor="rgba(17,24,39,0.92)", bordercolor="rgba(99,179,237,0.4)",
                         font=dict(size=12, color="#f9fafb")),
     )
 

@@ -5524,7 +5524,9 @@ try:
                 st.info("Performance chart unavailable.")
             else:
                 p_fig = go.Figure()
-                for idx_tag, idx_label, color, dash in [("^GSPC", "S&P 500", "white", "dash"), ("^IXIC", "Nasdaq", "#ff9900", "dot")]:
+                # Collect all series for % change calculation
+                _mbet_traces = []
+                for idx_tag, idx_label, color, dash in [("^GSPC", "S&P 500", "rgba(255,255,255,0.7)", "dash"), ("^IXIC", "Nasdaq", "#ff9900", "dot")]:
                     _tag_col = _mbet_feed["tag"].astype(str).str.upper()
                     _asset_col = _mbet_feed["asset"].astype(str).str.lower()
                     idx_feed = _mbet_feed[_tag_col.isin([idx_tag, idx_tag.lstrip("^")])]
@@ -5538,8 +5540,14 @@ try:
                     base = float(idx_feed.iloc[0]["price"])
                     if base <= 0:
                         continue
-                    norm = idx_feed["price"] / base * 100
-                    p_fig.add_trace(go.Scatter(x=idx_feed["date"], y=norm, name=idx_label, line=dict(color=color, dash=dash, width=1.5), hovertemplate=f"{idx_label}: %{{y:.0f}}<extra></extra>"))
+                    pct_change = ((idx_feed["price"] - base) / base) * 100.0
+                    latest_pct = float(pct_change.iloc[-1])
+                    p_fig.add_trace(go.Scatter(
+                        x=idx_feed["date"], y=pct_change,
+                        name=f"{idx_label} {latest_pct:+,.0f}%",
+                        line=dict(color=color, dash=dash, width=1.5, shape="spline"),
+                        hovertemplate=f"<b>{idx_label}</b><br>%{{y:+,.1f}}%<extra></extra>",
+                    ))
                 for company in top3:
                     ticker = company_ticker_fallback.get(company)
                     if not ticker:
@@ -5555,23 +5563,59 @@ try:
                     base = float(co_feed.iloc[0]["price"])
                     if base <= 0:
                         continue
-                    norm = co_feed["price"] / base * 100
-                    p_fig.add_trace(go.Scatter(x=co_feed["date"], y=norm, name=company, line=dict(color=_company_color(company), width=2.5), hovertemplate=f"{company}: %{{y:.0f}}<extra></extra>"))
+                    pct_change = ((co_feed["price"] - base) / base) * 100.0
+                    latest_pct = float(pct_change.iloc[-1])
+                    p_fig.add_trace(go.Scatter(
+                        x=co_feed["date"], y=pct_change,
+                        name=f"{company} {latest_pct:+,.0f}%",
+                        line=dict(color=_company_color(company), width=2.5, shape="spline"),
+                        hovertemplate=f"<b>{company}</b><br>%{{y:+,.1f}}%<extra></extra>",
+                    ))
                 if not p_fig.data:
                     st.info("Performance chart unavailable.")
                 else:
                     best = perf.nlargest(1, "tsr").iloc[0]
                     _mbet_body = (
                         f"{best['company']} was the top compounder: +{best['tsr']:.0f}% market-cap growth "
-                        f"from {y_start} to {effective_year}. All lines indexed to 1999 = 100. "
+                        f"from {y_start} to {effective_year}. All lines show % change from 1999 base. "
                         f"S&P 500 and Nasdaq shown as benchmarks."
                     )
                     _section(
                         "The Market Bet",
-                        "Starting from the same base of 100, who compounded fastest?",
+                        "Starting from the same base, who compounded fastest?",
                         _mbet_body
                     )
-                    _apply_dark_chart_layout(p_fig, height=370)
+                    # Polymarket-style layout
+                    p_fig.update_layout(
+                        height=400,
+                        hovermode="x",
+                        margin=dict(l=0, r=0, t=32, b=40),
+                        font=dict(color="#ffffff"),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(13,17,23,0.5)",
+                        showlegend=True,
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                                    font=dict(color="#e6edf3", size=11)),
+                        hoverlabel=dict(
+                            bgcolor="rgba(17,24,39,0.92)",
+                            bordercolor="rgba(99,179,237,0.4)",
+                            font=dict(color="#ffffff", size=12),
+                        ),
+                        xaxis=dict(
+                            showgrid=False, zeroline=False, showline=False,
+                            tickfont=dict(color="#aaaaaa"),
+                            showspikes=True, spikemode="across",
+                            spikecolor="rgba(148,163,184,0.4)", spikethickness=1,
+                            spikedash="solid",
+                        ),
+                        yaxis=dict(
+                            showgrid=True, gridcolor="rgba(48,54,61,0.3)",
+                            zeroline=True, zerolinecolor="rgba(148,163,184,0.3)",
+                            zerolinewidth=1, showline=False,
+                            tickfont=dict(color="#aaaaaa"),
+                            ticksuffix="%",
+                        ),
+                    )
                     st.markdown("<div data-ae-section='1' style='width:100%;'>", unsafe_allow_html=True)
                     st.plotly_chart(p_fig, use_container_width=True, config={"displayModeBar": False})
                     st.markdown("</div>", unsafe_allow_html=True)

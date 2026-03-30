@@ -529,7 +529,7 @@ def render_multi_asset_chart():
     with c2:
         chart_type = st.selectbox(
             "Chart Type",
-            ["Line", "Candlestick", "Indexed (base=100)"],
+            ["% Change", "Line", "Candlestick", "Indexed (base=100)"],
             index=0,
             key="multi_chart_type",
         )
@@ -586,16 +586,14 @@ def render_multi_asset_chart():
         st.info("No price data available for the selected assets/timeframe.")
         return
 
-    # Build chart
+    # Build chart — Polymarket-style: % change, spike crosshairs, per-trace labels
     fig = go.Figure()
 
     if chart_type == "Candlestick" and company_ohlc:
-        # Candlestick for each selected asset (works best with 1-2 assets)
         for company in selected:
             if company not in company_ohlc:
                 continue
             ohlc = company_ohlc[company]
-            color = COMPANY_COLORS.get(company, "#64748b")
             fig.add_trace(go.Candlestick(
                 x=ohlc.index,
                 open=ohlc["Open"], high=ohlc["High"],
@@ -605,6 +603,29 @@ def render_multi_asset_chart():
                 decreasing=dict(line=dict(color="#EF4444"), fillcolor="rgba(239,68,68,0.3)"),
             ))
         y_title = "Price (USD)"
+        y_fmt = "$"
+    elif chart_type == "% Change":
+        # Polymarket-style: show % change from start
+        for company, series in company_series.items():
+            base = float(series.iloc[0]) if float(series.iloc[0]) != 0 else None
+            if not base:
+                continue
+            pct = ((series - base) / base) * 100.0
+            color = COMPANY_COLORS.get(company, "#64748b")
+            latest_pct = float(pct.iloc[-1])
+            fig.add_trace(go.Scatter(
+                x=series.index, y=pct, mode="lines", name=f"{company} {latest_pct:+.1f}%",
+                line=dict(color=color, width=2.4, shape="spline"),
+                customdata=series,
+                hovertemplate=(
+                    "<b>%{fullData.name}</b><br>"
+                    "%{y:+.1f}%<br>"
+                    "$%{customdata:.2f}"
+                    "<extra></extra>"
+                ),
+            ))
+        y_title = "Change %"
+        y_fmt = ""
     elif chart_type == "Indexed (base=100)":
         for company, series in company_series.items():
             base = float(series.iloc[0]) if float(series.iloc[0]) != 0 else None
@@ -614,38 +635,69 @@ def render_multi_asset_chart():
             color = COMPANY_COLORS.get(company, "#64748b")
             fig.add_trace(go.Scatter(
                 x=series.index, y=y, mode="lines", name=company,
-                line=dict(color=color, width=2.2),
+                line=dict(color=color, width=2.2, shape="spline"),
                 customdata=series,
-                hovertemplate="%{x|%b %d, %Y}<br><b>%{fullData.name}</b><br>Index: %{y:.1f}<br>Price: $%{customdata:.2f}<extra></extra>",
+                hovertemplate=(
+                    "<b>%{fullData.name}</b><br>"
+                    "Index: %{y:.1f}<br>"
+                    "$%{customdata:.2f}"
+                    "<extra></extra>"
+                ),
             ))
         y_title = "Index (base=100)"
+        y_fmt = ""
     else:
         # Line chart
         for company, series in company_series.items():
             color = COMPANY_COLORS.get(company, "#64748b")
             fig.add_trace(go.Scatter(
                 x=series.index, y=series, mode="lines", name=company,
-                line=dict(color=color, width=2.2),
-                hovertemplate="%{x|%b %d, %Y}<br><b>%{fullData.name}</b><br>$%{y:.2f}<extra></extra>",
+                line=dict(color=color, width=2.2, shape="spline"),
+                hovertemplate=(
+                    "<b>%{fullData.name}</b><br>"
+                    "$%{y:.2f}"
+                    "<extra></extra>"
+                ),
             ))
         y_title = "Price (USD)"
+        y_fmt = "$"
 
+    # Polymarket-inspired layout: spike crosshairs, per-trace hover labels
     fig.update_layout(
         height=520,
-        hovermode="x unified",
+        hovermode="x",  # Per-trace labels (not unified box)
         margin=dict(l=10, r=10, t=10, b=10),
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
                     font=dict(color="#e6edf3", size=12)),
         font=dict(family="system-ui, -apple-system, sans-serif", color="#e6edf3"),
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=False, zeroline=False, showline=False,
-                   tickfont=dict(color="#8b949e"),
-                   rangebreaks=[dict(bounds=["sat", "mon"])]),
-        yaxis=dict(title=y_title, showgrid=True, gridcolor="rgba(48,54,61,0.4)",
-                   zeroline=False, showline=False, tickfont=dict(color="#8b949e"),
-                   title_font=dict(color="#8b949e")),
+        plot_bgcolor="rgba(13,17,23,0.6)",
+        hoverlabel=dict(
+            bgcolor="rgba(17,24,39,0.92)",
+            bordercolor="rgba(99,179,237,0.4)",
+            font=dict(color="#ffffff", size=12, family="system-ui, sans-serif"),
+        ),
+        xaxis=dict(
+            showgrid=False, zeroline=False, showline=False,
+            tickfont=dict(color="#8b949e"),
+            rangebreaks=[dict(bounds=["sat", "mon"])],
+            showspikes=True, spikemode="across",
+            spikecolor="rgba(148,163,184,0.4)", spikethickness=1,
+            spikedash="solid",
+        ),
+        yaxis=dict(
+            title=y_title, showgrid=True,
+            gridcolor="rgba(48,54,61,0.3)",
+            zeroline=chart_type == "% Change",
+            zerolinecolor="rgba(148,163,184,0.3)",
+            zerolinewidth=1,
+            showline=False,
+            tickfont=dict(color="#8b949e"),
+            title_font=dict(color="#8b949e"),
+            ticksuffix="%" if chart_type == "% Change" else "",
+            tickprefix=y_fmt if y_fmt else "",
+        ),
     )
     if chart_type == "Candlestick":
         fig.update_layout(xaxis_rangeslider_visible=False)
