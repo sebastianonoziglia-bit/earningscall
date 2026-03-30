@@ -1917,6 +1917,8 @@ _adv_bundle = _build_ss_ad_json_bundle(excel_path, source_stamp)
 _ss_data_json = _adv_bundle["ss_data_json"]
 _ad_json_str = _adv_bundle["ad_json_str"]
 _global_adv_json_str = _adv_bundle["global_adv_json_str"]
+# Keep _ad_by_year as dict — used downstream by concentration chart + revenue ticker
+_ad_by_year: dict = {int(k): v for k, v in json.loads(_ad_json_str).items()}
 
 db_path = ROOT_DIR / "earningscall_intelligence.db"
 
@@ -2235,8 +2237,8 @@ st.components.v1.html(
   const doc = window.parent.document;
 
   function init() {
-    const svEls = doc.querySelectorAll('.sv');
     const dots = doc.querySelectorAll('.wm-progress-dot');
+    const observed = new WeakSet();
 
     const _revealObs = new window.parent.IntersectionObserver((entries) => {
       entries.forEach(e => {
@@ -2264,7 +2266,30 @@ st.components.v1.html(
       }
     }, { threshold: 0.06, rootMargin: "0px 0px -40px 0px" });
 
-    svEls.forEach(el => _revealObs.observe(el));
+    // Observe all .sv elements, including ones added later by Streamlit
+    function observeAll() {
+      doc.querySelectorAll('.sv').forEach(el => {
+        if (!observed.has(el)) {
+          observed.add(el);
+          _revealObs.observe(el);
+        }
+      });
+    }
+    observeAll();
+
+    // Watch for new .sv elements as Streamlit streams the page
+    try {
+      const bodyObs = new MutationObserver(() => observeAll());
+      bodyObs.observe(doc.body || doc.documentElement, { childList: true, subtree: true });
+    } catch(e) {}
+
+    // Fallback poll for environments where MutationObserver can't reach parent
+    let _pollCount = 0;
+    const _poll = setInterval(() => {
+      observeAll();
+      _pollCount++;
+      if (_pollCount > 60) clearInterval(_poll);
+    }, 500);
 
     // Also update dots on scroll for smooth tracking
     window.parent.addEventListener('scroll', function() {
@@ -2281,7 +2306,8 @@ st.components.v1.html(
   if (doc.readyState === 'loading') {
     doc.addEventListener('DOMContentLoaded', init);
   } else {
-    init();
+    // Delay slightly to let Streamlit finish initial DOM setup
+    setTimeout(init, 300);
   }
 
   function _startTicker() {
