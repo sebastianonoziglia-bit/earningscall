@@ -4106,6 +4106,19 @@ def _render_macro_expansion_sections(
             fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
             _apply_light_theme(fig)
             st.plotly_chart(fig, use_container_width=True, config=plotly_config, key="macro_gdp_vs_ad")
+            # Auto-generated commentary for GDP vs Ad Spend
+            _latest_row = merge.sort_values("Year").iloc[-1]
+            _gdp_val = _latest_row.get("Global_GDP_YoY")
+            _ad_val = _latest_row.get("Ad_YoY")
+            _yr = int(_latest_row["Year"])
+            if pd.notna(_gdp_val) and pd.notna(_ad_val):
+                _ratio_text = ""
+                if abs(_gdp_val) > 0.01:
+                    _ratio = _ad_val / _gdp_val
+                    _ratio_text = f" Ad spend growth is {abs(_ratio):.1f}x {'above' if _ratio > 1 else 'below'} GDP growth."
+                st.caption(
+                    f"In {_yr}, global GDP grew {_gdp_val:+.1f}% while ad spend grew {_ad_val:+.1f}%.{_ratio_text}"
+                )
             rendered_any = True
 
     if not labor_df.empty and employees_df is not None and not employees_df.empty:
@@ -4212,10 +4225,19 @@ def _render_macro_expansion_sections(
     structural_started = False
     if not wealth_df.empty:
         year_df = wealth_df[wealth_df["Year"] == int(selected_year)].copy()
-        if year_df.empty:
-            year_df = wealth_df[wealth_df["Year"] <= int(selected_year)].copy()
-            target_year = int(year_df["Year"].max()) if not year_df.empty else None
-            if target_year is not None:
+        # If selected year has very few countries, pick the year with the most countries
+        _wealth_min_countries = 3
+        if year_df.empty or year_df["Country"].nunique() < _wealth_min_countries:
+            # Find the year <= selected_year with the most country coverage
+            _wealth_candidates = wealth_df[wealth_df["Year"] <= int(selected_year)].copy()
+            if not _wealth_candidates.empty:
+                _wealth_year_counts = _wealth_candidates.groupby("Year")["Country"].nunique()
+                target_year = int(_wealth_year_counts.idxmax())
+                year_df = wealth_df[wealth_df["Year"] == target_year].copy()
+            else:
+                # Use whatever year has most data
+                _wealth_year_counts = wealth_df.groupby("Year")["Country"].nunique()
+                target_year = int(_wealth_year_counts.idxmax())
                 year_df = wealth_df[wealth_df["Year"] == target_year].copy()
         else:
             target_year = int(selected_year)
@@ -5972,6 +5994,18 @@ def _render_macro_bridge_charts(
         fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
         _apply_light_theme(fig)
         st.plotly_chart(fig, use_container_width=True, config=plotly_config, key="ov_pc22")
+        # Auto-generated commentary for M2 vs Big Tech
+        if len(merged) >= 2:
+            _m2_corr = merged[["M2_B", "Tech_MarketCap_B"]].dropna().corr().iloc[0, 1]
+            _latest = merged.sort_values("Year").iloc[-1]
+            _m2_latest = _latest.get("M2_B")
+            _tc_latest = _latest.get("Tech_MarketCap_B")
+            _yr = int(_latest["Year"])
+            _corr_label = "strong" if abs(_m2_corr) > 0.7 else ("moderate" if abs(_m2_corr) > 0.4 else "weak")
+            _caption_parts = [f"M2 and Big Tech market cap show a {_corr_label} correlation (r={_m2_corr:.2f})."]
+            if pd.notna(_m2_latest) and pd.notna(_tc_latest):
+                _caption_parts.append(f"As of {_yr}, M2 stands at ${_m2_latest:,.0f}B vs Big Tech at ${_tc_latest:,.0f}B.")
+            st.caption(" ".join(_caption_parts))
     render_standard_overview_post_comment(title, selected_year)
 
     # 2) Inflation vs Advertising Spend Growth
@@ -6351,7 +6385,19 @@ def _render_macro_bridge_charts(
         fig.update_yaxes(gridcolor="rgba(148,163,184,0.22)")
         _apply_light_theme(fig)
         st.plotly_chart(fig, use_container_width=True, config=plotly_config, key="ov_pc32")
-        st.caption(f"Year shown: {target_year}")
+        # Auto-generated commentary for Country Ad Spend vs GDP bubble
+        if not year_df.empty and "Ad_vs_GDP_pct" in year_df.columns:
+            _top_intensity = year_df.nlargest(3, "Ad_vs_GDP_pct")
+            _top_names = ", ".join(_top_intensity["Country"].tolist())
+            _top_val = _top_intensity["Ad_vs_GDP_pct"].iloc[0]
+            _biggest_spender = year_df.nlargest(1, "AdSpending_BUSD").iloc[0]
+            st.caption(
+                f"Year shown: {target_year}. "
+                f"Highest ad intensity: {_top_names} (up to {_top_val:.1f}% of GDP). "
+                f"Largest absolute spender: {_biggest_spender['Country']} at ${_biggest_spender['AdSpending_BUSD']:.1f}B."
+            )
+        else:
+            st.caption(f"Year shown: {target_year}")
     render_standard_overview_post_comment(title, selected_year)
 
     # 12) Country Ad Intensity Ranking
@@ -7291,9 +7337,9 @@ _OVERVIEW_AREA_CONFIG = [
         "description": "Macro regime, liquidity context, and interactive global ad spend map.",
     },
     {
-        "key": "channels_devices",
-        "title": "Channels & Devices",
-        "description": "Ad spend by channel, insights by category, and device-platform migration.",
+        "key": "narrative_sentiment",
+        "title": "Narrative & Sentiment",
+        "description": "Transcript topics, CEO/CFO quotes, and market signal cards.",
     },
     {
         "key": "deep_dives",
@@ -7301,9 +7347,9 @@ _OVERVIEW_AREA_CONFIG = [
         "description": "P/E, debt, margins, R&D, employees, and market structure comparison.",
     },
     {
-        "key": "narrative_sentiment",
-        "title": "Narrative & Sentiment",
-        "description": "Transcript topics, CEO/CFO quotes, and market signal cards.",
+        "key": "channels_devices",
+        "title": "Channels & Devices",
+        "description": "Ad spend by channel, insights by category, and device-platform migration.",
     },
 ]
 
@@ -7438,10 +7484,20 @@ excel_path = getattr(data_processor, "data_path", "")
 # Year + quarter + granularity selectors
 year_col, quarter_col, gran_col = st.columns([1.0, 1.0, 1.0])
 with year_col:
+    # Default to latest year with actual data (not projections)
+    _current_real_year = min(datetime.now().year, 2025)
+    _default_year_idx = len(available_years) - 1  # fallback to last
+    for _i, _y in enumerate(available_years):
+        if int(_y) <= _current_real_year:
+            _default_year_idx = _i
+    # Use session state if user already changed it
+    _prev_year = st.session_state.get("selected_year")
+    if _prev_year is not None and _prev_year in [int(y) for y in available_years]:
+        _default_year_idx = [int(y) for y in available_years].index(int(_prev_year))
     selected_year = st.selectbox(
         "Select Year",
         available_years,
-        index=len(available_years)-1  # Default to most recent year
+        index=_default_year_idx,
     )
 with quarter_col:
     quarter_options = get_quarter_labels_for_year(excel_path, int(selected_year))
@@ -7883,6 +7939,20 @@ if not country_ad_df.empty:
             macro_html += f"<div class='ov-macro-pill {cls}'><span>{macro}</span><span>{value}</span></div>"
         macro_html += "</div>"
         st.markdown(macro_html, unsafe_allow_html=True)
+
+        # Auto-generated commentary for Macro YoY pills
+        if metric_choice == "All channels" and len(macro_rows) > 1:
+            _pos = [(m, v) for m, v in macro_rows if v is not None and v > 0]
+            _neg = [(m, v) for m, v in macro_rows if v is not None and v < 0]
+            _parts = []
+            if _pos:
+                _top = max(_pos, key=lambda x: x[1])
+                _parts.append(f"{_top[0]} leads growth at +{_top[1]:.1f}% YoY")
+            if _neg:
+                _bot = min(_neg, key=lambda x: x[1])
+                _parts.append(f"while {_bot[0]} contracts at {_bot[1]:.1f}%")
+            if _parts:
+                st.caption(" ".join(_parts) + ".")
 
     df_map = (
         df_year.groupby("Country", as_index=False)["Value"].sum()
