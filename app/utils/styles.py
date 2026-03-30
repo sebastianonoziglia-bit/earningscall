@@ -163,29 +163,36 @@ def load_common_styles():
         visibility: visible !important;
     }
 
-    /* Fix multiselect pill text clipping — remove left-side scroll-shadow overlay */
+    /* Fix multiselect pill text clipping — kill ALL pseudo-element overlays */
     [data-baseweb="select"]::before,
     [data-baseweb="select"]::after,
     [data-baseweb="input"]::before,
-    [data-baseweb="input"]::after {
+    [data-baseweb="input"]::after,
+    [data-baseweb="select"] > div::before,
+    [data-baseweb="select"] > div::after,
+    [data-baseweb="select"] > div > div::before,
+    [data-baseweb="select"] > div > div::after,
+    .stMultiSelect [data-baseweb="select"]::before,
+    .stMultiSelect [data-baseweb="select"]::after,
+    .stMultiSelect [data-baseweb="select"] > div::before,
+    .stMultiSelect [data-baseweb="select"] > div::after {
         display: none !important;
         content: none !important;
         background: none !important;
+        background-image: none !important;
         width: 0 !important;
+        height: 0 !important;
+        position: absolute !important;
+        pointer-events: none !important;
     }
-    /* Also kill any inner pseudo-elements that create the white fade */
-    [data-baseweb="select"] > div::before,
-    [data-baseweb="select"] > div::after {
-        display: none !important;
-        content: none !important;
-    }
+    /* Tag pill — proper padding so first letter is never clipped */
     [data-baseweb="tag"] {
         overflow: visible !important;
         max-width: none !important;
-        padding-left: 10px !important;
-        padding-right: 4px !important;
+        padding: 2px 8px 2px 10px !important;
         min-width: 0 !important;
         text-overflow: unset !important;
+        margin-left: 4px !important;
     }
     [data-baseweb="tag"] > span,
     [data-baseweb="tag"] span[dir="auto"] {
@@ -201,11 +208,16 @@ def load_common_styles():
         flex-shrink: 0 !important;
         position: relative !important;
     }
-    /* Ensure container doesn't clip tags */
+    /* Ensure container doesn't clip tags — kill gradient overlays */
     [data-baseweb="input"],
     [data-baseweb="select"] > div:first-child {
         overflow: visible !important;
         flex-wrap: wrap !important;
+        padding-left: 4px !important;
+    }
+    /* Kill linear-gradient scroll-shadow overlays that Streamlit/BaseWeb adds */
+    .stMultiSelect [data-baseweb="select"] > div > div {
+        background-image: none !important;
     }
 
     /* Slider styling */

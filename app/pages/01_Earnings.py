@@ -4114,6 +4114,7 @@ def main():
             _q = str(_sig.get("quote", "")).strip()
             _sp = str(_sig.get("speaker", "")).strip()
             _rl = str(_sig.get("role", "")).strip()
+            _sq = str(_sig.get("quarter", "")).strip()
             _sc = float(_sig.get("score", 0))
             _filled = max(1, int(min(_sc / 15.0, 1.0) * 5))
             _dot_color = _c["tag"]
@@ -4121,14 +4122,29 @@ def main():
                 f"<span style='color:{_dot_color};'>{'●' * _filled}</span>"
                 f"<span style='color:#d1d5db;'>{'●' * (5 - _filled)}</span>"
             )
+            # Quarter badge
+            _qtr_badge = (
+                f"<span style='background:#dbeafe;color:#1d4ed8;font-size:0.6rem;"
+                f"padding:1px 5px;border-radius:8px;font-weight:700;margin-left:4px;'>"
+                f"{html.escape(_sq)}</span>"
+                if _sq else ""
+            )
+            # Role badge (boxed)
+            _role_badge = (
+                f"<span style='background:{_c['tag']}18;color:{_c['tag']};font-size:0.62rem;"
+                f"padding:1px 6px;border-radius:4px;font-weight:600;border:1px solid {_c['tag']}30;"
+                f"margin-left:4px;'>{html.escape(_rl)}</span>"
+                if _rl else ""
+            )
             _meta = ""
             if _sp and _sp.lower() not in ("", "unknown", "nan"):
                 _meta = (
                     f"<div style='margin-top:6px;display:flex;justify-content:space-between;"
-                    f"align-items:center;'>"
-                    f"<span style='font-size:0.71rem;color:#6b7280;'>{html.escape(_sp)}"
-                    + (f"<span style='color:{_c['tag']};'> · {html.escape(_rl)}</span>" if _rl else "")
-                    + f"</span><span style='font-size:0.68rem;letter-spacing:1px;'>{_dots}</span></div>"
+                    f"align-items:center;flex-wrap:wrap;gap:3px;'>"
+                    f"<span style='font-size:0.71rem;color:#6b7280;display:flex;align-items:center;"
+                    f"flex-wrap:wrap;gap:3px;'>{html.escape(_sp)}"
+                    f"{_role_badge}{_qtr_badge}"
+                    f"</span><span style='font-size:0.68rem;letter-spacing:1px;'>{_dots}</span></div>"
                 )
             st.markdown(
                 f"<div style='border-left:3px solid {_c['border']};"
