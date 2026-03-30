@@ -233,18 +233,42 @@ def fetch_company_bets(company_name: str) -> list[dict[str, Any]]:
     return sorted(result, key=lambda x: x.get("volume_total") or 0, reverse=True)
 
 
+# ── Entertainment / market-cap / tech category keywords ──────────────────────
+_ENTERTAINMENT_KEYWORDS = [
+    "oscar", "grammy", "emmy", "actor", "movie", "film", "celebrity",
+    "taylor swift", "album", "box office", "tv show", "streaming",
+    "netflix", "disney", "award", "spotify", "tiktok", "youtube",
+    "content creator", "podcast", "entertainment", "media company",
+    "market cap", "largest company", "most valuable", "trillion",
+    "stock price", "ipo", "acquisition", "antitrust",
+    "ai ", "artificial intelligence", "chatgpt", "openai",
+    "search engine", "social media", "advertising", "ad revenue",
+]
+
+
+def _is_entertainment_or_market_bet(question: str) -> bool:
+    q = question.lower()
+    return any(kw in q for kw in _ENTERTAINMENT_KEYWORDS)
+
+
 def get_all_company_bets_labelled(markets: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """
-    Filter `markets` (or fetch top-300 if None) to only those matching a tracked
-    company. Returns list with extra `matched_company` key, sorted by volume desc.
+    Filter `markets` (or fetch top-300 if None) to those matching a tracked
+    company OR entertainment/tech/market-cap bets.
+    Returns list with extra `matched_company` key, sorted by volume desc.
     """
     if markets is None:
         markets = fetch_polymarket_top(300)
     result = []
     seen_ids: set[str] = set()
     for m in markets:
+        if m["market_id"] in seen_ids:
+            continue
         company = match_company(m["question"])
-        if company and m["market_id"] not in seen_ids:
+        if company:
             seen_ids.add(m["market_id"])
             result.append({**m, "matched_company": company})
+        elif _is_entertainment_or_market_bet(m["question"]):
+            seen_ids.add(m["market_id"])
+            result.append({**m, "matched_company": "Entertainment"})
     return sorted(result, key=lambda x: x.get("volume_total") or 0, reverse=True)

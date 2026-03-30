@@ -2579,7 +2579,8 @@ def _render_transcript_pulse_strip(current_year: int, current_quarter: str) -> N
         "<style>@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');"
         "html,body{margin:0;padding:0;background:#020810;}*{box-sizing:border-box;}"
         ".strip{width:100%;overflow:hidden;border-radius:12px;border:1px solid rgba(74,174,255,0.18);background:#020810;padding:12px 0;}"
-        ".track{display:flex;align-items:flex-start;gap:12px;width:max-content;animation:scroll 160s linear infinite;}"
+        ".track{display:flex;align-items:flex-start;gap:12px;width:max-content;animation:scroll 120s linear infinite;}"
+        ".track:hover{animation-play-state:paused;}"
         ".item{width:380px;height:190px;flex:0 0 auto;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(15,23,42,0.72);padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;}"
         ".item-quote{font-style:italic;font-size:0.83rem;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;}"
         ".item-meta{margin-top:8px;display:flex;align-items:center;gap:8px;font-size:0.74rem;flex-shrink:0;}"
@@ -2678,7 +2679,8 @@ def _render_stock_price_strip(feed_df: pd.DataFrame) -> None:
         "<style>@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');"
         "html,body{margin:0;padding:0;background:#020810;}*{box-sizing:border-box;}"
         ".strip{width:100%;overflow:hidden;border-radius:12px;border:1px solid rgba(74,174,255,0.15);background:#020810;padding:7px 0;}"
-        ".track{display:flex;align-items:stretch;gap:12px;width:max-content;animation:scroll 36s linear infinite;}"
+        ".track{display:flex;align-items:stretch;gap:12px;width:max-content;animation:scroll 120s linear infinite;}"
+        ".track:hover{animation-play-state:paused;}"
         ".item{width:220px;flex:0 0 auto;border-radius:10px;border:1px solid rgba(148,163,184,0.22);background:rgba(15,23,42,0.72);padding:7px 10px;}"
         ".logo{width:32px;height:32px;object-fit:contain;border-radius:50%;background:rgba(148,163,184,0.12);border:1px solid rgba(148,163,184,0.26);padding:3px;flex-shrink:0;}"
         "@keyframes scroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}"
@@ -5993,17 +5995,17 @@ body{background:transparent;}
 .cta-btn:hover .cta-arrow{color:#4aaeff;right:16px;}
 </style>
 <div class="cta-row">
-  <a class="cta-btn" id="cta-overview" href="#" onclick="try{window.top.location.href='/Overview';}catch(e){window.location.href='/Overview';}return false;">
+  <a class="cta-btn" id="cta-overview" href="/Overview" target="_parent">
     <div class="cta-title">Overview</div>
     <div class="cta-desc">Macro trends & market signals</div>
     <span class="cta-arrow">&rarr;</span>
   </a>
-  <a class="cta-btn" id="cta-earnings" href="#" onclick="try{window.top.location.href='/Earnings';}catch(e){window.location.href='/Earnings';}return false;">
+  <a class="cta-btn" id="cta-earnings" href="/Earnings" target="_parent">
     <div class="cta-title">Earnings</div>
     <div class="cta-desc">Company deep dives & intelligence</div>
     <span class="cta-arrow">&rarr;</span>
   </a>
-  <a class="cta-btn" id="cta-genie" href="#" onclick="try{window.top.location.href='/Genie';}catch(e){window.location.href='/Genie';}return false;">
+  <a class="cta-btn" id="cta-genie" href="/Genie" target="_parent">
     <div class="cta-title">Genie</div>
     <div class="cta-desc">Ask the data anything</div>
     <span class="cta-arrow">&rarr;</span>

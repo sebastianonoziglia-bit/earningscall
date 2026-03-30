@@ -4275,6 +4275,13 @@ def main():
                     # Confidence squares
                     _filled = max(1, int(min(_sc / 15.0, 1.0) * 5))
                     _conf = "■" * _filled + "□" * (5 - _filled)
+                    _fwd_qtr = str(_sig.get("quarter", "")).strip()
+                    _fwd_qtr_badge = (
+                        f"<span style='background:#dbeafe;color:#1d4ed8;font-size:0.62rem;"
+                        f"padding:1px 6px;border-radius:8px;font-weight:700;margin-left:6px;'>"
+                        f"{html.escape(_fwd_qtr)}</span>"
+                        if _fwd_qtr else ""
+                    )
                     _sp_html = ""
                     if _sp and _sp.lower() not in ("", "unknown", "nan"):
                         _sp_html = (
@@ -4282,7 +4289,7 @@ def main():
                             f"display:flex;justify-content:space-between;align-items:center;'>"
                             f"<span>{html.escape(_sp)}"
                             + (f" · <span style='color:#1d4ed8'>{html.escape(_rl)}</span>" if _rl else "")
-                            + f"</span>"
+                            + f"{_fwd_qtr_badge}</span>"
                             f"<span style='color:#3b82f6;font-family:monospace;letter-spacing:1px;"
                             f"font-size:0.7rem;'>{_conf}</span></div>"
                         )
