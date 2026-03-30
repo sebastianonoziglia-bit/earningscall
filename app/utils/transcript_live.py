@@ -416,7 +416,6 @@ def extract_pulse_quotes(
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-@st.cache_data(ttl=3600, show_spinner=False)
 def extract_topic_metrics(
     excel_path: str,
     year: int,

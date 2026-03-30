@@ -5577,15 +5577,24 @@ def _load_transcript_topic_metrics(excel_path: str = "", selected_year: int = 0,
             pass
 
     # Fallback — live extraction from Transcripts sheet
-    if excel_path and selected_year:
+    if excel_path:
         try:
             from utils.transcript_live import extract_topic_metrics as _live_topics
-            result = _live_topics(excel_path, int(selected_year), selected_quarter)
+            result = _live_topics(excel_path, int(selected_year) if selected_year else 0, selected_quarter or "")
             if result is not None and not result.empty:
                 return result
+            else:
+                import logging as _log
+                _log.getLogger(__name__).warning(
+                    "extract_topic_metrics returned empty (excel=%s, year=%s, qtr=%s)",
+                    excel_path, selected_year, selected_quarter,
+                )
         except Exception as exc:
             import logging as _log
             _log.getLogger(__name__).warning("extract_topic_metrics fallback failed: %s", exc)
+    else:
+        import logging as _log
+        _log.getLogger(__name__).warning("No excel_path for transcript topic metrics fallback")
     return pd.DataFrame()
 
 
@@ -6742,8 +6751,8 @@ def _render_excel_overview_layers(
     topic_chart_rendered = _render_transcript_topic_growth_chart(selected_year, selected_quarter, plotly_config)
     if not topic_chart_rendered:
         st.info(
-            "No transcript topic metrics found. Run `python3 scripts/extract_transcript_topics.py` "
-            "after adding new quarter transcript files."
+            "No transcript topic metrics found for this period. "
+            "Check that the Transcripts sheet exists in the workbook with columns: company, year, quarter, transcript_text."
         )
 
     # ── Transcript Signal Explorer ──────────────────────────────────────────
@@ -7601,8 +7610,8 @@ if selected_overview_area == "narrative_sentiment":
     topic_chart_rendered = _render_transcript_topic_growth_chart(selected_year, selected_quarter, plotly_config)
     if not topic_chart_rendered:
         st.info(
-            "No transcript topic metrics found. Run `python3 scripts/extract_transcript_topics.py` "
-            "after adding new quarter transcript files."
+            "No transcript topic metrics found for this period. "
+            "Check that the Transcripts sheet exists in the workbook with columns: company, year, quarter, transcript_text."
         )
     iconic_quotes_rendered = _render_iconic_quote_section(data_processor, selected_year, selected_quarter)
     if not iconic_quotes_rendered:

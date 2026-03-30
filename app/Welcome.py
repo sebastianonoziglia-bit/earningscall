@@ -2700,7 +2700,8 @@ def _render_polymarket_strip(logos_dict: dict) -> None:
 
     bets = get_all_company_bets_labelled(raw_markets)
     if not bets:
-        return  # silently skip if API unavailable
+        st.caption("⏳ Polymarket data unavailable — API may be blocked by your network.")
+        return
 
     def _yes_color(p: float | None) -> str:
         if p is None:
