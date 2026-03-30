@@ -1231,9 +1231,45 @@ with tab1:
         **Data Sources**:
         - Historical + live rows from workbook tabs: `Stocks & Crypto`, `Daily`, `Minute`
         - Latest price cards/hero values use the merged feed automatically
+        - Market Terminal: live data via yfinance, CoinGecko, CoinMarketCap
 
         Click on any company card to see detailed performance.
         """)
+
+    # ── Market Terminal Panel ──────────────────────────────────────────────
+    st.divider()
+    st.header("Market Terminal")
+    st.caption("Live prices across indices, commodities, forex, crypto, sectors & ad-tech")
+
+    try:
+        from utils.market_terminal import (
+            fetch_bulk_market_data,
+            fetch_fear_greed,
+            fetch_crypto_top,
+            build_terminal_html,
+        )
+
+        with st.spinner("Loading live market data..."):
+            _mt_data = fetch_bulk_market_data()
+            _mt_fg = fetch_fear_greed()
+            _mt_crypto = fetch_crypto_top(limit=30)
+
+        if _mt_data:
+            _mt_html = build_terminal_html(
+                market_data=_mt_data,
+                fear_greed=_mt_fg,
+                crypto_top=_mt_crypto,
+            )
+            # Estimate height: base 200 + rows
+            _n_rows = len(_mt_data) + (30 if _mt_crypto else 0)
+            _mt_height = max(600, 200 + _n_rows * 22 + (80 if _mt_fg else 0))
+            st.components.v1.html(_mt_html, height=_mt_height, scrolling=True)
+        else:
+            st.info("Market terminal data unavailable — yfinance may be blocked by your network.")
+    except ImportError:
+        st.info("Market terminal requires `yfinance`. Add it to requirements.txt.")
+    except Exception as _mt_exc:
+        st.warning(f"Market terminal error: {_mt_exc}")
 
 #############################
 # Sidebar Components
