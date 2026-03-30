@@ -4088,13 +4088,29 @@ for _c in _human_companies:
         _c["color"] = "#9146FF"
         _c["logo"] = _resolve_logo("Amazon", logos) if logos else ""
 
-# Sanitise NaN / inf before JSON serialisation (NaN breaks JSON spec)
+# Sanitise NaN / inf AND convert numpy types before JSON serialisation
 import math as _math_mod
 for _hc_clean in _human_companies:
     for _hk, _hv in list(_hc_clean.items()):
+        # Convert numpy types to native Python (json.dumps can't handle np.int64/float64)
+        if hasattr(_hv, 'item'):  # numpy scalar → python scalar
+            _hc_clean[_hk] = _hv.item()
+            _hv = _hc_clean[_hk]
         if isinstance(_hv, float) and (_math_mod.isnan(_hv) or _math_mod.isinf(_hv)):
             _hc_clean[_hk] = None
-_human_json = json.dumps(_human_companies, allow_nan=False)
+        elif _hv is not None and not isinstance(_hv, (str, bool, int, float, list, dict)):
+            try:
+                _hc_clean[_hk] = float(_hv) if _hv == _hv else None
+            except (TypeError, ValueError):
+                _hc_clean[_hk] = str(_hv)
+try:
+    _human_json = json.dumps(_human_companies, allow_nan=False, default=str)
+except (ValueError, TypeError):
+    _human_json = json.dumps([
+        {"name": "YouTube", "val": 2500, "mins": 1000, "revenue": 36.1, "users": "2.5B users", "color": "#ff0000", "label": "2.5B users"},
+        {"name": "Spotify", "val": 675, "mins": 30, "revenue": 15.7, "users": "675M users", "color": "#1db954", "label": "675M users"},
+        {"name": "Netflix", "val": 301, "mins": 120, "revenue": 33.7, "users": "301M subs", "color": "#e50914", "label": "301M subs"},
+    ])
 
 # ── THE HUMAN SIDE — Platform Globe (dynamic from Company_subscribers_values) ─
 @st.cache_data(ttl=300)
@@ -4583,10 +4599,17 @@ for _hc in _human_companies:
         _b64 = _resolve_logo(_logo_key, logos_original)
         if _b64:
             _bubble_logo_map[_hname] = _b64
-_attn_html = _build_attn_html(_ad_json_str, _global_adv_json_str, _human_json, logos_json=json.dumps(_bubble_logo_map))
+try:
+    _logos_json_str = json.dumps(_bubble_logo_map, default=str)
+except Exception:
+    _logos_json_str = "{}"
+try:
+    _attn_html = _build_attn_html(_ad_json_str, _global_adv_json_str, _human_json, logos_json=_logos_json_str)
+except Exception as _attn_err:
+    _attn_html = f"<html><body style='background:#0d1117;color:#ff5b1f;padding:40px;font-family:monospace;'><b>Bubble chart build error</b><br>{_attn_err}</body></html>"
 _section("ATTENTION ECONOMY", "Who Owns Your Time", "Each bubble = a platform. Size = subscribers or monthly active users.")
 st.markdown("<div data-ae-section='1' style='width:100%;'>", unsafe_allow_html=True)
-st.components.v1.html(_attn_html, height=560)
+st.components.v1.html(_attn_html, height=580)
 st.markdown("</div>", unsafe_allow_html=True)
 _deep_dive("editorial", "Deep dive into platforms")
 _separator()

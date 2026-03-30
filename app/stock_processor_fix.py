@@ -46,11 +46,15 @@ def _load_stock_sheet(path, source_stamp):
     if merged is None or merged.empty:
         return pd.DataFrame()
     out = merged.copy()
-    if "volume" not in out.columns:
-        out["volume"] = None
+    for col in ("volume", "open", "high", "low"):
+        if col not in out.columns:
+            out[col] = None
     if "tag" not in out.columns:
         out["tag"] = ""
-    return out.dropna(subset=["date", "price"])[["date", "price", "volume", "asset", "tag"]]
+    if "source_sheet" not in out.columns:
+        out["source_sheet"] = ""
+    keep_cols = ["date", "price", "open", "high", "low", "volume", "asset", "tag", "source_sheet"]
+    return out.dropna(subset=["date", "price"])[[c for c in keep_cols if c in out.columns]]
 
 
 class StockDataProcessor:
@@ -156,9 +160,18 @@ class StockDataProcessor:
         if df_company.empty:
             return None
 
-        history = df_company[["date", "price", "volume"]].rename(
-            columns={"price": "Close", "volume": "Volume"}
-        )
+        hist_cols = {"price": "Close", "volume": "Volume"}
+        avail = ["date", "price", "volume"]
+        if "open" in df_company.columns:
+            avail.append("open")
+            hist_cols["open"] = "Open"
+        if "high" in df_company.columns:
+            avail.append("high")
+            hist_cols["high"] = "High"
+        if "low" in df_company.columns:
+            avail.append("low")
+            hist_cols["low"] = "Low"
+        history = df_company[[c for c in avail if c in df_company.columns]].rename(columns=hist_cols)
         history = history.set_index("date")
 
         last_price = history["Close"].iloc[-1]

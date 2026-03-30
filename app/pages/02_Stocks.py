@@ -6,17 +6,14 @@ st.set_page_config(page_title="Stocks", page_icon="📈", layout="wide")
 from utils.global_fonts import apply_global_fonts
 apply_global_fonts()
 
-
 from utils.page_transition import apply_page_transition_fix
-
-# Apply fix for page transitions to prevent background bleed-through
 apply_page_transition_fix()
 
 from utils.auth import check_password
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
-from stock_processor_fix import StockDataProcessor  # Use the fixed version
+from stock_processor_fix import StockDataProcessor
 from data_processor import FinancialDataProcessor
 from utils.helpers import format_number
 from datetime import datetime, timedelta
@@ -30,72 +27,58 @@ from utils.styles import get_page_style, get_animation_style
 from utils.workbook_market_data import load_combined_stock_market_data
 from utils.workbook_source import get_workbook_source_stamp
 
-# Apply global styles at page load for better performance
+# Apply global styles
 st.markdown(get_page_style(), unsafe_allow_html=True)
 st.markdown(get_animation_style(), unsafe_allow_html=True)
 
-# Add header with language selector
 from utils.header import render_header
 from utils.language import get_text
 st.session_state["active_nav_page"] = "stocks"
 st.session_state["_active_nav_page"] = "stocks"
 render_header()
 
-# Add SQL Assistant in the sidebar
 from utils.sql_assistant_sidebar import render_sql_assistant_sidebar
 if not st.session_state.get("hide_sidebar_nav", False):
     render_sql_assistant_sidebar()
 
-# Add the plotly config near the top after other constants
+from utils.time_utils import render_floating_clock
+render_floating_clock()
+
+# ── Plotly config ──────────────────────────────────────────────────────────
 plotly_config = {
     'displayModeBar': True,
     'modeBarButtonsToRemove': [
         'zoom', 'pan', 'select', 'lasso2d', 'zoomIn', 'zoomOut',
-        'autoScale', 'resetScale', 'resetViewMapbox', 'zoomInMapbox',
-        'zoomOutMapbox', 'resetViewMapbox', 'hoverClosestCartesian',
-        'hoverCompareCartesian'
+        'autoScale', 'resetScale', 'hoverClosestCartesian', 'hoverCompareCartesian'
     ],
-    'modeBarButtonsToAdd': ['fullscreen'],
     'displaylogo': False
 }
 
-# Check if user is logged in, redirect to Welcome page if not
-# Always authenticated - no password check needed
-from utils.time_utils import render_floating_clock
-render_floating_clock()
-
-# Initialize data processor in session state if not already present
+# ── Initialize processors ─────────────────────────────────────────────────
 if 'data_processor' not in st.session_state:
     data_processor = FinancialDataProcessor()
     data_processor.load_data()
     st.session_state['data_processor'] = data_processor
-
-# Initialize stock processor in session state if not already present
 if 'stock_processor' not in st.session_state:
     st.session_state.stock_processor = StockDataProcessor()
-
-# Initialize stock data cache in session state
 if 'stock_data_cache' not in st.session_state:
     st.session_state.stock_data_cache = {}
 
-# Define company colors for consistency across visualizations
+_data_processor = st.session_state.data_processor
+
+# ── Company colors ─────────────────────────────────────────────────────────
 COMPANY_COLORS = {
-    'Apple': ('#000000', 'black'),
-    'Microsoft': ('#00A4EF', 'blue'),
-    'Alphabet': ('#4285F4', 'blue'),
-    'Amazon': ('#FF9900', 'orange'),
-    'Meta': ('#0668E1', 'blue'),
-    'Meta Platforms': ('#0668E1', 'blue'),
-    'Netflix': ('#E50914', 'red'),
-    'Disney': ('#113CCF', 'blue'),
-    'Spotify': ('#1ED760', 'green'),
-    'Roku': ('#6F1AB1', 'purple'),
-    'Comcast': ('#FFBA00', 'yellow'),
-    'Paramount': ('#000A3B', 'navy'),
-    'Paramount Global': ('#000A3B', 'navy'),
-    'Warner Bros Discovery': ('#D0A22D', 'gold'),
-    'Warner Bros. Discovery': ('#D0A22D', 'gold'),
-    'Other US Companies': ('#212121', 'darkgrey')
+    'Apple': '#000000', 'Microsoft': '#00A4EF', 'Alphabet': '#4285F4',
+    'Amazon': '#FF9900', 'Meta': '#0668E1', 'Meta Platforms': '#0668E1',
+    'Netflix': '#E50914', 'Disney': '#113CCF', 'Spotify': '#1ED760',
+    'Roku': '#6F1AB1', 'Comcast': '#FFBA00',
+    'Paramount': '#000A3B', 'Paramount Global': '#000A3B',
+    'Warner Bros Discovery': '#D0A22D', 'Warner Bros. Discovery': '#D0A22D',
+    'Bitcoin': '#F7931A', 'S&P 500': '#1a73e8', 'Nasdaq': '#00b4d8',
+    'Nvidia': '#76B900', 'NVIDIA': '#76B900',
+    'TTD': '#3DD8A5', 'The Trade Desk': '#3DD8A5',
+    'CRTO': '#F47920', 'Criteo': '#F47920',
+    'SNAP': '#FFFC00', 'PINS': '#E60023',
 }
 
 ASSET_DIR = Path(__file__).resolve().parents[1] / "attached_assets"
@@ -152,6 +135,7 @@ def _first_existing_logo(*names):
             return candidate
     return None
 
+
 def _parse_numeric(value):
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
@@ -162,17 +146,13 @@ def _parse_numeric(value):
         return None
     multiplier = 1.0
     if text.endswith("K"):
-        multiplier = 1_000.0
-        text = text[:-1]
+        multiplier = 1_000.0; text = text[:-1]
     elif text.endswith("M"):
-        multiplier = 1_000_000.0
-        text = text[:-1]
+        multiplier = 1_000_000.0; text = text[:-1]
     elif text.endswith("B"):
-        multiplier = 1_000_000_000.0
-        text = text[:-1]
+        multiplier = 1_000_000_000.0; text = text[:-1]
     elif text.endswith("T"):
-        multiplier = 1_000_000_000_000.0
-        text = text[:-1]
+        multiplier = 1_000_000_000_000.0; text = text[:-1]
     try:
         return float(text) * multiplier
     except ValueError:
@@ -230,11 +210,7 @@ def _build_sparkline_svg(series, color="#16A34A", width=140, height=40):
         if isinstance(series, pd.Series):
             values = series.dropna().astype(float).tolist()
         else:
-            values = [
-                float(v)
-                for v in series
-                if v is not None and not (isinstance(v, float) and pd.isna(v))
-            ]
+            values = [float(v) for v in series if v is not None and not (isinstance(v, float) and pd.isna(v))]
     except Exception:
         return ""
     if len(values) < 2:
@@ -268,26 +244,16 @@ def load_stock_fundamentals(data_path):
         merged = load_combined_stock_market_data(
             excel_path=data_path,
             source_stamp=int(get_workbook_source_stamp(data_path) or 0),
-            include_baseline=True,
-            include_daily=True,
-            include_minute=True,
+            include_baseline=True, include_daily=True, include_minute=True,
         )
     except Exception:
         return pd.DataFrame()
-
     if merged is None or merged.empty:
         return pd.DataFrame()
-
     df = merged.copy()
-    if "market_cap" not in df.columns:
-        df["market_cap"] = None
-    if "outstanding_shares" not in df.columns:
-        df["outstanding_shares"] = None
-    if "tag" not in df.columns:
-        df["tag"] = ""
-    if "volume" not in df.columns:
-        df["volume"] = None
-
+    for col in ("market_cap", "outstanding_shares", "tag", "volume"):
+        if col not in df.columns:
+            df[col] = None if col != "tag" else ""
     required = {"date", "price", "asset", "tag"}
     if not required.issubset(set(df.columns)):
         return pd.DataFrame()
@@ -315,19 +281,9 @@ def _get_last_nonzero(series):
     series = series[series != 0]
     return series.iloc[-1] if not series.empty else None
 
-#############################
-# Start of Stocks Page Content
-#############################
-
-# Page title
-st.title("📈 Stock Performance")
-
-# Get data processor for metrics
-_data_processor = st.session_state.data_processor
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_company_logos():
-    """Load and cache company logos with base64 encoding."""
     logo_paths = {
         "Apple": _first_existing_logo("apple_logo.png"),
         "Microsoft": _first_existing_logo("msft.png"),
@@ -370,7 +326,6 @@ def load_company_logos():
         "IAS": _first_existing_logo("IAS.png"),
         "Integral Ad Science": _first_existing_logo("IAS.png"),
     }
-
     logos = {}
     for company, path in logo_paths.items():
         if not path:
@@ -386,12 +341,89 @@ def load_company_logos():
     return logos
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE CSS
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown("""
+<style>
+    .company-logo {
+        width: 50px; height: 50px; object-fit: contain;
+        transition: all 0.3s ease;
+    }
+    .company-logo:hover { transform: scale(1.2); filter: drop-shadow(0 0 5px rgba(0,0,0,0.3)); cursor: pointer; }
+    .company-card {
+        border: 1px solid rgba(48,54,61,0.6); border-radius: 10px;
+        padding: 15px; margin-bottom: 15px;
+        background-color: rgba(22,27,34,0.85);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        transition: all 0.3s ease; cursor: pointer;
+    }
+    .company-card-content { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .company-card-left { display: flex; align-items: center; gap: 12px; }
+    .company-card-details { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .company-card-name { font-weight: 700; font-size: 16px; color: #e6edf3; }
+    .company-card-price { font-size: 20px; font-weight: 600; color: #e6edf3; }
+    .company-card-change { font-size: 0.9rem; }
+    .company-sparkline { display: flex; align-items: center; }
+    .stock-sparkline { width: 120px; height: 40px; }
+    .company-card:hover { box-shadow: 0 5px 20px rgba(0,0,0,0.4); transform: translateY(-2px); border-color: rgba(88,100,120,0.7); }
+    .indicator-card { border-color: rgba(37,99,235,0.35); box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12); }
+    [data-testid="stElementToolbar"], [data-testid="stElementToolbarBorderless"] {
+        display: none !important; visibility: hidden !important; pointer-events: none !important;
+    }
+    .stApp div[data-testid="stButton"] > button,
+    .stApp [data-testid="stBaseButton-secondary"],
+    .stApp [data-testid="stBaseButton-primary"] {
+        background: #1e40af !important; background-color: #1e40af !important;
+        background-image: none !important; color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border: 1px solid #1e3a8a !important; border-radius: 8px !important;
+        font-weight: 600 !important; font-size: 0.85rem !important;
+        padding: 8px 18px !important; box-shadow: 0 2px 6px rgba(30,64,175,0.18) !important;
+        cursor: pointer !important;
+    }
+    .stApp div[data-testid="stButton"] > button:hover,
+    .stApp [data-testid="stBaseButton-secondary"]:hover,
+    .stApp [data-testid="stBaseButton-primary"]:hover {
+        background: #2563eb !important; background-color: #2563eb !important;
+    }
+    .stApp div[data-testid="stButton"] > button p,
+    .stApp div[data-testid="stButton"] > button span,
+    .stApp [data-testid="stBaseButton-secondary"] p,
+    .stApp [data-testid="stBaseButton-secondary"] span {
+        color: #ffffff !important; -webkit-text-fill-color: #ffffff !important;
+    }
+    .price-up { color: #16A34A; }
+    .price-down { color: #EF4444; }
+    .stock-metric-card {
+        background: rgba(22,27,34,0.85); border-radius: 10px;
+        border: 1px solid rgba(48,54,61,0.6); box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        padding: 12px 14px; min-height: 76px;
+    }
+    .stock-metrics-section { margin-bottom: 1.4rem; }
+    .stock-metric-label { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: #8b949e; }
+    .stock-metric-value { font-size: 1.1rem; font-weight: 700; color: #e6edf3; margin-top: 0.35rem; }
+    /* Timeframe pill buttons */
+    .tf-pills { display: flex; gap: 4px; margin: 8px 0 12px 0; }
+    .tf-pill {
+        padding: 5px 14px; border-radius: 16px; font-size: 0.78rem; font-weight: 600;
+        cursor: pointer; border: 1px solid rgba(48,54,61,0.6);
+        background: rgba(22,27,34,0.6); color: #8b949e; transition: all 0.2s;
+    }
+    .tf-pill.active { background: #1e40af; border-color: #2563eb; color: #fff; }
+    .tf-pill:hover:not(.active) { background: rgba(30,64,175,0.15); border-color: rgba(37,99,235,0.4); color: #c9d1d9; }
+</style>
+""", unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# COMPANY CARD & GRID RENDERERS
+# ══════════════════════════════════════════════════════════════════════════════
 def _render_company_card(company, company_logos, stock_processor, timeframe, button_prefix="company"):
     try:
         stock_data = stock_processor.get_company_data(company, timeframe)
         if not stock_data or "quote" not in stock_data:
             return False
-
         quote = stock_data["quote"]
         history = stock_data.get("history")
         price = quote.get("price", 0)
@@ -409,23 +441,16 @@ def _render_company_card(company, company_logos, stock_processor, timeframe, but
         if history is not None and not history.empty:
             spark_color = "#16A34A" if change >= 0 else "#EF4444"
             sparkline_svg = _build_sparkline_svg(history["Close"], color=spark_color)
-        sparkline_html = (
-            f"<div class='company-sparkline'>{sparkline_svg}</div>"
-            if sparkline_svg
-            else ""
-        )
+        sparkline_html = f"<div class='company-sparkline'>{sparkline_svg}</div>" if sparkline_svg else ""
         card_classes = "company-card indicator-card" if _is_market_indicator(company) else "company-card"
         logo_b64 = company_logos.get(company, "")
         logo_html = (
             f"<img src='data:image/png;base64,{logo_b64}' class='company-logo'>"
-            if logo_b64
-            else "<div class='company-logo'></div>"
+            if logo_b64 else "<div class='company-logo'></div>"
         )
-
         with st.container():
             st.markdown(
-                f"""
-                <div class="{card_classes}" onclick="handleCompanyClick('{company}')">
+                f"""<div class="{card_classes}" onclick="handleCompanyClick('{company}')">
                     <div class="company-card-content">
                         <div class="company-card-left">
                             {logo_html}
@@ -439,15 +464,10 @@ def _render_company_card(company, company_logos, stock_processor, timeframe, but
                         </div>
                         {sparkline_html}
                     </div>
-                </div>
-                """,
+                </div>""",
                 unsafe_allow_html=True,
             )
-
-            if st.button(
-                f"View {company}",
-                key=f"{button_prefix}_{_normalize_company_key(company)}",
-            ):
+            if st.button(f"View {company}", key=f"{button_prefix}_{_normalize_company_key(company)}"):
                 st.session_state.selected_company = company
                 st.session_state.selected_timeframe = timeframe
                 st.rerun()
@@ -457,8 +477,6 @@ def _render_company_card(company, company_logos, stock_processor, timeframe, but
 
 
 def _render_company_grid(companies, company_logos, stock_processor, timeframe, button_prefix, center_last_single=False):
-    # Pre-filter: verify each company actually has renderable data
-    # so that failed cards don't leave empty column slots in the grid.
     renderable = []
     for c in companies:
         try:
@@ -467,7 +485,6 @@ def _render_company_grid(companies, company_logos, stock_processor, timeframe, b
                 renderable.append(c)
         except Exception:
             pass
-
     for start in range(0, len(renderable), 3):
         row = renderable[start:start + 3]
         if len(row) == 1 and center_last_single:
@@ -480,167 +497,168 @@ def _render_company_grid(companies, company_logos, stock_processor, timeframe, b
             row_cols = st.columns(3)
         for col, company in zip(row_cols, row):
             with col:
-                _render_company_card(
-                    company,
-                    company_logos,
-                    stock_processor,
-                    timeframe,
-                    button_prefix=button_prefix,
-                )
+                _render_company_card(company, company_logos, stock_processor, timeframe, button_prefix=button_prefix)
 
 
-def render_all_company_stocks_section():
-    st.header("All Company Stocks")
+# ══════════════════════════════════════════════════════════════════════════════
+# MULTI-ASSET CHART (professional overlay with line/candlestick + live updates)
+# ══════════════════════════════════════════════════════════════════════════════
+def render_multi_asset_chart():
+    """Professional multi-asset chart: empty default, line/candle modes, timeframe pills."""
+    st.markdown("### Multi-Asset Chart")
+    st.caption("Compare assets side by side. Select companies to begin.")
 
     stock_processor = st.session_state.stock_processor
     companies_all_raw = (
         stock_processor.get_companies()
         if hasattr(stock_processor, "get_companies")
-        else st.session_state["data_processor"].get_companies()
+        else _data_processor.get_companies()
     )
     companies_main, companies_indicators = _split_company_groups(companies_all_raw)
     companies_all = companies_main + companies_indicators
 
-    controls = st.columns([1.2, 1.2, 2.6])
-    with controls[0]:
+    # Controls row
+    c1, c2, c3 = st.columns([1, 1, 3])
+    with c1:
         multi_timeframe = st.selectbox(
             "Timeframe",
             ["1M", "3M", "6M", "1Y", "2Y", "5Y", "MAX"],
-            index=1,
-            key="all_stocks_timeframe",
+            index=2,  # default 6M
+            key="multi_chart_tf",
         )
-    with controls[1]:
-        view_mode = st.selectbox(
-            "View",
-            ["Individual Charts", "Overlay (Indexed)", "Overlay (Price)"],
+    with c2:
+        chart_type = st.selectbox(
+            "Chart Type",
+            ["Line", "Candlestick", "Indexed (base=100)"],
             index=0,
-            key="all_stocks_view_mode",
+            key="multi_chart_type",
         )
-    with controls[2]:
-        default_selection = st.session_state.get("all_stocks_companies")
-        if default_selection:
-            default_selection = [name for name in default_selection if name in companies_all]
-        if not default_selection:
-            default_selection = companies_all
-        selected_companies = st.multiselect(
-            "Companies",
+    with c3:
+        # Start empty — user picks what they want
+        default_sel = st.session_state.get("multi_chart_companies")
+        if default_sel:
+            default_sel = [n for n in default_sel if n in companies_all]
+        if not default_sel:
+            default_sel = []
+        selected = st.multiselect(
+            "Assets",
             options=companies_all,
-            default=default_selection,
-            key="all_stocks_companies",
+            default=default_sel,
+            key="multi_chart_companies",
+            placeholder="Select assets to chart...",
         )
 
-    if not selected_companies:
-        st.info("Select at least one company to show the chart.")
+    if not selected:
+        st.info("Select one or more assets above to display the chart.")
         return
 
-    # ── Collect price data for all selected companies ──
+    # Collect data
     company_series = {}
-    with st.spinner("Loading price histories..."):
-        for company in selected_companies:
-            try:
-                stock_data = stock_processor.get_company_data(company, multi_timeframe)
-                history = stock_data.get("history") if isinstance(stock_data, dict) else None
-                if history is None or getattr(history, "empty", True):
-                    continue
-                series = pd.to_numeric(history.get("Close"), errors="coerce").dropna()
-                if series.empty:
-                    continue
-                company_series[company] = series
-            except Exception:
+    company_ohlc = {}
+    for company in selected:
+        try:
+            stock_data = stock_processor.get_company_data(company, multi_timeframe)
+            if not isinstance(stock_data, dict):
                 continue
+            history = stock_data.get("history")
+            if history is None or history.empty:
+                continue
+            series = pd.to_numeric(history.get("Close"), errors="coerce").dropna()
+            if series.empty:
+                continue
+            company_series[company] = series
+            # Check for OHLC
+            has_ohlc = all(c in history.columns for c in ("Open", "High", "Low"))
+            if has_ohlc:
+                ohlc = history[["Open", "High", "Low", "Close"]].dropna()
+                if not ohlc.empty and len(ohlc) > 5:
+                    company_ohlc[company] = ohlc
+        except Exception:
+            continue
 
     if not company_series:
-        st.info("No price history available for the selected companies/timeframe.")
+        st.info("No price data available for the selected assets/timeframe.")
         return
 
-    if view_mode == "Individual Charts":
-        # ── Trading-terminal style: one mini-chart per company ──
-        n = len(company_series)
-        cols_per_row = 3
-        rows = (n + cols_per_row - 1) // cols_per_row
-        names = list(company_series.keys())
+    # Build chart
+    fig = go.Figure()
 
-        fig = make_subplots(
-            rows=rows,
-            cols=cols_per_row,
-            subplot_titles=names + [""] * (rows * cols_per_row - n),
-            vertical_spacing=0.08,
-            horizontal_spacing=0.05,
-        )
+    if chart_type == "Candlestick" and company_ohlc:
+        # Candlestick for each selected asset (works best with 1-2 assets)
+        for company in selected:
+            if company not in company_ohlc:
+                continue
+            ohlc = company_ohlc[company]
+            color = COMPANY_COLORS.get(company, "#64748b")
+            fig.add_trace(go.Candlestick(
+                x=ohlc.index,
+                open=ohlc["Open"], high=ohlc["High"],
+                low=ohlc["Low"], close=ohlc["Close"],
+                name=company,
+                increasing=dict(line=dict(color="#16A34A"), fillcolor="rgba(22,163,74,0.3)"),
+                decreasing=dict(line=dict(color="#EF4444"), fillcolor="rgba(239,68,68,0.3)"),
+            ))
+        y_title = "Price (USD)"
+    elif chart_type == "Indexed (base=100)":
+        for company, series in company_series.items():
+            base = float(series.iloc[0]) if float(series.iloc[0]) != 0 else None
+            if not base:
+                continue
+            y = (series / base) * 100.0
+            color = COMPANY_COLORS.get(company, "#64748b")
+            fig.add_trace(go.Scatter(
+                x=series.index, y=y, mode="lines", name=company,
+                line=dict(color=color, width=2.2),
+                customdata=series,
+                hovertemplate="%{x|%b %d, %Y}<br><b>%{fullData.name}</b><br>Index: %{y:.1f}<br>Price: $%{customdata:.2f}<extra></extra>",
+            ))
+        y_title = "Index (base=100)"
+    else:
+        # Line chart
+        for company, series in company_series.items():
+            color = COMPANY_COLORS.get(company, "#64748b")
+            fig.add_trace(go.Scatter(
+                x=series.index, y=series, mode="lines", name=company,
+                line=dict(color=color, width=2.2),
+                hovertemplate="%{x|%b %d, %Y}<br><b>%{fullData.name}</b><br>$%{y:.2f}<extra></extra>",
+            ))
+        y_title = "Price (USD)"
 
-        for idx, (company, series) in enumerate(company_series.items()):
-            row = idx // cols_per_row + 1
-            col = idx % cols_per_row + 1
-            color = (COMPANY_COLORS.get(company) or COMPANY_COLORS.get(company.strip()) or ("#64748b", ""))[0]
-            # Compute period return for color
-            start_price = float(series.iloc[0])
-            end_price = float(series.iloc[-1])
-            pct_change = ((end_price - start_price) / start_price * 100) if start_price else 0
-            line_color = "#16A34A" if pct_change >= 0 else "#EF4444"
-            # Fill area under the line
-            fig.add_trace(
-                go.Scatter(
-                    x=series.index,
-                    y=series,
-                    mode="lines",
-                    name=company,
-                    showlegend=False,
-                    line=dict(color=line_color, width=2),
-                    fill="tozeroy",
-                    fillcolor=f"rgba({int(line_color[1:3],16)},{int(line_color[3:5],16)},{int(line_color[5:7],16)},0.08)",
-                    hovertemplate="%{x|%b %d, %Y}<br>$%{y:.2f}<extra></extra>",
-                ),
-                row=row,
-                col=col,
-            )
+    fig.update_layout(
+        height=520,
+        hovermode="x unified",
+        margin=dict(l=10, r=10, t=10, b=10),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+                    font=dict(color="#e6edf3", size=12)),
+        font=dict(family="system-ui, -apple-system, sans-serif", color="#e6edf3"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=False, zeroline=False, showline=False,
+                   tickfont=dict(color="#8b949e"),
+                   rangebreaks=[dict(bounds=["sat", "mon"])]),
+        yaxis=dict(title=y_title, showgrid=True, gridcolor="rgba(48,54,61,0.4)",
+                   zeroline=False, showline=False, tickfont=dict(color="#8b949e"),
+                   title_font=dict(color="#8b949e")),
+    )
+    if chart_type == "Candlestick":
+        fig.update_layout(xaxis_rangeslider_visible=False)
 
-        chart_height = max(320, rows * 240)
-        fig.update_layout(
-            height=chart_height,
-            margin=dict(l=40, r=20, t=40, b=20),
-            font=dict(
-                family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-                size=11,
-                color="#e6edf3",
-            ),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            showlegend=False,
-        )
-        # Style each subplot axis
-        for idx in range(len(company_series)):
-            ax_suffix = "" if idx == 0 else str(idx + 1)
-            fig.update_xaxes(
-                showgrid=False, zeroline=False, showline=False,
-                showticklabels=(idx // cols_per_row == rows - 1),  # only bottom row
-                tickfont=dict(size=9, color="#8b949e"),
-                row=idx // cols_per_row + 1,
-                col=idx % cols_per_row + 1,
-            )
-            fig.update_yaxes(
-                showgrid=True,
-                gridcolor="rgba(48,54,61,0.4)",
-                zeroline=False,
-                showline=False,
-                tickprefix="$",
-                tickfont=dict(size=9, color="#8b949e"),
-                row=idx // cols_per_row + 1,
-                col=idx % cols_per_row + 1,
-            )
-        # Style subplot titles (company names)
-        fig.update_annotations(font=dict(size=12, color="#e6edf3"))
-        st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+    st.plotly_chart(fig, use_container_width=True, config=plotly_config)
 
-        # Summary strip: show current price + period return for each
-        strip_cols = st.columns(min(len(company_series), 6))
+    # Summary strip
+    n_cols = min(len(company_series), 6)
+    if n_cols > 0:
+        strip_cols = st.columns(n_cols)
         for i, (company, series) in enumerate(company_series.items()):
-            col_idx = i % min(len(company_series), 6)
+            if i >= n_cols:
+                break
             start_p = float(series.iloc[0])
             end_p = float(series.iloc[-1])
             pct = ((end_p - start_p) / start_p * 100) if start_p else 0
             sign = "+" if pct >= 0 else ""
             clr = "#16A34A" if pct >= 0 else "#EF4444"
-            with strip_cols[col_idx]:
+            with strip_cols[i % n_cols]:
                 st.markdown(
                     f"<div style='text-align:center;padding:6px 0;'>"
                     f"<div style='font-weight:700;font-size:0.85rem;color:#e6edf3;'>{company}</div>"
@@ -649,596 +667,212 @@ def render_all_company_stocks_section():
                     f"</div>",
                     unsafe_allow_html=True,
                 )
-    else:
-        # ── Overlay mode: all companies on same chart ──
-        is_indexed = view_mode == "Overlay (Indexed)"
-        fig = go.Figure()
-        for company, series in company_series.items():
-            if is_indexed:
-                base = float(series.iloc[0]) if float(series.iloc[0]) != 0 else None
-                if not base:
-                    continue
-                y = (series / base) * 100.0
-                hover_y = series
-                hover_extra = "Price: $%{customdata:.2f}"
-                y_title = "Index (base=100)"
-            else:
-                y = series
-                hover_y = series
-                hover_extra = "Price: $%{y:.2f}"
-                y_title = "Price (USD)"
 
-            color = (COMPANY_COLORS.get(company) or COMPANY_COLORS.get(company.strip()) or ("#64748b", ""))[0]
-            fig.add_trace(
-                go.Scatter(
-                    x=series.index,
-                    y=y,
-                    mode="lines",
-                    name=company,
-                    line=dict(color=color, width=2.6),
-                    customdata=hover_y,
-                    hovertemplate="%{x|%b %d, %Y}<br><b>%{fullData.name}</b><br>"
-                    + hover_extra
-                    + "<extra></extra>",
-                )
-            )
 
-        fig.update_layout(
-            height=560,
-            hovermode="x unified",
-            margin=dict(l=10, r=10, t=10, b=10),
-            showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, font=dict(color="#e6edf3")),
-            font=dict(
-                family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-                color="#e6edf3",
-            ),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-        )
-        fig.update_xaxes(showgrid=False, zeroline=False, showline=False, tickfont=dict(color="#8b949e"))
-        fig.update_yaxes(
-            title=y_title,
-            showgrid=True,
-            gridcolor="rgba(48,54,61,0.4)",
-            zeroline=False,
-            showline=False,
-            tickfont=dict(color="#8b949e"),
-            title_font=dict(color="#8b949e"),
-        )
-        st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+# ══════════════════════════════════════════════════════════════════════════════
+# COMPANY DETAIL VIEW
+# ══════════════════════════════════════════════════════════════════════════════
+def render_company_detail(selected_company, stock_processor, company_logos):
+    """Full detail view for a single company."""
+    timeframe = st.session_state.get('selected_timeframe', '3M')
+    stock_data = stock_processor.get_company_data(selected_company, timeframe, expanded=True)
 
-# Create tabs for different views (only Company Details for now)
-tab1, = st.tabs(["Company Details"])
+    if not stock_data:
+        st.error("Unable to fetch detailed data. This might be due to missing rows in the Excel stock sheet.")
+        if st.button("Back to Overview"):
+            del st.session_state.selected_company
+            st.rerun()
+        return
 
-# Add hover effect CSS for company logos
-st.markdown("""
-<style>
-    .company-logo {
-        width: 50px;
-        height: 50px;
-        object-fit: contain;
-        transition: all 0.3s ease;
-    }
-    .company-logo:hover {
-        transform: scale(1.2);
-        filter: drop-shadow(0 0 5px rgba(0,0,0,0.3));
-        cursor: pointer;
-    }
-    .company-card {
-        border: 1px solid rgba(48,54,61,0.6);
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 15px;
-        background-color: rgba(22,27,34,0.85);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-        transition: all 0.3s ease;
-        cursor: pointer;
-    }
-    .company-card-content {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-    }
-    .company-card-left {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    .company-card-details {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 2px;
-    }
-    .company-card-name {
-        font-weight: 700;
-        font-size: 16px;
-        color: #e6edf3;
-    }
-    .company-card-price {
-        font-size: 20px;
-        font-weight: 600;
-        color: #e6edf3;
-    }
-    .company-card-change {
-        font-size: 0.9rem;
-    }
-    .company-sparkline {
-        display: flex;
-        align-items: center;
-    }
-    .stock-sparkline {
-        width: 120px;
-        height: 40px;
-    }
-    .company-card:hover {
-        box-shadow: 0 5px 20px rgba(0,0,0,0.4);
-        transform: translateY(-2px);
-        border-color: rgba(88,100,120,0.7);
-    }
-    .indicator-card {
-        border-color: rgba(37,99,235,0.35);
-        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
-    }
-    /* Hide Streamlit element toolbar overlay that creates dark bar on hover */
-    [data-testid="stElementToolbar"],
-    [data-testid="stElementToolbarBorderless"] {
-        display: none !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
-    }
-    /* Blue button styling — CSS fallback alongside JS inline styles.
-       .stApp prefix raises specificity above Streamlit emotion classes.
-       -webkit-text-fill-color needed because emotion CSS overrides color. */
-    .stApp div[data-testid="stButton"] > button,
-    .stApp [data-testid="stBaseButton-secondary"],
-    .stApp [data-testid="stBaseButton-primary"] {
-        background: #1e40af !important;
-        background-color: #1e40af !important;
-        background-image: none !important;
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-        border: 1px solid #1e3a8a !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        font-size: 0.85rem !important;
-        padding: 8px 18px !important;
-        box-shadow: 0 2px 6px rgba(30,64,175,0.18) !important;
-        cursor: pointer !important;
-    }
-    .stApp div[data-testid="stButton"] > button:hover,
-    .stApp [data-testid="stBaseButton-secondary"]:hover,
-    .stApp [data-testid="stBaseButton-primary"]:hover {
-        background: #2563eb !important;
-        background-color: #2563eb !important;
-        background-image: none !important;
-    }
-    .stApp div[data-testid="stButton"] > button p,
-    .stApp div[data-testid="stButton"] > button span,
-    .stApp [data-testid="stBaseButton-secondary"] p,
-    .stApp [data-testid="stBaseButton-secondary"] span {
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-    }
-    .price-up {
-        color: #16A34A;
-    }
-    .price-down {
-        color: #EF4444;
-    }
-    .stock-metric-card {
-        background: rgba(22,27,34,0.85);
-        border-radius: 10px;
-        border: 1px solid rgba(48,54,61,0.6);
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-        padding: 12px 14px;
-        min-height: 76px;
-    }
-    .stock-metrics-section {
-        margin-bottom: 1.4rem;
-    }
-    .stock-metric-label {
-        font-size: 0.72rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: #8b949e;
-    }
-    .stock-metric-value {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: #e6edf3;
-        margin-top: 0.35rem;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-#############################
-# TAB 1: COMPANY DETAILS
-#############################
-with tab1:
-    stock_processor = st.session_state.stock_processor
-    # Get available companies (financial universe + live stock feed additions)
-    base_companies = _data_processor.get_companies()
-    live_companies = (
-        stock_processor.get_companies()
-        if hasattr(stock_processor, "get_companies")
-        else []
+    quote = stock_data['quote']
+    history = stock_data['history']
+    fundamentals_df = load_stock_fundamentals(stock_processor.data_path)
+    fundamentals_company_df = (
+        stock_processor._filter_company(fundamentals_df, selected_company)
+        if fundamentals_df is not None and not fundamentals_df.empty
+        else pd.DataFrame()
     )
-    companies_main, companies_indicators = _split_company_groups(
-        list(base_companies or []) + list(live_companies or [])
-    )
-    company_logos = load_company_logos()
-    if _is_excluded_stock(st.session_state.get("selected_company", "")):
-        del st.session_state.selected_company
+    if not fundamentals_company_df.empty:
+        fundamentals_company_df = fundamentals_company_df.sort_values("date")
+        fundamentals_company_df = stock_processor._apply_timeframe(fundamentals_company_df, timeframe)
 
-    # Filter out companies with no stock data — use fast set lookup, not per-company API call
-    try:
-        _known = set(stock_processor.get_companies()) if hasattr(stock_processor, "get_companies") else set()
-    except Exception:
-        _known = set()
-    _known_lower = {c.lower() for c in _known}
+    col1, col2 = st.columns([1, 2.4])
 
-    def _has_stock_data(name):
-        return name in _known or name.lower() in _known_lower
-
-    companies_main = [c for c in companies_main if _has_stock_data(c)]
-    companies_indicators = [c for c in companies_indicators if _has_stock_data(c)]
-
-    # Company selector
-    if 'selected_company' not in st.session_state:
-        # Show all companies in a grid layout
-        st.subheader("Select a Company to View Details")
-
-        # Default timeframe for overview cards
-        timeframe = "3M"
-
-        # Single continuous grid — companies + indicators packed left-to-right.
-        # Indicator cards keep their visual distinction via .indicator-card CSS.
-        all_display = companies_main + companies_indicators
-        _render_company_grid(
-            all_display,
-            company_logos,
-            stock_processor,
-            timeframe,
-            button_prefix="company",
-            center_last_single=False,
-        )
-        
-        # Add JavaScript for handling card clicks
-        st.markdown("""
-        <script>
-        function handleCompanyClick(company) {
-            // Find and click the corresponding button
-            const buttons = document.querySelectorAll('button');
-            for (const button of buttons) {
-                if (button.innerText.trim() === `View ${company}`) {
-                    button.click();
-                    break;
-                }
-            }
-        }
-        </script>
-        """, unsafe_allow_html=True)
-    else:
-        # Display detailed view for selected company
-        selected_company = st.session_state.selected_company
-        timeframe = st.session_state.get('selected_timeframe', '1M')
-        
-        # Get stock data for the company with expanded details
-        stock_data = stock_processor.get_company_data(selected_company, timeframe, expanded=True)
-        
-        # Display stock data
-        if stock_data:
-            # Extract data components
-            quote = stock_data['quote']
-            history = stock_data['history']
-
-            fundamentals_df = load_stock_fundamentals(stock_processor.data_path)
-            fundamentals_company_df = (
-                stock_processor._filter_company(fundamentals_df, selected_company)
-                if fundamentals_df is not None and not fundamentals_df.empty
-                else pd.DataFrame()
+    with col1:
+        logo_b64 = company_logos.get(selected_company, "")
+        if logo_b64:
+            st.markdown(
+                f"<div style='display:flex;align-items:center;gap:0.75rem;margin-bottom:0.35rem;'>"
+                f"<img src='data:image/png;base64,{logo_b64}' style='height:54px;width:54px;object-fit:contain;'>"
+                f"<div style='font-size:1.05rem;font-weight:600;color:#e6edf3;'>{selected_company}</div></div>",
+                unsafe_allow_html=True,
             )
-            if not fundamentals_company_df.empty:
-                fundamentals_company_df = fundamentals_company_df.sort_values("date")
-                fundamentals_company_df = stock_processor._apply_timeframe(
-                    fundamentals_company_df, timeframe
-                )
-
-            col1, col2 = st.columns([1, 2.4])
-
-            # Stock price and change
-            with col1:
-                logo_b64 = company_logos.get(selected_company, "")
-                if logo_b64:
-                    st.markdown(
-                        f"""
-                        <div style="display:flex; align-items:center; gap: 0.75rem; margin-bottom: 0.35rem;">
-                            <img src="data:image/png;base64,{logo_b64}" alt="{selected_company} logo"
-                                 style="height: 54px; width: 54px; object-fit: contain;">
-                            <div style="font-size: 1.05rem; font-weight: 600; color: #e6edf3;">{selected_company}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.subheader(f"{selected_company}")
-
-                price = quote.get('price', 0)
-                change = quote.get('change', 0)
-                change_percent = quote.get('change_percent', 0)
-
-                change_color = "#16A34A" if change >= 0 else "#EF4444"
-                change_prefix = "+" if change >= 0 else "−"
-
-                st.markdown(f"<h3 style='margin-bottom: 0;'>${price:.2f}</h3>", unsafe_allow_html=True)
-                st.markdown(
-                    f"<span style='color: {change_color}; font-size: 1.1em; font-weight: 600;'>"
-                    f"{change_prefix}${abs(change):.2f} ({abs(change_percent):.2f}%)</span>",
-                    unsafe_allow_html=True,
-                )
-
-                st.markdown(f"**Symbol**: {quote.get('symbol', 'N/A')}")
-                st.markdown(f"**Volume**: {format(quote.get('volume', 0), ',')}")
-                st.caption(f"Source: {stock_data.get('source', 'Unknown').capitalize()}")
-
-                new_timeframe = st.selectbox(
-                    "Change Timeframe",
-                    ["1M", "3M", "6M", "1Y", "2Y", "5Y", "MAX"],
-                    index=["1M", "3M", "6M", "1Y", "2Y", "5Y", "MAX"].index(timeframe),
-                )
-
-                show_volume = st.checkbox(
-                    "Show volume",
-                    value=False,
-                    key=f"show_volume_{selected_company}",
-                )
-
-                if new_timeframe != timeframe:
-                    st.session_state.selected_timeframe = new_timeframe
-                    st.rerun()
-
-            # Stock price history chart
-            with col2:
-                if not history.empty:
-                    fig = go.Figure()
-
-                    fig.add_trace(
-                        go.Scatter(
-                            x=history.index,
-                            y=history['Close'],
-                            mode='lines',
-                            name='Price',
-                            line=dict(color='#0073ff', width=3),
-                            hovertemplate='%{x|%b %d, %Y}<br>$%{y:.2f}<extra></extra>',
-                        )
-                    )
-
-                    if show_volume:
-                        fig.add_trace(
-                            go.Bar(
-                                x=history.index,
-                                y=history['Volume'],
-                                name='Volume',
-                                marker=dict(color='rgba(22, 163, 74, 0.35)'),
-                                hovertemplate='%{x|%b %d, %Y}<br>Vol: %{y:,}<extra></extra>',
-                                yaxis='y2',
-                            )
-                        )
-
-                    fig.update_layout(
-                        height=420,
-                        title=None,
-                        hovermode="x unified",
-                        legend=dict(orientation="h", y=1.02, font=dict(color="#e6edf3")),
-                        margin=dict(l=0, r=10, t=40, b=0),
-                        font=dict(
-                            family="system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-                            color="#e6edf3",
-                        ),
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        plot_bgcolor="rgba(0,0,0,0)",
-                        yaxis=dict(
-                            title="Price ($)",
-                            tickprefix="$",
-                            showgrid=True,
-                            gridcolor="rgba(48,54,61,0.4)",
-                            zeroline=False,
-                            showline=False,
-                            tickfont=dict(color="#8b949e"),
-                        ),
-                        yaxis2=(
-                            dict(
-                                title="Volume",
-                                overlaying="y",
-                                side="right",
-                                showgrid=False,
-                                zeroline=False,
-                                showline=False,
-                            )
-                            if show_volume
-                            else None
-                        ),
-                        xaxis=dict(
-                            showgrid=False,
-                            zeroline=False,
-                            showline=False,
-                            tickfont=dict(color="#8b949e"),
-                            rangebreaks=[dict(bounds=["sat", "mon"])],
-                        ),
-                    )
-                    fig.update_xaxes(showgrid=False, zeroline=False, showline=False, tickfont=dict(color="#8b949e"))
-                    fig.update_yaxes(showgrid=True, gridcolor="rgba(48,54,61,0.4)", zeroline=False, showline=False, tickfont=dict(color="#8b949e"))
-                    
-                    # Add chart zoom effect at the top of the file if not already added
-                    if not hasattr(st.session_state, 'chart_css_added'):
-                        st.markdown("""
-                        <style>
-                        .chart-container {
-                            transition: transform 0.3s ease;
-                            transform-origin: center center;
-                        }
-                        .chart-container:hover {
-                            transform: scale(1.02);
-                        }
-                        </style>
-                        """, unsafe_allow_html=True)
-                        st.session_state.chart_css_added = True
-                    
-                    # Show plot with zoom effect
-                    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-                    st.plotly_chart(fig, use_container_width=True, config=plotly_config)
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-                    st.markdown("<div class='stock-metrics-section'>", unsafe_allow_html=True)
-                    st.markdown("#### Key Metrics")
-                    period_end = history.index.max()
-                    start_price = history["Close"].iloc[0]
-                    end_price = history["Close"].iloc[-1]
-                    period_return = (
-                        (end_price - start_price) / start_price * 100 if start_price else None
-                    )
-                    period_high = history["Close"].max()
-                    period_low = history["Close"].min()
-                    avg_volume = (
-                        history["Volume"].mean() if "Volume" in history.columns else None
-                    )
-
-                    market_cap = (
-                        _get_last_nonzero(fundamentals_company_df["market_cap"])
-                        if "market_cap" in fundamentals_company_df
-                        else None
-                    )
-                    shares_outstanding = (
-                        _get_last_nonzero(fundamentals_company_df["outstanding_shares"])
-                        if "outstanding_shares" in fundamentals_company_df
-                        else None
-                    )
-
-                    available_years = _data_processor.get_available_years(selected_company)
-                    metric_year = _latest_available_year(available_years, period_end)
-                    metrics = (
-                        _data_processor.get_metrics(selected_company, metric_year)
-                        if metric_year
-                        else None
-                    )
-
-                    market_cap_value = (
-                        market_cap if market_cap and market_cap > 0 else None
-                    )
-                    if market_cap_value is None and metrics:
-                        metric_market_cap = metrics.get("market_cap")
-                        market_cap_value = metric_market_cap if metric_market_cap else None
-
-                    pe_ratio = None
-                    ps_ratio = None
-                    net_assets_to_debt = None
-                    if metrics:
-                        net_income = metrics.get("net_income")
-                        revenue = metrics.get("revenue")
-                        debt = metrics.get("debt")
-                        total_assets = metrics.get("total_assets")
-                        if market_cap_value and net_income and net_income > 0:
-                            pe_ratio = market_cap_value / net_income
-                        if market_cap_value and revenue and revenue > 0:
-                            ps_ratio = market_cap_value / revenue
-                        if debt and debt > 0 and total_assets:
-                            net_assets = total_assets - debt
-                            if net_assets is not None:
-                                net_assets_to_debt = net_assets / debt
-
-                    metric_cards = [
-                        {
-                            "label": f"Period Return ({timeframe})",
-                            "value": _format_percent(period_return),
-                        },
-                        {
-                            "label": f"Range ({timeframe})",
-                            "value": f"{_format_currency(period_low)} - {_format_currency(period_high)}",
-                        },
-                        {
-                            "label": f"Avg Volume ({timeframe})",
-                            "value": _format_volume(avg_volume),
-                        },
-                        {
-                            "label": "Market Cap",
-                            "value": _format_money_millions(market_cap_value),
-                        },
-                        {
-                            "label": "P/E",
-                            "value": _format_ratio(pe_ratio),
-                        },
-                        {
-                            "label": "P/S",
-                            "value": _format_ratio(ps_ratio),
-                        },
-                        {
-                            "label": "Net Assets / Debt",
-                            "value": _format_ratio(net_assets_to_debt),
-                        },
-                        {
-                            "label": "Shares Outstanding",
-                            "value": _format_shares_millions(shares_outstanding),
-                        },
-                    ]
-
-                    for start in range(0, len(metric_cards), 4):
-                        cols = st.columns(4)
-                        for col, metric in zip(cols, metric_cards[start:start + 4]):
-                            with col:
-                                st.markdown(
-                                    "<div class='stock-metric-card'>"
-                                    f"<div class='stock-metric-label'>{metric['label']}</div>"
-                                    f"<div class='stock-metric-value'>{metric['value']}</div>"
-                                    "</div>",
-                                    unsafe_allow_html=True,
-                                )
-                    st.markdown("</div>", unsafe_allow_html=True)
-                else:
-                    st.error("No historical data available for this timeframe.")
-            
-            # Display additional info about the chart
-            with st.expander("📊 About the Chart"):
-                st.markdown(f"""
-                This chart shows the stock price history for {st.session_state.selected_company} over the selected timeframe:
-                - The blue line represents the closing price
-                - The gray bars show daily trading volume
-                - Hover over the chart to see detailed values
-                """)
-            
-            # Clear selection button
-            if st.button("← Back to Overview"):
-                del st.session_state.selected_company
-                st.rerun()
         else:
-            st.error("Unable to fetch detailed data. This might be due to missing rows in the Excel stock sheet.")
-            
-    st.divider()
-    render_all_company_stocks_section()
+            st.subheader(selected_company)
 
-    st.divider()
-    with st.expander("ℹ️ About Stock Data"):
-        st.markdown("""
-        This section shows detailed stock information for major technology and media companies.
+        price = quote.get('price', 0)
+        change = quote.get('change', 0)
+        change_percent = quote.get('change_percent', 0)
+        change_color = "#16A34A" if change >= 0 else "#EF4444"
+        change_prefix = "+" if change >= 0 else "-"
 
-        **Key Metrics**:
-        - **Current Price**: Latest stock price in USD
-        - **Change**: Last 3 months price movement
-        - **Volume**: Trading volume
+        st.markdown(f"<h3 style='margin-bottom:0;'>${price:.2f}</h3>", unsafe_allow_html=True)
+        st.markdown(
+            f"<span style='color:{change_color};font-size:1.1em;font-weight:600;'>"
+            f"{change_prefix}${abs(change):.2f} ({abs(change_percent):.2f}%)</span>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(f"**Symbol**: {quote.get('symbol', 'N/A')}")
+        st.markdown(f"**Volume**: {format(quote.get('volume', 0), ',')}")
+        st.caption(f"Source: {stock_data.get('source', 'Unknown').capitalize()}")
 
-        **Data Sources**:
-        - Historical + live rows from workbook tabs: `Stocks & Crypto`, `Daily`, `Minute`
-        - Latest price cards/hero values use the merged feed automatically
-        - Market Terminal: live data via yfinance, CoinGecko, CoinMarketCap
+        new_timeframe = st.selectbox(
+            "Timeframe",
+            ["1M", "3M", "6M", "1Y", "2Y", "5Y", "MAX"],
+            index=["1M", "3M", "6M", "1Y", "2Y", "5Y", "MAX"].index(timeframe),
+            key="detail_timeframe",
+        )
+        show_volume = st.checkbox("Show volume", value=False, key=f"show_vol_{selected_company}")
 
-        Click on any company card to see detailed performance.
-        """)
+        # Check for OHLC data
+        has_ohlc = all(c in history.columns for c in ("Open", "High", "Low"))
+        detail_chart_type = "Line"
+        if has_ohlc:
+            detail_chart_type = st.selectbox("Chart Type", ["Line", "Candlestick"], key="detail_chart_type")
 
-    # ── Market Terminal Panel ──────────────────────────────────────────────
-    st.divider()
-    st.header("Market Terminal")
+        if new_timeframe != timeframe:
+            st.session_state.selected_timeframe = new_timeframe
+            st.rerun()
+
+    with col2:
+        if not history.empty:
+            fig = go.Figure()
+
+            if detail_chart_type == "Candlestick" and has_ohlc:
+                ohlc = history[["Open", "High", "Low", "Close"]].dropna()
+                fig.add_trace(go.Candlestick(
+                    x=ohlc.index,
+                    open=ohlc["Open"], high=ohlc["High"],
+                    low=ohlc["Low"], close=ohlc["Close"],
+                    name="OHLC",
+                    increasing=dict(line=dict(color="#16A34A"), fillcolor="rgba(22,163,74,0.3)"),
+                    decreasing=dict(line=dict(color="#EF4444"), fillcolor="rgba(239,68,68,0.3)"),
+                ))
+            else:
+                fig.add_trace(go.Scatter(
+                    x=history.index, y=history['Close'],
+                    mode='lines', name='Price',
+                    line=dict(color='#0073ff', width=2.5),
+                    fill="tozeroy",
+                    fillcolor="rgba(0,115,255,0.06)",
+                    hovertemplate='%{x|%b %d, %Y}<br>$%{y:.2f}<extra></extra>',
+                ))
+
+            if show_volume and "Volume" in history.columns:
+                fig.add_trace(go.Bar(
+                    x=history.index, y=history['Volume'], name='Volume',
+                    marker=dict(color='rgba(22, 163, 74, 0.35)'),
+                    hovertemplate='%{x|%b %d, %Y}<br>Vol: %{y:,}<extra></extra>',
+                    yaxis='y2',
+                ))
+
+            fig.update_layout(
+                height=420, title=None, hovermode="x unified",
+                legend=dict(orientation="h", y=1.02, font=dict(color="#e6edf3")),
+                margin=dict(l=0, r=10, t=40, b=0),
+                font=dict(family="system-ui, -apple-system, sans-serif", color="#e6edf3"),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False, zeroline=False, showline=False,
+                           tickfont=dict(color="#8b949e"),
+                           rangebreaks=[dict(bounds=["sat", "mon"])],
+                           rangeslider_visible=False),
+                yaxis=dict(title="Price ($)", tickprefix="$", showgrid=True,
+                           gridcolor="rgba(48,54,61,0.4)", zeroline=False,
+                           showline=False, tickfont=dict(color="#8b949e")),
+                yaxis2=(dict(title="Volume", overlaying="y", side="right",
+                             showgrid=False, zeroline=False, showline=False)
+                        if show_volume else None),
+            )
+            st.plotly_chart(fig, use_container_width=True, config=plotly_config)
+
+            # Key Metrics
+            st.markdown("<div class='stock-metrics-section'>", unsafe_allow_html=True)
+            st.markdown("#### Key Metrics")
+            period_end = history.index.max()
+            start_price = history["Close"].iloc[0]
+            end_price = history["Close"].iloc[-1]
+            period_return = (end_price - start_price) / start_price * 100 if start_price else None
+            period_high = history["Close"].max()
+            period_low = history["Close"].min()
+            avg_volume = history["Volume"].mean() if "Volume" in history.columns else None
+
+            market_cap = (
+                _get_last_nonzero(fundamentals_company_df["market_cap"])
+                if "market_cap" in fundamentals_company_df else None
+            )
+            shares_outstanding = (
+                _get_last_nonzero(fundamentals_company_df["outstanding_shares"])
+                if "outstanding_shares" in fundamentals_company_df else None
+            )
+            available_years = _data_processor.get_available_years(selected_company)
+            metric_year = _latest_available_year(available_years, period_end)
+            metrics = _data_processor.get_metrics(selected_company, metric_year) if metric_year else None
+
+            market_cap_value = market_cap if market_cap and market_cap > 0 else None
+            if market_cap_value is None and metrics:
+                market_cap_value = metrics.get("market_cap") or None
+
+            pe_ratio = ps_ratio = net_assets_to_debt = None
+            if metrics:
+                net_income = metrics.get("net_income")
+                revenue = metrics.get("revenue")
+                debt = metrics.get("debt")
+                total_assets = metrics.get("total_assets")
+                if market_cap_value and net_income and net_income > 0:
+                    pe_ratio = market_cap_value / net_income
+                if market_cap_value and revenue and revenue > 0:
+                    ps_ratio = market_cap_value / revenue
+                if debt and debt > 0 and total_assets:
+                    net_assets = total_assets - debt
+                    if net_assets is not None:
+                        net_assets_to_debt = net_assets / debt
+
+            metric_cards = [
+                {"label": f"Period Return ({timeframe})", "value": _format_percent(period_return)},
+                {"label": f"Range ({timeframe})", "value": f"{_format_currency(period_low)} - {_format_currency(period_high)}"},
+                {"label": f"Avg Volume ({timeframe})", "value": _format_volume(avg_volume)},
+                {"label": "Market Cap", "value": _format_money_millions(market_cap_value)},
+                {"label": "P/E", "value": _format_ratio(pe_ratio)},
+                {"label": "P/S", "value": _format_ratio(ps_ratio)},
+                {"label": "Net Assets / Debt", "value": _format_ratio(net_assets_to_debt)},
+                {"label": "Shares Outstanding", "value": _format_shares_millions(shares_outstanding)},
+            ]
+            for start in range(0, len(metric_cards), 4):
+                cols = st.columns(4)
+                for col, metric in zip(cols, metric_cards[start:start + 4]):
+                    with col:
+                        st.markdown(
+                            f"<div class='stock-metric-card'>"
+                            f"<div class='stock-metric-label'>{metric['label']}</div>"
+                            f"<div class='stock-metric-value'>{metric['value']}</div>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+            st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.error("No historical data available for this timeframe.")
+
+    if st.button("Back to Overview"):
+        del st.session_state.selected_company
+        st.rerun()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MARKET TERMINAL (white/light theme)
+# ══════════════════════════════════════════════════════════════════════════════
+def render_market_terminal():
+    """Market Terminal panel on white background."""
+    st.markdown("### Market Terminal")
     st.caption("Live prices across indices, commodities, forex, crypto, sectors & ad-tech")
 
     try:
@@ -1248,21 +882,20 @@ with tab1:
             fetch_crypto_top,
             build_terminal_html,
         )
-
         with st.spinner("Loading live market data..."):
             _mt_data = fetch_bulk_market_data()
             _mt_fg = fetch_fear_greed()
-            _mt_crypto = fetch_crypto_top(limit=30)
+            _mt_crypto = fetch_crypto_top(limit=50)
 
         if _mt_data:
             _mt_html = build_terminal_html(
                 market_data=_mt_data,
                 fear_greed=_mt_fg,
                 crypto_top=_mt_crypto,
+                light_theme=True,
             )
-            # Estimate height: base 200 + rows
-            _n_rows = len(_mt_data) + (30 if _mt_crypto else 0)
-            _mt_height = max(600, 200 + _n_rows * 22 + (80 if _mt_fg else 0))
+            _n_rows = len(_mt_data) + (min(50, len(_mt_crypto)) if _mt_crypto else 0)
+            _mt_height = max(700, 220 + _n_rows * 22 + (80 if _mt_fg else 0))
             st.components.v1.html(_mt_html, height=_mt_height, scrolling=True)
         else:
             st.info("Market terminal data unavailable — yfinance may be blocked by your network.")
@@ -1271,36 +904,83 @@ with tab1:
     except Exception as _mt_exc:
         st.warning(f"Market terminal error: {_mt_exc}")
 
-#############################
-# Sidebar Components
-#############################
 
-# Update AI context
-dashboard_state = {
-    'page': 'Stocks',
-    'selected_company': st.session_state.get('selected_company', None),
-}
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE LAYOUT
+# ══════════════════════════════════════════════════════════════════════════════
+st.title("Stock Performance")
 
-# ── Button style override — MutationObserver applies INLINE styles ──
-# CSS specificity wars with Streamlit are unwinnable. Inline styles always
-# beat any stylesheet rule, so we apply them directly via JS on every DOM
-# mutation. A throttle prevents performance issues.
+stock_processor = st.session_state.stock_processor
+base_companies = _data_processor.get_companies()
+live_companies = stock_processor.get_companies() if hasattr(stock_processor, "get_companies") else []
+companies_main, companies_indicators = _split_company_groups(
+    list(base_companies or []) + list(live_companies or [])
+)
+company_logos = load_company_logos()
+
+if _is_excluded_stock(st.session_state.get("selected_company", "")):
+    del st.session_state.selected_company
+
+# Filter to companies with data
+try:
+    _known = set(stock_processor.get_companies()) if hasattr(stock_processor, "get_companies") else set()
+except Exception:
+    _known = set()
+_known_lower = {c.lower() for c in _known}
+def _has_stock_data(name):
+    return name in _known or name.lower() in _known_lower
+companies_main = [c for c in companies_main if _has_stock_data(c)]
+companies_indicators = [c for c in companies_indicators if _has_stock_data(c)]
+
+# ── Section 1: Company Detail or Company Grid ─────────────────────────────
+if 'selected_company' in st.session_state:
+    render_company_detail(st.session_state.selected_company, stock_processor, company_logos)
+else:
+    st.subheader("Select a Company")
+    all_display = companies_main + companies_indicators
+    _render_company_grid(
+        all_display, company_logos, stock_processor, "3M",
+        button_prefix="company", center_last_single=False,
+    )
+    st.markdown("""<script>
+    function handleCompanyClick(company) {
+        const buttons = document.querySelectorAll('button');
+        for (const button of buttons) {
+            if (button.innerText.trim() === 'View ' + company) { button.click(); break; }
+        }
+    }
+    </script>""", unsafe_allow_html=True)
+
+# ── Section 2: Multi-Asset Chart ──────────────────────────────────────────
+st.divider()
+render_multi_asset_chart()
+
+# ── Section 3: Market Terminal (white bg) ─────────────────────────────────
+st.divider()
+render_market_terminal()
+
+# ── About section ─────────────────────────────────────────────────────────
+st.divider()
+with st.expander("About Stock Data"):
+    st.markdown("""
+    **Data Sources**:
+    - Historical + live rows from workbook tabs: `Stocks & Crypto`, `Daily`, `Minute`
+    - Market Terminal: live data via yfinance, CoinGecko, CoinMarketCap
+
+    Click on any company card to see detailed performance.
+    """)
+
+# ── Button style override (MutationObserver) ─────────────────────────────
 import streamlit.components.v1 as _comp
 _comp.html("""
 <script>
 (function() {
   var doc = window.parent ? window.parent.document : document;
-  var BLUE = '#1e40af';
-  var BLUE_HOVER = '#2563eb';
-  var _timer = null;
-
+  var BLUE = '#1e40af', BLUE_HOVER = '#2563eb', _timer = null;
   function styleAllButtons() {
-    var btns = doc.querySelectorAll(
-      '[data-testid="stButton"] button, ' +
-      '[data-testid="stBaseButton-secondary"], ' +
-      '[data-testid="stBaseButton-primary"]'
-    );
-    btns.forEach(function(btn) {
+    doc.querySelectorAll(
+      '[data-testid="stButton"] button, [data-testid="stBaseButton-secondary"], [data-testid="stBaseButton-primary"]'
+    ).forEach(function(btn) {
       btn.style.setProperty('background', BLUE, 'important');
       btn.style.setProperty('background-color', BLUE, 'important');
       btn.style.setProperty('background-image', 'none', 'important');
@@ -1308,44 +988,31 @@ _comp.html("""
       btn.style.setProperty('border', '1px solid #1e3a8a', 'important');
       btn.style.setProperty('border-radius', '8px', 'important');
       btn.style.setProperty('font-weight', '600', 'important');
-      btn.style.setProperty('font-size', '0.85rem', 'important');
       btn.style.setProperty('padding', '8px 18px', 'important');
-      btn.style.setProperty('box-shadow', '0 2px 6px rgba(30,64,175,0.2)', 'important');
       btn.style.setProperty('cursor', 'pointer', 'important');
-      // Force white text on all children
-      var kids = btn.querySelectorAll('p, span, div');
-      kids.forEach(function(k) { k.style.setProperty('color', '#ffffff', 'important'); });
-      // Add hover listeners (only once)
+      btn.querySelectorAll('p, span, div').forEach(function(k) {
+        k.style.setProperty('color', '#ffffff', 'important');
+      });
       if (!btn._stocksHover) {
         btn._stocksHover = true;
         btn.addEventListener('mouseenter', function() {
           this.style.setProperty('background', BLUE_HOVER, 'important');
           this.style.setProperty('background-color', BLUE_HOVER, 'important');
-          this.style.setProperty('box-shadow', '0 4px 12px rgba(37,99,235,0.35)', 'important');
-          this.style.setProperty('transform', 'translateY(-1px)', 'important');
         });
         btn.addEventListener('mouseleave', function() {
           this.style.setProperty('background', BLUE, 'important');
           this.style.setProperty('background-color', BLUE, 'important');
-          this.style.setProperty('box-shadow', '0 2px 6px rgba(30,64,175,0.2)', 'important');
-          this.style.setProperty('transform', 'none', 'important');
         });
       }
     });
   }
-
-  // Initial pass
   styleAllButtons();
-  // Re-apply on DOM changes (throttled to 150ms)
-  var obs = new MutationObserver(function() {
+  new MutationObserver(function() {
     if (_timer) clearTimeout(_timer);
     _timer = setTimeout(styleAllButtons, 150);
-  });
-  obs.observe(doc.body, { childList: true, subtree: true });
-  // Safety: also re-apply after short delay for Streamlit hydration
+  }).observe(doc.body, { childList: true, subtree: true });
   setTimeout(styleAllButtons, 300);
   setTimeout(styleAllButtons, 800);
-  setTimeout(styleAllButtons, 1500);
 })();
 </script>
 """, height=0)
