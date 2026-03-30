@@ -2696,7 +2696,7 @@ def _render_polymarket_strip(logos_dict: dict) -> None:
     Design mirrors the stock ticker strip — same dark glass card aesthetic.
     """
     try:
-        raw_markets = fetch_polymarket_top(300)
+        raw_markets = fetch_polymarket_top(1000)
     except Exception:
         raw_markets = []
 
@@ -6016,17 +6016,17 @@ body{background:transparent;}
 .cta-btn:hover .cta-arrow{color:#4aaeff;right:16px;}
 </style>
 <div class="cta-row">
-  <a class="cta-btn" id="cta-overview" href="/Overview" target="_parent">
+  <a class="cta-btn" id="cta-overview" href="/Overview" target="_top">
     <div class="cta-title">Overview</div>
     <div class="cta-desc">Macro trends & market signals</div>
     <span class="cta-arrow">&rarr;</span>
   </a>
-  <a class="cta-btn" id="cta-earnings" href="/Earnings" target="_parent">
+  <a class="cta-btn" id="cta-earnings" href="/Earnings" target="_top">
     <div class="cta-title">Earnings</div>
     <div class="cta-desc">Company deep dives & intelligence</div>
     <span class="cta-arrow">&rarr;</span>
   </a>
-  <a class="cta-btn" id="cta-genie" href="/Genie" target="_parent">
+  <a class="cta-btn" id="cta-genie" href="/Genie" target="_top">
     <div class="cta-title">Genie</div>
     <div class="cta-desc">Ask the data anything</div>
     <span class="cta-arrow">&rarr;</span>

@@ -177,7 +177,7 @@ def match_company(question: str) -> str | None:
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def fetch_polymarket_top(limit: int = 300) -> list[dict[str, Any]]:
+def fetch_polymarket_top(limit: int = 1000) -> list[dict[str, Any]]:
     """
     Fetch top active Polymarket markets sorted by volume.
     Paginates until `limit` markets are collected. Cached 10 min.
@@ -224,7 +224,7 @@ def fetch_company_bets(company_name: str) -> list[dict[str, Any]]:
     keywords = COMPANY_KEYWORDS.get(company_name, [company_name.lower()])
     # Also try platform variants from other companies (e.g. "YouTube" for Alphabet)
     # by doing a full keyword scan
-    all_markets = fetch_polymarket_top(300)
+    all_markets = fetch_polymarket_top(1000)
     result = []
     for m in all_markets:
         q = m["question"].lower()
@@ -260,7 +260,7 @@ def get_all_company_bets_labelled(markets: list[dict[str, Any]] | None = None) -
     event only appear once — the highest-volume one).
     """
     if markets is None:
-        markets = fetch_polymarket_top(300)
+        markets = fetch_polymarket_top(1000)
     result = []
     seen_ids: set[str] = set()
     seen_slugs: set[str] = set()

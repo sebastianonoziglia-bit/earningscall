@@ -163,7 +163,16 @@ def load_common_styles():
         visibility: visible !important;
     }
 
-    /* Fix multiselect pill text clipping — kill ALL pseudo-element overlays */
+    /* ── Fix multiselect pill text clipping ────────────────────────
+       Streamlit's BaseWeb adds real <div> scroll-shadow overlays
+       with linear-gradient backgrounds INSIDE the select container.
+       These are NOT pseudo-elements — they're actual child divs.
+       Nuclear fix: kill ALL backgrounds + gradients on every
+       descendant div, and ensure no overflow clipping. ────────── */
+    [data-baseweb="select"] *,
+    .stMultiSelect * {
+        background-image: none !important;
+    }
     [data-baseweb="select"]::before,
     [data-baseweb="select"]::after,
     [data-baseweb="input"]::before,
@@ -171,19 +180,11 @@ def load_common_styles():
     [data-baseweb="select"] > div::before,
     [data-baseweb="select"] > div::after,
     [data-baseweb="select"] > div > div::before,
-    [data-baseweb="select"] > div > div::after,
-    .stMultiSelect [data-baseweb="select"]::before,
-    .stMultiSelect [data-baseweb="select"]::after,
-    .stMultiSelect [data-baseweb="select"] > div::before,
-    .stMultiSelect [data-baseweb="select"] > div::after {
+    [data-baseweb="select"] > div > div::after {
         display: none !important;
         content: none !important;
-        background: none !important;
-        background-image: none !important;
         width: 0 !important;
         height: 0 !important;
-        position: absolute !important;
-        pointer-events: none !important;
     }
     /* Tag pill — proper padding so first letter is never clipped */
     [data-baseweb="tag"] {
@@ -193,6 +194,7 @@ def load_common_styles():
         min-width: 0 !important;
         text-overflow: unset !important;
         margin-left: 4px !important;
+        background-color: var(--app-surface-alt, #f3f4f6) !important;
     }
     [data-baseweb="tag"] > span,
     [data-baseweb="tag"] span[dir="auto"] {
@@ -208,16 +210,16 @@ def load_common_styles():
         flex-shrink: 0 !important;
         position: relative !important;
     }
-    /* Ensure container doesn't clip tags — kill gradient overlays */
+    /* Container: no clipping, wrap tags */
     [data-baseweb="input"],
     [data-baseweb="select"] > div:first-child {
         overflow: visible !important;
         flex-wrap: wrap !important;
         padding-left: 4px !important;
     }
-    /* Kill linear-gradient scroll-shadow overlays that Streamlit/BaseWeb adds */
-    .stMultiSelect [data-baseweb="select"] > div > div {
-        background-image: none !important;
+    /* Restore the select container's own background (the wildcard above kills it) */
+    div[data-baseweb="select"] > div {
+        background-color: var(--app-surface, #ffffff) !important;
     }
 
     /* Slider styling */

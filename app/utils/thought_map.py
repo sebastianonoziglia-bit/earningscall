@@ -1182,9 +1182,9 @@ def render_thought_map(height: int = 620, view_mode: str = "classic"):
         {
           selector: "edge",
           style: {
-            "width": 2,
-            "line-color": "rgba(99,179,237,0.45)",
-            "target-arrow-color": "rgba(99,179,237,0.6)",
+            "width": 2.5,
+            "line-color": "rgba(56,189,248,0.7)",
+            "target-arrow-color": "rgba(56,189,248,0.85)",
             "target-arrow-shape": "triangle",
             "curve-style": "bezier",
             "arrow-scale": 0.9,
@@ -1193,15 +1193,13 @@ def render_thought_map(height: int = 620, view_mode: str = "classic"):
             "color": "#8ea2bf",
             "text-rotation": "autorotate",
             "text-margin-y": -8,
-            "opacity": 0.75,
+            "opacity": 1,
             "line-style": "dashed",
-            "line-dash-pattern": [8, 10],
-            "line-dash-offset": 0,
-            "transition-property": "opacity, line-color, width",
-            "transition-duration": "0.4s"
+            "line-dash-pattern": [6, 8],
+            "line-dash-offset": 0
           }
         },
-        { selector: "edge.dimmed", style: { "opacity": 0.08 } },
+        { selector: "edge.dimmed", style: { "opacity": 0.12 } },
         { selector: "edge.focused", style: { "width": 3.5, "line-color": "#22d3ee", "target-arrow-color": "#22d3ee" } }
       ],
       layout: { name: "breadthfirst", directed: true, spacingFactor: 1.68, padding: 32 },
@@ -1544,14 +1542,14 @@ def render_thought_map(height: int = 620, view_mode: str = "classic"):
         setTimeout(() => {
           node.animate({ style: { "border-width": 2, "border-color": originalBorder } }, { duration: 720 });
         }, 360);
-        node.connectedEdges().forEach((edge) => {
-          const sourceVisible = parseFloat(edge.source().style("opacity")) > 0.5;
-          const targetVisible = parseFloat(edge.target().style("opacity")) > 0.5;
-          if (sourceVisible && targetVisible) {
-            edge.animate({ style: { opacity: 1 } }, { duration: 320 });
-          }
-        });
       }, 220 + index * 220);
+    });
+    // Animate ALL edges to visible after nodes have started appearing
+    const edgeDelay = 220 + Math.min(allNodes.length, 3) * 220;
+    allEdges.forEach((edge, i) => {
+      setTimeout(() => {
+        edge.animate({ style: { opacity: 1 } }, { duration: 500, easing: "ease-out-cubic" });
+      }, edgeDelay + i * 80);
     });
     setTimeout(() => fitMap(), 280 + allNodes.length * 220 + 180);
 
@@ -1560,10 +1558,10 @@ def render_thought_map(height: int = 620, view_mode: str = "classic"):
       cy.edges().forEach((edge, i) => {
         setTimeout(() => {
           edge.animate(
-            { style: { "width": 3.5, "line-color": "rgba(56,189,248,0.6)", "target-arrow-color": "rgba(56,189,248,0.7)" } },
+            { style: { "width": 3.5, "line-color": "rgba(56,189,248,0.9)", "target-arrow-color": "rgba(56,189,248,0.95)" } },
             { duration: 400, easing: "ease-out-cubic", complete: () => {
               edge.animate(
-                { style: { "width": 2, "line-color": "rgba(99,179,237,0.45)", "target-arrow-color": "rgba(99,179,237,0.6)" } },
+                { style: { "width": 2.5, "line-color": "rgba(56,189,248,0.7)", "target-arrow-color": "rgba(56,189,248,0.85)" } },
                 { duration: 600, easing: "ease-in-out-cubic" }
               );
             }}
