@@ -384,6 +384,8 @@ def fetch_crypto_top(limit: int = 50) -> list[dict]:
         ("AUDIO-USD", "Audius"), ("RLC-USD", "iExec RLC"), ("BAND-USD", "Band Protocol"),
         ("OCEAN-USD", "Ocean Protocol"), ("NMR-USD", "Numeraire"),
     ]
+    # Build index lookup: symbol → position in _CRYPTO_YF (already ordered by ~mcap)
+    _yf_order = {sym.replace("-USD", "").upper(): i for i, (sym, _) in enumerate(_CRYPTO_YF)}
     rows = []
     # Batch fetch with thread pool for speed
     with ThreadPoolExecutor(max_workers=16) as pool:
@@ -406,8 +408,12 @@ def fetch_crypto_top(limit: int = 50) -> list[dict]:
                     })
             except Exception:
                 pass
-    # Sort by market cap descending (largest first); fall back to name if no mcap
-    rows.sort(key=lambda x: -(float(x.get("market_cap") or 0)), reverse=False)
+    # Sort by market cap descending; if mcap is missing, use hardcoded list order
+    # (_CRYPTO_YF is already roughly ordered by market cap)
+    rows.sort(key=lambda x: (
+        -(float(x.get("market_cap") or 0)),
+        _yf_order.get(x.get("symbol", "").upper(), 9999),
+    ))
     return rows[:limit]
 
 

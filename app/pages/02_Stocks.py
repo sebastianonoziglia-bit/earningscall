@@ -57,12 +57,10 @@ plotly_config = {
 import json as _json
 
 def _render_hover_highlight_chart(fig, height=520, theme="dark"):
-    """Render a Plotly chart inside st.components.v1.html with a premium
-    hover-highlight overlay: left of cursor = full opacity, right = dimmed.
-    Works for line, candlestick, and all trace types."""
-    # Sanitize JSON: replace </ with <\/ to prevent premature </script> in HTML
+    """Render a Plotly chart inside st.components.v1.html with a frosted-glass
+    hover overlay (right of cursor = blurred/dimmed) and full interactivity
+    (drag-zoom, scroll-zoom, pan via shift+drag)."""
     fig_json_str = fig.to_json().replace("</", r"<\/")
-    # Background tint for the dim overlay (dark theme vs light)
     if theme == "dark":
         dim_color = "2,8,16"
         glow_color = "74,174,255"
@@ -70,7 +68,6 @@ def _render_hover_highlight_chart(fig, height=520, theme="dark"):
         dim_color = "255,255,255"
         glow_color = "59,130,246"
     _h = str(height)
-    # Build HTML parts and join — keeps script tags intact for srcdoc rendering
     html = "\n".join([
         '<!DOCTYPE html><html><head><meta charset="utf-8">',
         '<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>',
@@ -79,33 +76,63 @@ def _render_hover_highlight_chart(fig, height=520, theme="dark"):
         'html,body{background:transparent;overflow:hidden;}',
         '#cw{position:relative;width:100%;height:' + _h + 'px;}',
         '#ch{width:100%;height:100%;}',
+        # Frosted glass overlay — lower opacity + backdrop blur
         '#hdim{position:absolute;pointer-events:none;z-index:5;display:none;',
-        'background:linear-gradient(to right,transparent 0%,rgba(' + dim_color + ',0.45) 16px,rgba(' + dim_color + ',0.62) 100%);',
-        'border-left:1px solid rgba(' + glow_color + ',0.22);',
-        'box-shadow:-4px 0 14px rgba(' + glow_color + ',0.08);}',
+        'background:linear-gradient(to right,transparent 0%,rgba(' + dim_color + ',0.18) 8px,rgba(' + dim_color + ',0.28) 100%);',
+        '-webkit-backdrop-filter:blur(1.5px);backdrop-filter:blur(1.5px);',
+        'border-left:1px solid rgba(' + glow_color + ',0.18);}',
+        # Glow cursor line
         '#hglow{position:absolute;pointer-events:none;z-index:6;display:none;width:2px;',
-        'background:linear-gradient(to bottom,transparent 0%,rgba(' + glow_color + ',0.18) 10%,',
-        'rgba(' + glow_color + ',0.32) 50%,rgba(' + glow_color + ',0.18) 90%,transparent 100%);}',
+        'background:linear-gradient(to bottom,transparent 0%,rgba(' + glow_color + ',0.22) 10%,',
+        'rgba(' + glow_color + ',0.38) 50%,rgba(' + glow_color + ',0.22) 90%,transparent 100%);}',
+        # Crosshair value label
+        '#hval{position:absolute;pointer-events:none;z-index:7;display:none;',
+        'background:rgba(' + dim_color + ',0.85);color:rgba(' + glow_color + ',0.9);',
+        'font:11px/1.3 "DM Mono",monospace;padding:2px 6px;border-radius:3px;white-space:nowrap;}',
+        # Modebar styling to match dark theme
+        '.modebar{opacity:0;transition:opacity 0.3s;}',
+        '#cw:hover .modebar{opacity:0.7;}',
+        '.modebar .modebar-btn path{fill:#8b949e !important;}',
+        '.modebar .modebar-btn:hover path{fill:#e6edf3 !important;}',
         '</style></head><body>',
-        '<div id="cw"><div id="ch"></div><div id="hdim"></div><div id="hglow"></div></div>',
+        '<div id="cw"><div id="ch"></div><div id="hdim"></div><div id="hglow"></div><div id="hval"></div></div>',
         '<script>',
         'var F=' + fig_json_str + ';',
+        # Set dragmode to zoom for interactive zooming
+        'if(!F.layout)F.layout={};',
+        'F.layout.dragmode="zoom";',
         'var gd=document.getElementById("ch");',
-        'Plotly.newPlot(gd,F.data,F.layout,{displayModeBar:false,responsive:true,scrollZoom:false}).then(function(){',
-        '  var dim=document.getElementById("hdim"),gl=document.getElementById("hglow");',
-        '  function pos(mx){',
+        'var cfg={responsive:true,scrollZoom:true,displayModeBar:true,',
+        '  modeBarButtonsToRemove:["select2d","lasso2d","autoScale2d"],',
+        '  displaylogo:false};',
+        'Plotly.newPlot(gd,F.data,F.layout,cfg).then(function(){',
+        '  var dim=document.getElementById("hdim"),gl=document.getElementById("hglow"),vl=document.getElementById("hval");',
+        '  var dragging=false;',
+        '  gd.on("plotly_relayout",function(){dragging=false;});',
+        '  function pos(mx,my){',
+        '    if(dragging){dim.style.display="none";gl.style.display="none";vl.style.display="none";return;}',
         '    var xa=gd._fullLayout.xaxis,ya=gd._fullLayout.yaxis;',
         '    if(!xa||!ya)return;',
         '    var pL=xa._offset,pR=pL+xa._length,pT=ya._offset,pH=ya._length;',
-        '    if(mx>=pL&&mx<=pR){',
+        '    if(mx>=pL&&mx<=pR&&my>=pT&&my<=(pT+pH)){',
         '      dim.style.display="block";dim.style.left=mx+"px";dim.style.top=pT+"px";',
         '      dim.style.height=pH+"px";dim.style.width=(pR-mx)+"px";',
         '      gl.style.display="block";gl.style.left=mx+"px";gl.style.top=pT+"px";',
         '      gl.style.height=pH+"px";',
-        '    }else{dim.style.display="none";gl.style.display="none";}',
+        # Show value label at cursor
+        '      try{',
+        '        var xVal=xa.p2d(mx-pL);',
+        '        var yVal=ya.p2d(my-pT);',
+        '        if(xa.type==="date"){vl.textContent=new Date(xVal).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"2-digit"});}',
+        '        else{vl.textContent=typeof xVal==="number"?xVal.toFixed(2):String(xVal);}',
+        '        vl.style.display="block";vl.style.left=(mx+6)+"px";vl.style.top=(pT-18)+"px";',
+        '      }catch(e){vl.style.display="none";}',
+        '    }else{dim.style.display="none";gl.style.display="none";vl.style.display="none";}',
         '  }',
-        '  function hide(){dim.style.display="none";gl.style.display="none";}',
-        '  gd.addEventListener("mousemove",function(e){var r=gd.getBoundingClientRect();pos(e.clientX-r.left);});',
+        '  function hide(){dim.style.display="none";gl.style.display="none";vl.style.display="none";}',
+        '  gd.addEventListener("mousedown",function(){dragging=true;hide();});',
+        '  gd.addEventListener("mouseup",function(){dragging=false;});',
+        '  gd.addEventListener("mousemove",function(e){var r=gd.getBoundingClientRect();pos(e.clientX-r.left,e.clientY-r.top);});',
         '  gd.addEventListener("mouseleave",hide);',
         '});',
         '</script></body></html>',

@@ -4183,12 +4183,19 @@ def main():
                 _hover_texts.append(_hover_texts[0])
 
                 _co_color = COMPANY_COLORS.get(_rco, _radar_palette[_ci % 4])
+                def _hex_to_rgba(hx, alpha=0.08):
+                    hx = hx.lstrip("#")
+                    return f"rgba({int(hx[0:2],16)},{int(hx[2:4],16)},{int(hx[4:6],16)},{alpha})"
+                if "rgb" in _co_color:
+                    _fill_color = _co_color.replace(")", ",0.08)").replace("rgb", "rgba")
+                else:
+                    _fill_color = _hex_to_rgba(_co_color, 0.08)
                 _radar_fig.add_trace(go.Scatterpolar(
                     r=_vals_closed,
                     theta=_theta_closed,
                     name=_rco,
                     fill="toself",
-                    fillcolor=_co_color.replace(")", ",0.08)").replace("rgb", "rgba") if "rgb" in _co_color else _co_color + "14",
+                    fillcolor=_fill_color,
                     line=dict(color=_co_color, width=2.5),
                     marker=dict(size=5, color=_co_color),
                     hovertemplate="%{text}<extra></extra>",
