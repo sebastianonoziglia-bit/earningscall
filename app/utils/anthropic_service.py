@@ -42,6 +42,13 @@ def call_claude(system: str, user: str, max_tokens: int = 500) -> str:
         return ""
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_call_claude(system: str, user: str, max_tokens: int = 500) -> str:
+    """Cached wrapper for call_claude — avoids repeated API calls for same prompt."""
+    return call_claude(system, user, max_tokens=max_tokens)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def generate_segment_insight(
     company: str,
     segment: str,
@@ -75,7 +82,7 @@ def generate_segment_insight(
     if transcript_sentence:
         user_msg += f'Management said: "{transcript_sentence}"\n'
     user_msg += "Write a 2-3 sentence insight for this segment."
-    return call_claude(system, user_msg, max_tokens=200)
+    return _cached_call_claude(system, user_msg, max_tokens=200)
 
 
 def generate_editorial_summary(
