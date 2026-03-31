@@ -3861,7 +3861,7 @@ DATA.forEach(function(item, i) {
   row.innerHTML = '<div class="attn-leg-dot" style="background:' + item.color + ';"></div><span>' + item.name + (item.users ? ' \u2014 ' + item.users : '') + '</span>';
   legend.appendChild(row);
 });
-/* Animate bubbles in — use requestAnimationFrame for reliable timing in iframes */
+/* Animate bubbles in — multiple fallbacks for iframe timing */
 function animateBubbles() {
   allBubbles.forEach(function(info) {
     var delay = info.idx * 80;
@@ -3871,17 +3871,32 @@ function animateBubbles() {
       el.classList.add('pop');
     }, delay);
   });
-  /* Safety net: if animations haven't triggered after 2s, force-show all bubbles */
-  setTimeout(function() {
-    allBubbles.forEach(function(info) {
-      var cs = window.getComputedStyle(info.el);
-      if (cs.opacity === '0' || cs.transform.indexOf('matrix(0') === 0) {
-        info.el.classList.add('visible');
-      }
-    });
-  }, 2000);
+  /* Safety nets: force-show bubbles if animations fail */
+  [1500, 3000, 5000].forEach(function(ms) {
+    setTimeout(function() {
+      allBubbles.forEach(function(info) {
+        if (!info.el.classList.contains('visible')) {
+          var cs = window.getComputedStyle(info.el);
+          var op = parseFloat(cs.opacity);
+          if (isNaN(op) || op < 0.5) {
+            info.el.style.transform = 'scale(1)';
+            info.el.style.opacity = '1';
+            info.el.classList.add('visible');
+            info.el.style.animation = info.floatAnim + ' ' + info.floatDur + 'ms ease-in-out infinite';
+          }
+        }
+      });
+    }, ms);
+  });
 }
-requestAnimationFrame(animateBubbles);
+/* Try multiple entry points — iframes can be unreliable with rAF */
+if (typeof requestAnimationFrame === 'function') {
+  requestAnimationFrame(animateBubbles);
+} else {
+  setTimeout(animateBubbles, 100);
+}
+/* Extra fallback: also run on window load */
+window.addEventListener('load', function() { setTimeout(animateBubbles, 200); });
 function countUp(el, target, dur) {
   var start = performance.now();
   function step(now) {
@@ -3894,6 +3909,13 @@ function countUp(el, target, dur) {
   requestAnimationFrame(step);
 }
 setTimeout(function(){ countUp(document.getElementById('wa-attn-counter'), ytHoursB, 2000); }, 400);
+/* Fallback: if counter still shows 0 after 4s, set it directly */
+setTimeout(function(){
+  var ctr = document.getElementById('wa-attn-counter');
+  if (ctr && ctr.textContent.indexOf('0B') === 0) {
+    ctr.textContent = Math.round(ytHoursB) + 'B hours';
+  }
+}, 4000);
 } catch(err) {
   console.error('Bubble chart error:', err);
   var _errEl = document.getElementById('wa-attn-bubbles');
