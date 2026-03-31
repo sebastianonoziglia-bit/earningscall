@@ -85,10 +85,8 @@ def _render_hover_highlight_chart(fig, height=520, theme="dark"):
         '#hglow{position:absolute;pointer-events:none;z-index:6;display:none;width:2px;',
         'background:linear-gradient(to bottom,transparent 0%,rgba(' + glow_color + ',0.22) 10%,',
         'rgba(' + glow_color + ',0.38) 50%,rgba(' + glow_color + ',0.22) 90%,transparent 100%);}',
-        # Crosshair value label
-        '#hval{position:absolute;pointer-events:none;z-index:7;display:none;',
-        'background:rgba(' + dim_color + ',0.85);color:rgba(' + glow_color + ',0.9);',
-        'font:11px/1.3 "DM Mono",monospace;padding:2px 6px;border-radius:3px;white-space:nowrap;}',
+        # Crosshair value label — hidden (dates shown only on bottom axis)
+        '#hval{display:none !important;}',
         # Modebar styling to match dark theme
         '.modebar{opacity:0;transition:opacity 0.3s;}',
         '#cw:hover .modebar{opacity:0.7;}',
@@ -100,7 +98,7 @@ def _render_hover_highlight_chart(fig, height=520, theme="dark"):
         'var F=' + fig_json_str + ';',
         # Set dragmode to zoom for interactive zooming
         'if(!F.layout)F.layout={};',
-        'F.layout.dragmode="zoom";',
+        'F.layout.dragmode="pan";',
         'var gd=document.getElementById("ch");',
         'var cfg={responsive:true,scrollZoom:true,displayModeBar:true,',
         '  modeBarButtonsToRemove:["select2d","lasso2d","autoScale2d"],',
@@ -119,14 +117,7 @@ def _render_hover_highlight_chart(fig, height=520, theme="dark"):
         '      dim.style.height=pH+"px";dim.style.width=(pR-mx)+"px";',
         '      gl.style.display="block";gl.style.left=mx+"px";gl.style.top=pT+"px";',
         '      gl.style.height=pH+"px";',
-        # Show value label at cursor
-        '      try{',
-        '        var xVal=xa.p2d(mx-pL);',
-        '        var yVal=ya.p2d(my-pT);',
-        '        if(xa.type==="date"){vl.textContent=new Date(xVal).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"2-digit"});}',
-        '        else{vl.textContent=typeof xVal==="number"?xVal.toFixed(2):String(xVal);}',
-        '        vl.style.display="block";vl.style.left=(mx+6)+"px";vl.style.top=(pT-18)+"px";',
-        '      }catch(e){vl.style.display="none";}',
+        '      vl.style.display="none";',
         '    }else{dim.style.display="none";gl.style.display="none";vl.style.display="none";}',
         '  }',
         '  function hide(){dim.style.display="none";gl.style.display="none";vl.style.display="none";}',
@@ -412,6 +403,8 @@ def load_company_logos():
         "DoubleVerify": _first_existing_logo("DoubleVerify_logo.png"),
         "IAS": _first_existing_logo("IAS.png"),
         "Integral Ad Science": _first_existing_logo("IAS.png"),
+        "Samsung": _first_existing_logo("samsung_logo.png"),
+        "Tencent": _first_existing_logo("Tencent_logo.png"),
     }
     logos = {}
     for company, path in logo_paths.items():
@@ -769,7 +762,7 @@ def render_multi_asset_chart():
             showgrid=False, zeroline=False, showline=False,
             tickfont=dict(color="#8b949e"),
             rangebreaks=[dict(bounds=["sat", "mon"])],
-            showspikes=True, spikemode="across",
+            showspikes=True, spikemode="across", spikesnap="cursor",
             spikecolor="rgba(148,163,184,0.4)", spikethickness=1,
             spikedash="solid",
         ),
@@ -1080,6 +1073,244 @@ def render_market_terminal():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# POLYMARKET EXPLORER
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _render_poly_card(bet: dict, theme: str = "dark") -> str:
+    """Return HTML for a single Polymarket bet card."""
+    q = str(bet.get("question", ""))
+    yes = bet.get("yes_price")
+    vol = str(bet.get("volume_fmt", ""))
+    liq = str(bet.get("liquidity_fmt", ""))
+    end = str(bet.get("end_date", ""))
+    url = str(bet.get("url", "https://polymarket.com"))
+
+    if theme == "dark":
+        bg = "rgba(30,41,59,0.7)"
+        border = "rgba(99,102,241,0.3)"
+        accent = "#7c3aed"
+        txt = "#e2e8f0"
+        sub = "#94a3b8"
+    else:
+        bg = "#f9fafb"
+        border = "#e5e7eb"
+        accent = "#7c3aed"
+        txt = "#111827"
+        sub = "#6b7280"
+
+    # Yes badge
+    if yes is not None:
+        bcol = "#16a34a" if yes >= 65 else ("#d97706" if yes >= 45 else "#dc2626")
+        bbg = "#dcfce7" if yes >= 65 else ("#fef3c7" if yes >= 45 else "#fee2e2")
+        badge = (
+            f"<span style='background:{bbg};color:{bcol};font-weight:700;"
+            f"font-size:0.72rem;padding:2px 8px;border-radius:999px;"
+            f"white-space:nowrap;'>{yes:.0f}%</span>"
+        )
+        bar_w = int(yes)
+    else:
+        badge = ""
+        bar_w = 50
+        bcol = "#6b7280"
+
+    meta = []
+    if vol:
+        meta.append(f"<span style='color:{sub};'>{vol} vol</span>")
+    if liq:
+        meta.append(f"<span style='color:{sub};'>{liq} liq</span>")
+    if end:
+        meta.append(f"<span style='color:{sub};'>ends {end}</span>")
+    meta_html = "<span style='color:#475569;margin:0 3px;'>·</span>".join(meta)
+
+    import html as _h
+    return (
+        f"<a href='{url}' target='_blank' rel='noopener' style='text-decoration:none;display:block;'>"
+        f"<div class='poly-bet-card' style='background:{bg};border:1px solid {border};"
+        f"border-left:3px solid {accent};border-radius:6px;"
+        f"padding:10px 12px;margin-bottom:8px;transition:transform 0.15s,box-shadow 0.15s;'>"
+        f"<div style='display:flex;align-items:flex-start;justify-content:space-between;"
+        f"gap:8px;margin-bottom:6px;'>"
+        f"<p style='margin:0;font-size:0.82rem;color:{txt};"
+        f"line-height:1.45;font-weight:500;flex:1;'>"
+        f"<span style='display:inline-block;width:6px;height:6px;border-radius:50%;"
+        f"background:#16a34a;margin-right:4px;animation:liveDot 2s ease-in-out infinite;'></span>"
+        f"{_h.escape(q)}</p>{badge}</div>"
+        f"<div style='background:rgba(100,116,139,0.2);border-radius:999px;height:3px;margin-bottom:5px;'>"
+        f"<div style='background:{bcol};width:{bar_w}%;height:3px;border-radius:999px;'></div></div>"
+        f"<div style='display:flex;align-items:center;gap:4px;font-size:0.68rem;'>{meta_html}</div>"
+        f"</div></a>"
+    )
+
+
+def render_polymarket_explorer():
+    """Full Polymarket explorer: scrolling strip by category + search bar."""
+    st.markdown(
+        "<a id='polymarket-explorer'></a>"
+        "<div style='margin-bottom:0.5rem;'>"
+        "<span style='font-weight:700;font-size:1.25rem;color:#e6edf3;'>Polymarket Explorer</span>"
+        "<span style='margin-left:10px;color:#7c3aed;font-size:0.78rem;font-weight:600;'>"
+        "40,000+ prediction markets</span></div>",
+        unsafe_allow_html=True,
+    )
+
+    # CSS for cards
+    st.markdown("""<style>
+    @keyframes liveDot { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+    .poly-bet-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,0.15) !important; }
+    </style>""", unsafe_allow_html=True)
+
+    try:
+        from utils.polymarket import (
+            fetch_polymarket_top,
+            search_polymarket,
+            get_all_company_bets_labelled,
+            POLYMARKET_CATEGORIES,
+            COMPANY_KEYWORDS,
+            match_company,
+        )
+
+        # ── Search bar ──
+        search_col, cat_col = st.columns([3, 2])
+        with search_col:
+            _poly_query = st.text_input(
+                "Search all markets",
+                placeholder="Search 40,000+ markets... (e.g. 'iPhone', 'Bitcoin $100K', 'Oscar')",
+                key="poly_search_input",
+            )
+        with cat_col:
+            _poly_cat = st.selectbox(
+                "Category",
+                POLYMARKET_CATEGORIES,
+                key="poly_cat_select",
+            )
+
+        # ── Fetch data based on mode ──
+        if _poly_query and len(_poly_query.strip()) >= 2:
+            # Search mode
+            with st.spinner(f"Searching Polymarket for '{_poly_query}'..."):
+                _poly_results = search_polymarket(_poly_query, limit=100)
+            if _poly_results:
+                st.markdown(
+                    f"<div style='color:#94a3b8;font-size:0.78rem;margin-bottom:8px;'>"
+                    f"Found {len(_poly_results)} markets matching \"{_poly_query}\"</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.info(f"No markets found for \"{_poly_query}\"")
+                _poly_results = []
+        else:
+            # Category browse mode
+            if _poly_cat == "All":
+                _poly_results = fetch_polymarket_top(limit=200)
+            else:
+                # Use text search with category name to approximate tag filtering
+                _poly_results = search_polymarket(_poly_cat, limit=150)
+                # Also merge in top markets that match the category keywords
+                _top = fetch_polymarket_top(limit=500)
+                _cat_kw = _poly_cat.lower()
+                _seen = {m["market_id"] for m in _poly_results}
+                for m in _top:
+                    if m["market_id"] not in _seen:
+                        tags_lower = [t.lower() for t in m.get("tags", [])]
+                        if _cat_kw in m["question"].lower() or _cat_kw in tags_lower:
+                            _poly_results.append(m)
+                            _seen.add(m["market_id"])
+                _poly_results.sort(key=lambda x: x.get("volume_total") or 0, reverse=True)
+
+        if not _poly_results:
+            _poly_results = fetch_polymarket_top(limit=100)
+
+        # ── Scrolling strip by matched company ──
+        # Group bets by company
+        _company_groups: dict[str, list] = {}
+        _general: list = []
+        for bet in _poly_results:
+            comp = bet.get("matched_company") or match_company(bet.get("question", ""))
+            if comp:
+                _company_groups.setdefault(comp, []).append(bet)
+            else:
+                _general.append(bet)
+
+        # Sort company groups by total volume
+        _sorted_groups = sorted(
+            _company_groups.items(),
+            key=lambda kv: sum(b.get("volume_total") or 0 for b in kv[1]),
+            reverse=True,
+        )
+
+        # ── Render scrollable strips per company ──
+        for _cname, _cbets in _sorted_groups[:12]:
+            _cbets_sorted = sorted(_cbets, key=lambda x: x.get("volume_total") or 0, reverse=True)
+            _cards_html = "".join(_render_poly_card(b, theme="dark") for b in _cbets_sorted[:10])
+            st.markdown(
+                f"<div style='margin:12px 0 4px 0;'>"
+                f"<span style='font-weight:600;font-size:0.92rem;color:#e6edf3;'>{_cname}</span>"
+                f"<span style='color:#7c3aed;font-size:0.72rem;margin-left:8px;'>"
+                f"{len(_cbets)} market{'s' if len(_cbets) != 1 else ''}</span></div>",
+                unsafe_allow_html=True,
+            )
+            # Horizontal scrolling strip
+            st.components.v1.html(
+                f"<div style='display:flex;gap:10px;overflow-x:auto;padding:4px 0 8px 0;"
+                f"scrollbar-width:thin;scrollbar-color:#4b5563 transparent;'>"
+                f"<style>"
+                f"@keyframes liveDot {{ 0%,100%{{opacity:1;}} 50%{{opacity:0.35;}} }}"
+                f".poly-bet-card:hover {{ transform:translateY(-1px); box-shadow:0 4px 12px rgba(124,58,237,0.15) !important; }}"
+                f"div::-webkit-scrollbar {{ height:4px; }}"
+                f"div::-webkit-scrollbar-track {{ background:transparent; }}"
+                f"div::-webkit-scrollbar-thumb {{ background:#4b5563;border-radius:2px; }}"
+                f"</style>"
+                + "".join(
+                    f"<div style='min-width:300px;max-width:320px;flex-shrink:0;'>"
+                    f"{_render_poly_card(b, theme='dark')}</div>"
+                    for b in _cbets_sorted[:10]
+                )
+                + "</div>",
+                height=140,
+                scrolling=False,
+            )
+
+        # ── General / unmatched bets grid ──
+        if _general:
+            st.markdown(
+                "<div style='margin:16px 0 6px 0;'>"
+                "<span style='font-weight:600;font-size:0.92rem;color:#e6edf3;'>Trending Markets</span>"
+                f"<span style='color:#94a3b8;font-size:0.72rem;margin-left:8px;'>"
+                f"{len(_general)} markets</span></div>",
+                unsafe_allow_html=True,
+            )
+            _gen_cols = st.columns(3, gap="small")
+            for _gi, _gbet in enumerate(_general[:30]):
+                with _gen_cols[_gi % 3]:
+                    _gq = str(_gbet.get("question", ""))
+                    _gyes = _gbet.get("yes_price")
+                    _gvol = str(_gbet.get("volume_fmt", ""))
+                    _gurl = str(_gbet.get("url", ""))
+                    _gbcol = "#16a34a" if (_gyes or 0) >= 65 else ("#d97706" if (_gyes or 0) >= 45 else "#dc2626")
+                    import html as _h
+                    st.markdown(
+                        f"<a href='{_gurl}' target='_blank' style='text-decoration:none;'>"
+                        f"<div style='background:rgba(30,41,59,0.5);border:1px solid rgba(99,102,241,0.2);"
+                        f"border-radius:6px;padding:8px 10px;margin-bottom:6px;'>"
+                        f"<p style='margin:0 0 4px 0;font-size:0.78rem;color:#e2e8f0;line-height:1.4;'>"
+                        f"{_h.escape(_gq[:80])}</p>"
+                        f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
+                        f"<span style='color:{_gbcol};font-weight:700;font-size:0.75rem;'>"
+                        f"{_gyes:.0f}%</span>"
+                        f"<span style='color:#64748b;font-size:0.68rem;'>{_gvol}</span>"
+                        f"</div></div></a>" if _gyes is not None else
+                        f"<div style='background:rgba(30,41,59,0.5);border:1px solid rgba(99,102,241,0.2);"
+                        f"border-radius:6px;padding:8px 10px;margin-bottom:6px;'>"
+                        f"<p style='margin:0;font-size:0.78rem;color:#e2e8f0;line-height:1.4;'>"
+                        f"{_h.escape(_gq[:80])}</p></div>",
+                        unsafe_allow_html=True,
+                    )
+
+    except Exception as _pe:
+        st.info(f"Polymarket explorer unavailable: {_pe}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # PAGE LAYOUT
 # ══════════════════════════════════════════════════════════════════════════════
 st.title("Stock Performance")
@@ -1132,6 +1363,10 @@ render_multi_asset_chart()
 # ── Section 3: Market Terminal (white bg) ─────────────────────────────────
 st.divider()
 render_market_terminal()
+
+# ── Section 4: Polymarket Explorer ───────────────────────────────────────
+st.divider()
+render_polymarket_explorer()
 
 # ── Button style override (MutationObserver) ─────────────────────────────
 import streamlit.components.v1 as _comp

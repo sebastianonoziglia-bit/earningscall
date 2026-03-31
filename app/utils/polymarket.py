@@ -1,12 +1,20 @@
 """
 Polymarket live prediction market data.
 Fetches from the public Gamma API — no auth required.
-Cached via st.cache_data (10 min TTL) so repeated page loads stay fast.
+
+Two-tier cache:
+  1. st.cache_data (10 min TTL) — fast, in-process, lost on restart.
+  2. JSON file on disk (/tmp/polymarket_cache/) — survives restarts,
+     1-hour TTL so data is warm even on first page load after deploy.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -14,7 +22,38 @@ import streamlit as st
 
 # ── API ────────────────────────────────────────────────────────────────────────
 _GAMMA_BASE = "https://gamma-api.polymarket.com"
-_REQUEST_TIMEOUT = 10
+_REQUEST_TIMEOUT = 12
+
+# ── Disk cache (survives process restarts) ────────────────────────────────────
+_CACHE_DIR = Path("/tmp/polymarket_cache")
+_DISK_TTL = 3600  # 1 hour
+
+
+def _disk_cache_path(key: str) -> Path:
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    return _CACHE_DIR / f"{hashlib.md5(key.encode()).hexdigest()}.json"
+
+
+def _disk_get(key: str) -> list[dict] | None:
+    p = _disk_cache_path(key)
+    if not p.exists():
+        return None
+    try:
+        data = json.loads(p.read_text())
+        if time.time() - data.get("ts", 0) > _DISK_TTL:
+            return None
+        return data.get("markets", [])
+    except Exception:
+        return None
+
+
+def _disk_put(key: str, markets: list[dict]) -> None:
+    try:
+        p = _disk_cache_path(key)
+        p.write_text(json.dumps({"ts": time.time(), "markets": markets}, default=str))
+    except Exception:
+        pass
+
 
 # ── Company / platform keyword mapping ────────────────────────────────────────
 # Each list entry is a lowercase substring searched inside the bet question.
@@ -36,7 +75,8 @@ COMPANY_KEYWORDS: dict[str, list[str]] = {
     "Apple": [
         "apple ", "iphone", "app store", "siri", " ipad",
         " ios ", "apple tv", "tim cook", "apple intelligence",
-        "vision pro", " macos",
+        "vision pro", " macos", "macbook", "apple watch",
+        "airpods", "apple music",
     ],
     "Microsoft": [
         "microsoft", " azure", "bing ", " xbox",
@@ -148,6 +188,15 @@ def _parse_market(m: dict[str, Any]) -> dict[str, Any]:
     slug = str(m.get("slug") or "")
     vol = _safe_float(m.get("volumeNum") or m.get("volume"))
     end_raw = str(m.get("endDateIso") or m.get("endDate") or "")
+    # Extract tags if available
+    tags = []
+    try:
+        raw_tags = m.get("tags") or m.get("tag") or []
+        if isinstance(raw_tags, str):
+            raw_tags = json.loads(raw_tags) if raw_tags.startswith("[") else [raw_tags]
+        tags = [str(t).strip() for t in raw_tags if t]
+    except Exception:
+        pass
     return {
         "market_id": str(m.get("id") or m.get("conditionId") or ""),
         "slug": slug,
@@ -157,11 +206,51 @@ def _parse_market(m: dict[str, Any]) -> dict[str, Any]:
         "volume_total": vol,
         "volume_24h": _safe_float(m.get("volume24hr") or m.get("volume24hrClob")),
         "volume_fmt": _fmt_vol(vol),
+        "liquidity": _safe_float(m.get("liquidityNum") or m.get("liquidity")),
+        "liquidity_fmt": _fmt_vol(_safe_float(m.get("liquidityNum") or m.get("liquidity"))),
         "end_date": _fmt_date(end_raw),
         "end_date_raw": end_raw,
         "active": bool(m.get("active")),
         "url": f"https://polymarket.com/event/{slug}" if slug else "https://polymarket.com",
+        "tags": tags,
     }
+
+
+# ── Low-level API helpers ─────────────────────────────────────────────────────
+
+def _gamma_paginated(limit: int = 1000, **extra_params) -> list[dict[str, Any]]:
+    """Fetch paginated markets from Gamma API with arbitrary params."""
+    all_markets: list[dict[str, Any]] = []
+    page_size = 100
+    offset = 0
+    while len(all_markets) < limit:
+        try:
+            params = {
+                "limit": page_size,
+                "offset": offset,
+                "active": "true",
+                "closed": "false",
+                "order": "volumeNum",
+                "ascending": "false",
+                **extra_params,
+            }
+            resp = requests.get(
+                f"{_GAMMA_BASE}/markets",
+                params=params,
+                timeout=_REQUEST_TIMEOUT,
+                headers={"Accept": "application/json", "User-Agent": "earnings-dashboard/1.0"},
+            )
+            resp.raise_for_status()
+            page = resp.json()
+            if not isinstance(page, list) or not page:
+                break
+            all_markets.extend(page)
+            if len(page) < page_size:
+                break
+            offset += page_size
+        except Exception:
+            break
+    return [_parse_market(m) for m in all_markets[:limit]]
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -180,57 +269,118 @@ def match_company(question: str) -> str | None:
 def fetch_polymarket_top(limit: int = 1000) -> list[dict[str, Any]]:
     """
     Fetch top active Polymarket markets sorted by volume.
-    Paginates until `limit` markets are collected. Cached 10 min.
-    Returns a list of parsed dicts.
+    Paginates until `limit` markets are collected.
+    Uses disk cache (1h) + st.cache_data (10min).
     """
-    all_markets: list[dict[str, Any]] = []
-    page_size = 100
-    offset = 0
-    while len(all_markets) < limit:
-        try:
-            resp = requests.get(
-                f"{_GAMMA_BASE}/markets",
-                params={
-                    "limit": page_size,
-                    "offset": offset,
-                    "active": "true",
-                    "closed": "false",
-                    "order": "volumeNum",
-                    "ascending": "false",
-                },
-                timeout=_REQUEST_TIMEOUT,
-                headers={"Accept": "application/json", "User-Agent": "earnings-dashboard/1.0"},
-            )
-            resp.raise_for_status()
-            page = resp.json()
-            if not isinstance(page, list) or not page:
-                break
-            all_markets.extend(page)
-            if len(page) < page_size:
-                break
-            offset += page_size
-        except Exception:
-            break
+    cache_key = f"polymarket_top_{limit}"
+    cached = _disk_get(cache_key)
+    if cached:
+        return cached
 
-    return [_parse_market(m) for m in all_markets[:limit]]
+    markets = _gamma_paginated(limit=limit)
+    if markets:
+        _disk_put(cache_key, markets)
+    return markets
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_deep_pool() -> list[dict[str, Any]]:
+    """
+    Fetch a deep pool of markets (up to 10,000) for company-level filtering.
+    Disk-cached 1 hour. On HuggingFace this runs once per deploy cycle.
+    Takes ~60-90s on first call, instant afterwards.
+    """
+    cache_key = "polymarket_deep_pool_10k"
+    cached = _disk_get(cache_key)
+    if cached:
+        return cached
+    markets = _gamma_paginated(limit=10000)
+    if markets:
+        _disk_put(cache_key, markets)
+    return markets
 
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_company_bets(company_name: str) -> list[dict[str, Any]]:
     """
     Return all active bets mentioning `company_name` or its platforms.
-    Searches the top 300 markets by volume. Cached 10 min.
+    Searches a deep pool of 10,000 markets (disk-cached 1h) for broad coverage.
     """
+    cache_key = f"company_bets_{company_name}"
+    cached = _disk_get(cache_key)
+    if cached:
+        return cached
+
     keywords = COMPANY_KEYWORDS.get(company_name, [company_name.lower()])
-    # Also try platform variants from other companies (e.g. "YouTube" for Alphabet)
-    # by doing a full keyword scan
-    all_markets = fetch_polymarket_top(1000)
-    result = []
+    # Try the deep pool first (covers niche bets)
+    try:
+        all_markets = _fetch_deep_pool()
+    except Exception:
+        all_markets = fetch_polymarket_top(1000)
+
+    result: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
     for m in all_markets:
+        mid = m.get("market_id", "")
+        if mid in seen_ids:
+            continue
         q = m["question"].lower()
         if any(kw.lower() in q for kw in keywords):
+            seen_ids.add(mid)
             result.append(m)
-    return sorted(result, key=lambda x: x.get("volume_total") or 0, reverse=True)
+
+    result.sort(key=lambda x: x.get("volume_total") or 0, reverse=True)
+    if result:
+        _disk_put(cache_key, result)
+    return result
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def search_polymarket(query: str, limit: int = 100) -> list[dict[str, Any]]:
+    """
+    Free-text search across all active Polymarket markets.
+    Searches the deep pool (10k markets) client-side.
+    """
+    if not query or len(query.strip()) < 2:
+        return []
+    cache_key = f"poly_search_{query.strip().lower()}_{limit}"
+    cached = _disk_get(cache_key)
+    if cached:
+        return cached
+
+    q = query.strip().lower()
+    terms = q.split()
+    try:
+        pool = _fetch_deep_pool()
+    except Exception:
+        pool = fetch_polymarket_top(1000)
+
+    results = []
+    for m in pool:
+        ql = m["question"].lower()
+        if all(t in ql for t in terms):
+            results.append(m)
+    results.sort(key=lambda x: x.get("volume_total") or 0, reverse=True)
+    results = results[:limit]
+    if results:
+        _disk_put(cache_key, results)
+    return results
+
+
+# ── Polymarket categories (for browsing UI) ───────────────────────────────────
+POLYMARKET_CATEGORIES = [
+    "All",
+    "AI",
+    "Tech",
+    "Business",
+    "Crypto",
+    "Politics",
+    "Sports",
+    "Culture",
+    "Science",
+    "Finance",
+    "Entertainment",
+]
 
 
 # ── Entertainment / market-cap / tech category keywords ──────────────────────
@@ -251,16 +401,17 @@ def _is_entertainment_or_market_bet(question: str) -> bool:
     return any(kw in q for kw in _ENTERTAINMENT_KEYWORDS)
 
 
-def get_all_company_bets_labelled(markets: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+@st.cache_data(ttl=600, show_spinner=False)
+def get_all_company_bets_labelled(markets: list[dict[str, Any]] | None = None, limit: int = 1000) -> list[dict[str, Any]]:
     """
-    Filter `markets` (or fetch top-300 if None) to those matching a tracked
+    Filter `markets` (or fetch top if None) to those matching a tracked
     company OR entertainment/tech/market-cap bets.
     Returns list with extra `matched_company` key, sorted by volume desc.
     Deduplicates by market_id AND by event slug (so sub-markets of the same
     event only appear once — the highest-volume one).
     """
     if markets is None:
-        markets = fetch_polymarket_top(1000)
+        markets = fetch_polymarket_top(limit)
     result = []
     seen_ids: set[str] = set()
     seen_slugs: set[str] = set()

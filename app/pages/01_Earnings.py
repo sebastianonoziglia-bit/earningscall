@@ -4507,13 +4507,16 @@ def main():
             .poly-bar-fill { animation: barPulse 4s ease-in-out infinite; }
             </style>""", unsafe_allow_html=True)
 
+            # Show up to 20 bets in scrollable 2-column layout
+            _max_show = min(len(_poly_bets), 20)
             _poly_cols = st.columns(2, gap="medium")
-            for _pi, _bet in enumerate(_poly_bets[:6]):
+            for _pi, _bet in enumerate(_poly_bets[:_max_show]):
                 with _poly_cols[_pi % 2]:
                     _bq = str(_bet.get("question", ""))
                     _yes = _bet.get("yes_price")
                     _no = _bet.get("no_price")
                     _vol = str(_bet.get("volume_fmt", ""))
+                    _liq = str(_bet.get("liquidity_fmt", ""))
                     _end = str(_bet.get("end_date", ""))
                     _url = str(_bet.get("url", "https://polymarket.com"))
                     _yes_html = _yes_badge(_yes)
@@ -4521,6 +4524,8 @@ def main():
                     _meta_parts = []
                     if _vol:
                         _meta_parts.append(f"<span style='color:#6b7280;'>{html.escape(_vol)} vol</span>")
+                    if _liq:
+                        _meta_parts.append(f"<span style='color:#9ca3af;'>{html.escape(_liq)} liq</span>")
                     if _end:
                         _meta_parts.append(f"<span style='color:#9ca3af;'>ends {html.escape(_end)}</span>")
                     _meta_html = "<span style='color:#d1d5db;margin:0 3px;'>·</span>".join(_meta_parts)
@@ -4547,11 +4552,15 @@ def main():
                         unsafe_allow_html=True,
                     )
 
-            if len(_poly_bets) > 6:
-                st.caption(
-                    f"Showing 6 of {len(_poly_bets)} bets — "
-                    f"[view all on Polymarket](https://polymarket.com)"
+            _poly_footer_parts = []
+            if len(_poly_bets) > _max_show:
+                _poly_footer_parts.append(
+                    f"Showing {_max_show} of {len(_poly_bets)} bets"
                 )
+            _poly_footer_parts.append(
+                "[View full Polymarket data on Stocks page](/Stocks#polymarket-explorer)"
+            )
+            st.caption(" · ".join(_poly_footer_parts))
     except Exception:
         pass
 
