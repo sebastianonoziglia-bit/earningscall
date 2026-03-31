@@ -4368,6 +4368,63 @@ def main():
             st.info("No revenue data available for the selected companies and year.")
 
 
+    # ── Sankey Revenue Flow & Waterfall Bridge ─────────────────────────────
+    st.divider()
+    st.markdown(
+        "<div style='margin:0.8rem 0 0.4rem 0;'>"
+        "<span style='font-weight:800;font-size:1.15rem;color:#111827;'>Revenue Flow & P&L Bridge</span>"
+        "</div>"
+        "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
+        "Trace how revenue turns into profit. The Sankey shows money flowing through the P&L; "
+        "the Waterfall shows the incremental steps from revenue to net income."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    _flow_tab_names = ["Sankey Flow", "Waterfall Bridge"]
+    _flow_tabs = st.tabs(_flow_tab_names)
+
+    _flow_col1, _flow_col2 = st.columns([2, 3])
+    with _flow_col1:
+        _flow_company = st.selectbox(
+            "Company", options=[company] + [c for c in companies if c != company],
+            index=0, key="flow_company",
+        )
+    with _flow_col2:
+        _flow_year = st.selectbox(
+            "Year",
+            options=sorted([int(y) for y in years], reverse=True),
+            index=0,
+            key="flow_year",
+        )
+
+    _flow_metrics = data_processor.get_metrics(_flow_company, int(_flow_year))
+    _flow_segments = data_processor.get_segments(_flow_company, int(_flow_year))
+
+    try:
+        from utils.sankey_builder import build_sankey_figure, build_waterfall_figure
+
+        with _flow_tabs[0]:
+            _sankey_fig = build_sankey_figure(
+                _flow_metrics, _flow_segments, _flow_company, int(_flow_year)
+            )
+            if _sankey_fig:
+                render_plotly(_sankey_fig)
+            else:
+                st.info("Not enough financial data for this company/year to build the Sankey flow.")
+
+        with _flow_tabs[1]:
+            _wf_fig = build_waterfall_figure(
+                _flow_metrics, _flow_company, int(_flow_year)
+            )
+            if _wf_fig:
+                render_plotly(_wf_fig)
+            else:
+                st.info("Not enough financial data for this company/year to build the waterfall.")
+    except Exception as _flow_err:
+        st.caption(f"Flow charts unavailable: {_flow_err}")
+
+
     # ── Insights — independent year/quarter filter ─────────────────────────
     st.markdown(
         "<div style='margin:2rem 0 0.6rem 0;'>"
