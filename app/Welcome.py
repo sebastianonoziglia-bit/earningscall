@@ -6061,32 +6061,69 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-# ── CTA navigation — st.page_link (Streamlit native, guaranteed to work) ──
+# ── CTA navigation — glass morphism cards with st.page_link ──
 st.markdown("""<style>
-/* Glass CTA card styling for st.page_link */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700&display=swap');
+/* ── Glass CTA cards ── */
+div[data-testid="stPageLink"] { height:100%; }
 div[data-testid="stPageLink"] a {
-  display:block!important;padding:22px 20px!important;border-radius:16px!important;
-  background:rgba(74,174,255,0.06)!important;border:1px solid rgba(74,174,255,0.18)!important;
+  display:flex!important;align-items:center!important;gap:10px!important;
+  padding:28px 24px!important;border-radius:16px!important;height:100%!important;
+  background:rgba(74,174,255,0.06)!important;
+  border:1px solid rgba(74,174,255,0.18)!important;
   text-decoration:none!important;cursor:pointer!important;
+  position:relative!important;overflow:hidden!important;
   transition:all .4s cubic-bezier(.22,1,.36,1)!important;
 }
 div[data-testid="stPageLink"] a:hover {
-  background:rgba(74,174,255,0.12)!important;border-color:rgba(74,174,255,0.4)!important;
+  background:rgba(74,174,255,0.12)!important;
+  border-color:rgba(74,174,255,0.4)!important;
   transform:translateY(-4px) scale(1.02)!important;
   box-shadow:0 8px 32px rgba(74,174,255,0.2),0 0 60px rgba(74,174,255,0.08)!important;
+  z-index:2!important;
 }
+/* Glass reflection sweep */
+div[data-testid="stPageLink"] a::before {
+  content:'';position:absolute;top:-50%;left:-60%;width:40%;height:200%;
+  background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,0.08) 45%,
+    rgba(255,255,255,0.15) 50%,rgba(255,255,255,0.08) 55%,transparent 60%);
+  transform:rotate(25deg);pointer-events:none;transition:none;
+}
+div[data-testid="stPageLink"] a:hover::before {
+  animation:ctaGlass 0.8s ease-out forwards;
+}
+@keyframes ctaGlass { 0%{left:-60%} 100%{left:120%} }
+/* Staggered pop pulse — CSS only */
+@keyframes ctaPop {
+  0%,85%,100%{transform:translateY(0) scale(1);box-shadow:0 0 0 transparent;}
+  90%{transform:translateY(-3px) scale(1.015);box-shadow:0 4px 20px rgba(74,174,255,0.15);}
+}
+.stColumn:nth-child(1) div[data-testid="stPageLink"] a { animation:ctaPop 7s ease-out infinite 0s; }
+.stColumn:nth-child(2) div[data-testid="stPageLink"] a { animation:ctaPop 7s ease-out infinite 2.3s; }
+.stColumn:nth-child(3) div[data-testid="stPageLink"] a { animation:ctaPop 7s ease-out infinite 4.6s; }
+div[data-testid="stPageLink"] a:hover { animation:none!important; }
+/* Text */
 div[data-testid="stPageLink"] a span {
   color:#4aaeff!important;font-size:1.05rem!important;font-weight:700!important;
   font-family:'DM Sans',sans-serif!important;letter-spacing:.02em!important;
 }
+/* Arrow indicator */
+div[data-testid="stPageLink"] a::after {
+  content:'→';position:absolute;right:20px;top:50%;transform:translateY(-50%);
+  color:rgba(74,174,255,0.3);font-size:1.3rem;transition:all 0.3s;pointer-events:none;
+}
+div[data-testid="stPageLink"] a:hover::after {
+  color:#4aaeff;right:16px;
+}
 </style>""", unsafe_allow_html=True)
+# Order: Earnings (left), Genie (middle), Overview (right)
 _cta_c1, _cta_c2, _cta_c3 = st.columns(3, gap="medium")
 with _cta_c1:
-    st.page_link("pages/00_Overview.py", label="Overview  →  Macro trends & market signals", icon="🔭")
+    st.page_link("pages/01_Earnings.py", label="Earnings  —  Company deep dives", icon="📊")
 with _cta_c2:
-    st.page_link("pages/01_Earnings.py", label="Earnings  →  Company deep dives & intelligence", icon="📊")
+    st.page_link("pages/04_Genie.py", label="Genie  —  Ask the data anything", icon="🧞")
 with _cta_c3:
-    st.page_link("pages/04_Genie.py", label="Genie  →  Ask the data anything", icon="🧞")
+    st.page_link("pages/00_Overview.py", label="Overview  —  Macro trends & signals", icon="🔭")
 
 source_label = str(workbook_path) if workbook_path else "not found"
 st.markdown(
