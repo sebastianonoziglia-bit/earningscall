@@ -72,6 +72,16 @@ def main():
             padding-top: 0.5rem;
         }
 
+        /* Fix checkbox/radio labels from wrapping vertically in narrow columns */
+        div[data-testid="stCheckbox"] label,
+        div[data-testid="stRadio"] label {
+            white-space: nowrap !important;
+        }
+        div[data-testid="stCheckbox"] label > div:last-child p,
+        div[data-testid="stCheckbox"] label span {
+            white-space: nowrap !important;
+        }
+
         .main-content {
             max-width: 1600px;
             margin: 0 auto;
@@ -3678,195 +3688,192 @@ def main():
 
     # ── Institutional Ownership ───────────────────────────────────────────
     canonical_company = normalize_company(company)
-    _show_inst_ownership = st.toggle("Institutional Ownership", value=False, key="show_inst_ownership",
-                                      help="Institutional & fund holder breakdown")
-    if _show_inst_ownership:
 
-        _h_tickers = COMPANY_TICKERS.get(company, COMPANY_TICKERS.get(canonical_company, []))
-        _h_ticker = _h_tickers[0] if _h_tickers else ""
-        _holders_df = pd.DataFrame()
-        if _h_ticker:
-            _holders_df = data_processor.get_holders(ticker=_h_ticker)
-        if _holders_df.empty:
-            _all_h = data_processor.get_holders()
-            if not _all_h.empty and _h_ticker:
-                _holders_df = _all_h[
-                    _all_h["company"].str.upper() == _h_ticker.upper()
-                ].copy()
+    _h_tickers = COMPANY_TICKERS.get(company, COMPANY_TICKERS.get(canonical_company, []))
+    _h_ticker = _h_tickers[0] if _h_tickers else ""
+    _holders_df = pd.DataFrame()
+    if _h_ticker:
+        _holders_df = data_processor.get_holders(ticker=_h_ticker)
+    if _holders_df.empty:
+        _all_h = data_processor.get_holders()
+        if not _all_h.empty and _h_ticker:
+            _holders_df = _all_h[
+                _all_h["company"].str.upper() == _h_ticker.upper()
+            ].copy()
 
-        if _holders_df.empty:
-            st.info("Ownership data is not available for this company.")
-        else:
-            def _clean_hname(name: str) -> str:
-                """Shorten 'FUND FAMILY-Specific Fund Name' → 'Specific Fund Name'."""
-                if "-" in name:
-                    parts = name.split("-", 1)
-                    tail = parts[1].strip()
-                    if len(tail) >= 6:
-                        return tail
-                return name.strip()
+    if _holders_df.empty:
+        st.info("Ownership data is not available for this company.")
+    else:
+        def _clean_hname(name: str) -> str:
+            """Shorten 'FUND FAMILY-Specific Fund Name' → 'Specific Fund Name'."""
+            if "-" in name:
+                parts = name.split("-", 1)
+                tail = parts[1].strip()
+                if len(tail) >= 6:
+                    return tail
+            return name.strip()
 
-            _holders_df = _holders_df.copy()
-            _holders_df["name_short"] = _holders_df["holder_name"].apply(_clean_hname)
-            _holders_df["pct_display"] = (_holders_df["pct_out"] * 100).round(2)
-            _holders_df["value_b"] = (_holders_df["value_usd"].fillna(0) / 1e9).round(1)
-            _holders_df["shares_m"] = (_holders_df["shares"].fillna(0) / 1e6).round(1)
-            _holders_df = _holders_df.sort_values("pct_out", ascending=False).reset_index(drop=True)
+        _holders_df = _holders_df.copy()
+        _holders_df["name_short"] = _holders_df["holder_name"].apply(_clean_hname)
+        _holders_df["pct_display"] = (_holders_df["pct_out"] * 100).round(2)
+        _holders_df["value_b"] = (_holders_df["value_usd"].fillna(0) / 1e9).round(1)
+        _holders_df["shares_m"] = (_holders_df["shares"].fillna(0) / 1e6).round(1)
+        _holders_df = _holders_df.sort_values("pct_out", ascending=False).reset_index(drop=True)
 
-            _top_h = _holders_df.iloc[0]
-            _BIG3 = ["vanguard", "blackrock", "state street"]
-            _big3_pct = (
-                _holders_df[
-                    _holders_df["name_short"].str.lower().apply(
-                        lambda n: any(b in n for b in _BIG3)
-                    )
-                ]["pct_out"].sum()
-                * 100
+        _top_h = _holders_df.iloc[0]
+        _BIG3 = ["vanguard", "blackrock", "state street"]
+        _big3_pct = (
+            _holders_df[
+                _holders_df["name_short"].str.lower().apply(
+                    lambda n: any(b in n for b in _BIG3)
+                )
+            ]["pct_out"].sum()
+            * 100
+        )
+        _n_inst = int((_holders_df["holder_type"] == "institutional").sum())
+        _n_fund = int((_holders_df["holder_type"] == "fund").sum())
+        _h_date = ""
+        try:
+            _dt = pd.to_datetime(_holders_df["date_fetched"]).max()
+            _h_date = _dt.strftime("%b %Y") if pd.notna(_dt) else ""
+        except Exception:
+            pass
+
+        # KPI strip
+        _hkpi = st.columns(3)
+        _kpi_style = (
+            "background:#f8fafc;border:1px solid #e2e8f0;"
+            "border-radius:12px;padding:1rem 1.1rem;box-shadow:0 1px 3px rgba(0,0,0,0.06);"
+        )
+        with _hkpi[0]:
+            st.markdown(
+                f"<div style='{_kpi_style}'>"
+                f"<div style='font-size:0.7rem;color:#6b7280;text-transform:uppercase;"
+                f"letter-spacing:0.08em;margin-bottom:0.25rem;'>Top Holder</div>"
+                f"<div style='font-size:0.95rem;font-weight:700;color:#111827;"
+                f"white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>"
+                f"{html.escape(_top_h['name_short'][:30])}</div>"
+                f"<div style='font-size:1.6rem;font-weight:800;color:#2563eb;line-height:1.1;'>"
+                f"{_top_h['pct_display']:.2f}%</div>"
+                f"<div style='font-size:0.78rem;color:#6b7280;margin-top:0.15rem;'>"
+                f"${_top_h['value_b']:.1f}B position</div>"
+                f"</div>",
+                unsafe_allow_html=True,
             )
-            _n_inst = int((_holders_df["holder_type"] == "institutional").sum())
-            _n_fund = int((_holders_df["holder_type"] == "fund").sum())
-            _h_date = ""
-            try:
-                _dt = pd.to_datetime(_holders_df["date_fetched"]).max()
-                _h_date = _dt.strftime("%b %Y") if pd.notna(_dt) else ""
-            except Exception:
-                pass
-
-            # KPI strip
-            _hkpi = st.columns(3)
-            _kpi_style = (
-                "background:#f8fafc;border:1px solid #e2e8f0;"
-                "border-radius:12px;padding:1rem 1.1rem;box-shadow:0 1px 3px rgba(0,0,0,0.06);"
+        with _hkpi[1]:
+            st.markdown(
+                f"<div style='{_kpi_style}'>"
+                f"<div style='font-size:0.7rem;color:#6b7280;text-transform:uppercase;"
+                f"letter-spacing:0.08em;margin-bottom:0.25rem;'>Big Three</div>"
+                f"<div style='font-size:0.8rem;color:#6b7280;'>Vanguard · BlackRock · State Street</div>"
+                f"<div style='font-size:1.6rem;font-weight:800;color:#2563eb;line-height:1.1;'>"
+                f"{_big3_pct:.1f}%</div>"
+                f"<div style='font-size:0.78rem;color:#6b7280;margin-top:0.15rem;'>"
+                f"Passive mega-managers combined</div>"
+                f"</div>",
+                unsafe_allow_html=True,
             )
-            with _hkpi[0]:
-                st.markdown(
-                    f"<div style='{_kpi_style}'>"
-                    f"<div style='font-size:0.7rem;color:#6b7280;text-transform:uppercase;"
-                    f"letter-spacing:0.08em;margin-bottom:0.25rem;'>Top Holder</div>"
-                    f"<div style='font-size:0.95rem;font-weight:700;color:#111827;"
-                    f"white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>"
-                    f"{html.escape(_top_h['name_short'][:30])}</div>"
-                    f"<div style='font-size:1.6rem;font-weight:800;color:#2563eb;line-height:1.1;'>"
-                    f"{_top_h['pct_display']:.2f}%</div>"
-                    f"<div style='font-size:0.78rem;color:#6b7280;margin-top:0.15rem;'>"
-                    f"${_top_h['value_b']:.1f}B position</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-            with _hkpi[1]:
-                st.markdown(
-                    f"<div style='{_kpi_style}'>"
-                    f"<div style='font-size:0.7rem;color:#6b7280;text-transform:uppercase;"
-                    f"letter-spacing:0.08em;margin-bottom:0.25rem;'>Big Three</div>"
-                    f"<div style='font-size:0.8rem;color:#6b7280;'>Vanguard · BlackRock · State Street</div>"
-                    f"<div style='font-size:1.6rem;font-weight:800;color:#2563eb;line-height:1.1;'>"
-                    f"{_big3_pct:.1f}%</div>"
-                    f"<div style='font-size:0.78rem;color:#6b7280;margin-top:0.15rem;'>"
-                    f"Passive mega-managers combined</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-            with _hkpi[2]:
-                st.markdown(
-                    f"<div style='{_kpi_style}'>"
-                    f"<div style='font-size:0.7rem;color:#6b7280;text-transform:uppercase;"
-                    f"letter-spacing:0.08em;margin-bottom:0.25rem;'>Holders tracked</div>"
-                    f"<div style='font-size:1.6rem;font-weight:800;color:#111827;line-height:1.1;'>"
-                    f"{len(_holders_df)}</div>"
-                    f"<div style='font-size:0.78rem;color:#6b7280;margin-top:0.15rem;'>"
-                    f"{_n_inst} institutional · {_n_fund} funds"
-                    f"{(' · snapshot ' + _h_date) if _h_date else ''}</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
+        with _hkpi[2]:
+            st.markdown(
+                f"<div style='{_kpi_style}'>"
+                f"<div style='font-size:0.7rem;color:#6b7280;text-transform:uppercase;"
+                f"letter-spacing:0.08em;margin-bottom:0.25rem;'>Holders tracked</div>"
+                f"<div style='font-size:1.6rem;font-weight:800;color:#111827;line-height:1.1;'>"
+                f"{len(_holders_df)}</div>"
+                f"<div style='font-size:0.78rem;color:#6b7280;margin-top:0.15rem;'>"
+                f"{_n_inst} institutional · {_n_fund} funds"
+                f"{(' · snapshot ' + _h_date) if _h_date else ''}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
-            st.markdown("<div style='margin-top:0.75rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top:0.75rem;'></div>", unsafe_allow_html=True)
 
-            _INST_PALETTE = [
-                "#1a73e8", "#00c9a7", "#f59e0b", "#ef4444", "#8b5cf6",
-                "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16",
-            ]
+        _INST_PALETTE = [
+            "#1a73e8", "#00c9a7", "#f59e0b", "#ef4444", "#8b5cf6",
+            "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16",
+        ]
 
-            def _render_ownership_tab(df_tab: pd.DataFrame, tab_label: str) -> None:
-                """Render donut + compact table for one holder type."""
-                if df_tab.empty:
-                    st.info(f"No {tab_label.lower()} holders found.")
-                    return
+        def _render_ownership_tab(df_tab: pd.DataFrame, tab_label: str) -> None:
+            """Render donut + compact table for one holder type."""
+            if df_tab.empty:
+                st.info(f"No {tab_label.lower()} holders found.")
+                return
 
-                _top8 = df_tab.head(8).copy()
-                _top8_labels = _top8["name_short"].tolist()
-                _top8_vals = _top8["pct_display"].tolist()
-                _top8_colors = _INST_PALETTE[: len(_top8)]
+            _top8 = df_tab.head(8).copy()
+            _top8_labels = _top8["name_short"].tolist()
+            _top8_vals = _top8["pct_display"].tolist()
+            _top8_colors = _INST_PALETTE[: len(_top8)]
 
-                _donut_fig = go.Figure(go.Pie(
-                    labels=_top8_labels,
-                    values=_top8_vals,
-                    hole=0.50,
-                    sort=False,
-                    marker=dict(colors=_top8_colors, line=dict(color="rgba(0,0,0,0.15)", width=1)),
-                    textinfo="none",
-                    hovertemplate="<b>%{label}</b><br>%{value:.2f}%<extra></extra>",
-                    customdata=_top8[["value_b", "shares_m"]].values,
-                ))
-                _donut_fig.update_layout(
-                    height=340,
-                    margin=dict(l=0, r=0, t=10, b=10),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#111827"),
-                    showlegend=True,
-                    legend=dict(
-                        orientation="v", x=1.01, y=0.5, yanchor="middle",
-                        bgcolor="rgba(0,0,0,0)",
-                        font=dict(color="#111827", size=10),
-                    ),
-                    hoverlabel=HOVERLABEL_STYLE,
+            _donut_fig = go.Figure(go.Pie(
+                labels=_top8_labels,
+                values=_top8_vals,
+                hole=0.50,
+                sort=False,
+                marker=dict(colors=_top8_colors, line=dict(color="rgba(0,0,0,0.15)", width=1)),
+                textinfo="none",
+                hovertemplate="<b>%{label}</b><br>%{value:.2f}%<extra></extra>",
+                customdata=_top8[["value_b", "shares_m"]].values,
+            ))
+            _donut_fig.update_layout(
+                height=340,
+                margin=dict(l=0, r=0, t=10, b=10),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#111827"),
+                showlegend=True,
+                legend=dict(
+                    orientation="v", x=1.01, y=0.5, yanchor="middle",
+                    bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#111827", size=10),
+                ),
+                hoverlabel=HOVERLABEL_STYLE,
+            )
+            # Compact styled HTML table
+            _tbl_rows = ""
+            for _ri, (_idx, _row) in enumerate(df_tab.iterrows()):
+                _bg = "#f8fafc" if _ri % 2 == 0 else "#f1f5f9"
+                _tbl_rows += (
+                    f"<tr style='background:{_bg};'>"
+                    f"<td style='padding:6px 8px;color:#6b7280;font-size:11px;width:30px;'>{_ri+1}</td>"
+                    f"<td style='padding:6px 8px;color:#111827;font-size:12px;font-weight:600;'>{html.escape(_row['name_short'][:36])}</td>"
+                    f"<td style='padding:6px 8px;color:#374151;font-size:11px;text-align:right;'>{_row['shares_m']:.1f}</td>"
+                    f"<td style='padding:6px 8px;color:#374151;font-size:11px;text-align:right;'>${_row['value_b']:.1f}B</td>"
+                    f"<td style='padding:6px 8px;color:#2563eb;font-size:11px;text-align:right;font-weight:700;'>{_row['pct_display']:.2f}%</td>"
+                    f"</tr>"
                 )
-                # Compact styled HTML table
-                _tbl_rows = ""
-                for _ri, (_idx, _row) in enumerate(df_tab.iterrows()):
-                    _bg = "#f8fafc" if _ri % 2 == 0 else "#f1f5f9"
-                    _tbl_rows += (
-                        f"<tr style='background:{_bg};'>"
-                        f"<td style='padding:6px 8px;color:#6b7280;font-size:11px;width:30px;'>{_ri+1}</td>"
-                        f"<td style='padding:6px 8px;color:#111827;font-size:12px;font-weight:600;'>{html.escape(_row['name_short'][:36])}</td>"
-                        f"<td style='padding:6px 8px;color:#374151;font-size:11px;text-align:right;'>{_row['shares_m']:.1f}</td>"
-                        f"<td style='padding:6px 8px;color:#374151;font-size:11px;text-align:right;'>${_row['value_b']:.1f}B</td>"
-                        f"<td style='padding:6px 8px;color:#2563eb;font-size:11px;text-align:right;font-weight:700;'>{_row['pct_display']:.2f}%</td>"
-                        f"</tr>"
-                    )
-                _tbl_html = (
-                    "<div style='overflow-x:auto;'>"
-                    "<table style='width:100%;border-collapse:collapse;font-family:Montserrat,sans-serif;'>"
-                    "<thead><tr style='background:#e2e8f0;'>"
-                    "<th style='padding:6px 8px;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:left;width:30px;'>#</th>"
-                    "<th style='padding:6px 8px;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:left;'>Holder</th>"
-                    "<th style='padding:6px 8px;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:right;'>Shares (M)</th>"
-                    "<th style='padding:6px 8px;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:right;'>Value</th>"
-                    "<th style='padding:6px 8px;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:right;'>% Stake</th>"
-                    "</tr></thead>"
-                    f"<tbody>{_tbl_rows}</tbody>"
-                    "</table></div>"
-                )
+            _tbl_html = (
+                "<div style='overflow-x:auto;'>"
+                "<table style='width:100%;border-collapse:collapse;font-family:Montserrat,sans-serif;'>"
+                "<thead><tr style='background:#e2e8f0;'>"
+                "<th style='padding:6px 8px;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:left;width:30px;'>#</th>"
+                "<th style='padding:6px 8px;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:left;'>Holder</th>"
+                "<th style='padding:6px 8px;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:right;'>Shares (M)</th>"
+                "<th style='padding:6px 8px;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:right;'>Value</th>"
+                "<th style='padding:6px 8px;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.06em;text-align:right;'>% Stake</th>"
+                "</tr></thead>"
+                f"<tbody>{_tbl_rows}</tbody>"
+                "</table></div>"
+            )
 
-                _dcol, _tcol = st.columns([1, 1.4])
-                with _dcol:
-                    st.plotly_chart(_donut_fig, use_container_width=True, config=PLOTLY_CONFIG)
-                with _tcol:
-                    st.markdown(_tbl_html, unsafe_allow_html=True)
+            _dcol, _tcol = st.columns([1, 1.4])
+            with _dcol:
+                st.plotly_chart(_donut_fig, use_container_width=True, config=PLOTLY_CONFIG)
+            with _tcol:
+                st.markdown(_tbl_html, unsafe_allow_html=True)
 
-            # Tabs: Institutional | Funds
-            _tab_inst, _tab_fund = st.tabs(["📋 Institutional", "📊 Funds"])
-            with _tab_inst:
-                _render_ownership_tab(
-                    _holders_df[_holders_df["holder_type"] == "institutional"].reset_index(drop=True),
-                    "Institutional",
-                )
-            with _tab_fund:
-                _render_ownership_tab(
-                    _holders_df[_holders_df["holder_type"] == "fund"].reset_index(drop=True),
-                    "Fund",
-                )
+        # Tabs: Institutional | Funds
+        _tab_inst, _tab_fund = st.tabs(["📋 Institutional", "📊 Funds"])
+        with _tab_inst:
+            _render_ownership_tab(
+                _holders_df[_holders_df["holder_type"] == "institutional"].reset_index(drop=True),
+                "Institutional",
+            )
+        with _tab_fund:
+            _render_ownership_tab(
+                _holders_df[_holders_df["holder_type"] == "fund"].reset_index(drop=True),
+                "Fund",
+            )
 
     st.divider()
 
@@ -3910,7 +3917,7 @@ def main():
         key="metrics_year_range",
     )
 
-    metric_toggle_row = st.columns([0.45, 0.30, 0.25])
+    metric_toggle_row = st.columns([2, 1])
     with metric_toggle_row[0]:
         metrics_freq = st.radio(
             "Frequency",
@@ -4073,64 +4080,61 @@ def main():
 
 
     st.divider()
-    _show_flow = st.toggle("Revenue Flow & P&L Bridge", value=False, key="show_flow_charts",
-                            help="Sankey flow and waterfall P&L breakdown")
-    if _show_flow:
 
-        # ── Revenue Flow & P&L Bridge ─────────────────────────────────────────
-        st.markdown(
-            "<div style='margin:0.8rem 0 0.4rem 0;'>"
-            "<span style='font-weight:800;font-size:1.15rem;color:#111827;'>Revenue Flow & P&L Bridge</span>"
-            "</div>"
-            "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
-            "Trace how revenue turns into profit. The Sankey shows money flowing through the P&L; "
-            "the Waterfall shows the incremental steps from revenue to net income."
-            "</div>",
-            unsafe_allow_html=True,
+    # ── Revenue Flow & P&L Bridge ─────────────────────────────────────────
+    st.markdown(
+        "<div style='margin:0.8rem 0 0.4rem 0;'>"
+        "<span style='font-weight:800;font-size:1.15rem;color:#111827;'>Revenue Flow & P&L Bridge</span>"
+        "</div>"
+        "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
+        "Trace how revenue turns into profit. The Sankey shows money flowing through the P&L; "
+        "the Waterfall shows the incremental steps from revenue to net income."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    _flow_tab_names = ["Sankey Flow", "Waterfall Bridge"]
+    _flow_tabs = st.tabs(_flow_tab_names)
+
+    _flow_col1, _flow_col2 = st.columns([2, 3])
+    with _flow_col1:
+        _flow_company = st.selectbox(
+            "Company", options=[company] + [c for c in companies if c != company],
+            index=0, key="flow_company",
+        )
+    with _flow_col2:
+        _flow_year = st.selectbox(
+            "Year",
+            options=sorted([int(y) for y in years], reverse=True),
+            index=0,
+            key="flow_year",
         )
 
-        _flow_tab_names = ["Sankey Flow", "Waterfall Bridge"]
-        _flow_tabs = st.tabs(_flow_tab_names)
+    _flow_metrics = data_processor.get_metrics(_flow_company, int(_flow_year))
+    _flow_segments = data_processor.get_segments(_flow_company, int(_flow_year))
 
-        _flow_col1, _flow_col2 = st.columns([2, 3])
-        with _flow_col1:
-            _flow_company = st.selectbox(
-                "Company", options=[company] + [c for c in companies if c != company],
-                index=0, key="flow_company",
+    try:
+        from utils.sankey_builder import build_sankey_figure, build_waterfall_figure
+
+        with _flow_tabs[0]:
+            _sankey_fig = build_sankey_figure(
+                _flow_metrics, _flow_segments, _flow_company, int(_flow_year)
             )
-        with _flow_col2:
-            _flow_year = st.selectbox(
-                "Year",
-                options=sorted([int(y) for y in years], reverse=True),
-                index=0,
-                key="flow_year",
+            if _sankey_fig:
+                render_plotly(_sankey_fig)
+            else:
+                st.info("Not enough financial data for this company/year to build the Sankey flow.")
+
+        with _flow_tabs[1]:
+            _wf_fig = build_waterfall_figure(
+                _flow_metrics, _flow_company, int(_flow_year)
             )
-
-        _flow_metrics = data_processor.get_metrics(_flow_company, int(_flow_year))
-        _flow_segments = data_processor.get_segments(_flow_company, int(_flow_year))
-
-        try:
-            from utils.sankey_builder import build_sankey_figure, build_waterfall_figure
-
-            with _flow_tabs[0]:
-                _sankey_fig = build_sankey_figure(
-                    _flow_metrics, _flow_segments, _flow_company, int(_flow_year)
-                )
-                if _sankey_fig:
-                    render_plotly(_sankey_fig)
-                else:
-                    st.info("Not enough financial data for this company/year to build the Sankey flow.")
-
-            with _flow_tabs[1]:
-                _wf_fig = build_waterfall_figure(
-                    _flow_metrics, _flow_company, int(_flow_year)
-                )
-                if _wf_fig:
-                    render_plotly(_wf_fig)
-                else:
-                    st.info("Not enough financial data for this company/year to build the waterfall.")
-        except Exception as _flow_err:
-            st.caption(f"Flow charts unavailable: {_flow_err}")
+            if _wf_fig:
+                render_plotly(_wf_fig)
+            else:
+                st.info("Not enough financial data for this company/year to build the waterfall.")
+    except Exception as _flow_err:
+        st.caption(f"Flow charts unavailable: {_flow_err}")
 
     st.divider()
     _show_sentiment = st.toggle("Earnings Call Sentiment", value=False, key="show_sentiment_viz",
@@ -4355,29 +4359,26 @@ def main():
                         _render_signal_col(_ecat, _oro, SIGNAL_COLORS, company, _ins_year, _sig_qtr_sel)
 
     # ── Forward Intelligence Panel ─────────────────────────────────────────
-    _show_fwd_intel = st.toggle("Forward Intelligence", value=False, key="show_fwd_intel",
-                                 help="Forward-looking signals from earnings transcripts")
-    if _show_fwd_intel:
+    try:
+        from utils.transcript_live import extract_forward_looking_signals, SIGNAL_COLORS
+        _fwd_signals = extract_forward_looking_signals(
+            excel_path=str(data_processor.data_path),
+            company=canonical_company,
+            year=int(_ins_year),
+            quarter=_ins_q_str,
+        )
+        # Also try DB merge if available
         try:
-            from utils.transcript_live import extract_forward_looking_signals, SIGNAL_COLORS
-            _fwd_signals = extract_forward_looking_signals(
-                excel_path=str(data_processor.data_path),
-                company=canonical_company,
-                year=int(_ins_year),
-                quarter=_ins_q_str,
-            )
-            # Also try DB merge if available
-            try:
-                from utils.database_service import get_forward_signals as _db_fwd
-                _db_signals = _db_fwd(company=canonical_company, year=int(_ins_year), limit=6)
-                if _db_signals:
-                    _existing_keys = {s["quote"][:60].lower() for s in _fwd_signals}
-                    for ds in _db_signals:
-                        if ds.get("quote", "")[:60].lower() not in _existing_keys:
-                            _fwd_signals.append(ds)
-                    _fwd_signals.sort(key=lambda x: -x.get("score", 0))
-            except Exception:
-                pass
+            from utils.database_service import get_forward_signals as _db_fwd
+            _db_signals = _db_fwd(company=canonical_company, year=int(_ins_year), limit=6)
+            if _db_signals:
+                _existing_keys = {s["quote"][:60].lower() for s in _fwd_signals}
+                for ds in _db_signals:
+                    if ds.get("quote", "")[:60].lower() not in _existing_keys:
+                        _fwd_signals.append(ds)
+                _fwd_signals.sort(key=lambda x: -x.get("score", 0))
+        except Exception:
+            pass
 
             if _fwd_signals:
                 _period = (
@@ -4455,108 +4456,105 @@ def main():
                             on_click=_fwd_less_cb,
                             use_container_width=True,
                         )
-        except Exception:
-            pass
+    except Exception:
+        pass
 
     # ── Market Intelligence — Polymarket prediction bets ──────────────────
-    _show_polymarket = st.toggle("Market Intelligence (Polymarket)", value=False, key="show_polymarket",
-                                  help="Live prediction market bets")
-    if _show_polymarket:
-        try:
-            from utils.polymarket import fetch_company_bets, COMPANY_KEYWORDS
+    try:
+        from utils.polymarket import fetch_company_bets, COMPANY_KEYWORDS
 
-            # Resolve company name for Polymarket (handle normalization differences)
-            _poly_company = canonical_company
-            # Also check common aliases used in Polymarket module
-            if canonical_company not in COMPANY_KEYWORDS:
-                _alias_map = {
-                    "Meta": "Meta Platforms",
-                    "Meta Platforms Inc": "Meta Platforms",
-                    "Alphabet Inc": "Alphabet",
-                    "Warner Bros Discovery": "Warner Bros. Discovery",
-                    "Paramount": "Paramount Global",
-                }
-                _poly_company = _alias_map.get(canonical_company, canonical_company)
+        # Resolve company name for Polymarket (handle normalization differences)
+        _poly_company = canonical_company
+        # Also check common aliases used in Polymarket module
+        if canonical_company not in COMPANY_KEYWORDS:
+            _alias_map = {
+                "Meta": "Meta Platforms",
+                "Meta Platforms Inc": "Meta Platforms",
+                "Alphabet Inc": "Alphabet",
+                "Warner Bros Discovery": "Warner Bros. Discovery",
+                "Paramount": "Paramount Global",
+            }
+            _poly_company = _alias_map.get(canonical_company, canonical_company)
 
-            _poly_bets = fetch_company_bets(_poly_company)
-            if _poly_bets:
-                st.markdown(
-                    f"<div style='margin:1.5rem 0 0.5rem 0;display:flex;align-items:baseline;gap:10px;'>"
-                    f"<span style='font-weight:700;font-size:1rem;color:#111827;'>Market Intelligence</span>"
-                    f"<span style='color:#7c3aed;font-size:0.78rem;font-weight:600;'>"
-                    f"Polymarket · {len(_poly_bets)} active bet{'s' if len(_poly_bets) != 1 else ''}</span>"
-                    f"</div>",
-                    unsafe_allow_html=True,
+        _poly_bets = fetch_company_bets(_poly_company)
+        if _poly_bets:
+            st.markdown(
+                f"<div style='margin:1.5rem 0 0.5rem 0;display:flex;align-items:baseline;gap:10px;'>"
+                f"<span style='font-weight:700;font-size:1rem;color:#111827;'>Market Intelligence</span>"
+                f"<span style='color:#7c3aed;font-size:0.78rem;font-weight:600;'>"
+                f"Polymarket · {len(_poly_bets)} active bet{'s' if len(_poly_bets) != 1 else ''}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+            def _yes_badge(p):
+                if p is None:
+                    return "<span style='color:#9ca3af;font-size:0.72rem;'>—</span>"
+                col = "#16a34a" if p >= 65 else ("#d97706" if p >= 45 else "#dc2626")
+                bg = "#dcfce7" if p >= 65 else ("#fef3c7" if p >= 45 else "#fee2e2")
+                return (
+                    f"<span style='background:{bg};color:{col};font-weight:700;"
+                    f"font-size:0.72rem;padding:2px 8px;border-radius:999px;"
+                    f"white-space:nowrap;'>{p:.0f}% YES</span>"
                 )
 
-                def _yes_badge(p):
-                    if p is None:
-                        return "<span style='color:#9ca3af;font-size:0.72rem;'>—</span>"
-                    col = "#16a34a" if p >= 65 else ("#d97706" if p >= 45 else "#dc2626")
-                    bg = "#dcfce7" if p >= 65 else ("#fef3c7" if p >= 45 else "#fee2e2")
-                    return (
-                        f"<span style='background:{bg};color:{col};font-weight:700;"
-                        f"font-size:0.72rem;padding:2px 8px;border-radius:999px;"
-                        f"white-space:nowrap;'>{p:.0f}% YES</span>"
+            st.markdown("""<style>
+            @keyframes polyPulse { 0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,0);border-left-color:#7c3aed;} 50%{box-shadow:-2px 0 8px 0 rgba(124,58,237,0.15);border-left-color:#a78bfa;} }
+            @keyframes liveDot { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+            @keyframes barPulse { 0%,100%{opacity:1;} 50%{opacity:0.75;} }
+            .poly-bet-card { animation: polyPulse 3s ease-in-out infinite; transition: transform 0.2s, box-shadow 0.2s; }
+            .poly-bet-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,0.12) !important; }
+            .poly-live-dot { display:inline-block;width:6px;height:6px;border-radius:50%;background:#16a34a;margin-right:4px;animation:liveDot 2s ease-in-out infinite; }
+            .poly-bar-fill { animation: barPulse 4s ease-in-out infinite; }
+            </style>""", unsafe_allow_html=True)
+
+            _poly_cols = st.columns(2, gap="medium")
+            for _pi, _bet in enumerate(_poly_bets[:6]):
+                with _poly_cols[_pi % 2]:
+                    _bq = str(_bet.get("question", ""))
+                    _yes = _bet.get("yes_price")
+                    _no = _bet.get("no_price")
+                    _vol = str(_bet.get("volume_fmt", ""))
+                    _end = str(_bet.get("end_date", ""))
+                    _url = str(_bet.get("url", "https://polymarket.com"))
+                    _yes_html = _yes_badge(_yes)
+                    _no_val = f"NO {_no:.0f}%" if _no is not None else ""
+                    _meta_parts = []
+                    if _vol:
+                        _meta_parts.append(f"<span style='color:#6b7280;'>{html.escape(_vol)} vol</span>")
+                    if _end:
+                        _meta_parts.append(f"<span style='color:#9ca3af;'>ends {html.escape(_end)}</span>")
+                    _meta_html = "<span style='color:#d1d5db;margin:0 3px;'>·</span>".join(_meta_parts)
+                    # Probability bar
+                    _bar_pct = int(_yes or 50)
+                    _bar_col = "#16a34a" if _bar_pct >= 65 else ("#d97706" if _bar_pct >= 45 else "#dc2626")
+                    st.markdown(
+                        f"<a href='{_url}' target='_blank' rel='noopener' style='text-decoration:none;'>"
+                        f"<div class='poly-bet-card' style='background:#f9fafb;border:1px solid #e5e7eb;"
+                        f"border-left:3px solid #7c3aed;border-radius:6px;"
+                        f"padding:10px 12px;margin-bottom:8px;'>"
+                        f"<div style='display:flex;align-items:flex-start;justify-content:space-between;"
+                        f"gap:8px;margin-bottom:7px;'>"
+                        f"<p style='margin:0;font-size:0.83rem;color:#111827;"
+                        f"line-height:1.5;font-weight:500;flex:1;'><span class='poly-live-dot'></span>{html.escape(_bq)}</p>"
+                        f"{_yes_html}"
+                        f"</div>"
+                        f"<div style='background:#e5e7eb;border-radius:999px;height:4px;margin-bottom:6px;'>"
+                        f"<div class='poly-bar-fill' style='background:{_bar_col};width:{_bar_pct}%;height:4px;border-radius:999px;'></div>"
+                        f"</div>"
+                        f"<div style='display:flex;align-items:center;gap:4px;font-size:0.7rem;'>"
+                        f"{_meta_html}</div>"
+                        f"</div></a>",
+                        unsafe_allow_html=True,
                     )
 
-                st.markdown("""<style>
-                @keyframes polyPulse { 0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,0);border-left-color:#7c3aed;} 50%{box-shadow:-2px 0 8px 0 rgba(124,58,237,0.15);border-left-color:#a78bfa;} }
-                @keyframes liveDot { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
-                @keyframes barPulse { 0%,100%{opacity:1;} 50%{opacity:0.75;} }
-                .poly-bet-card { animation: polyPulse 3s ease-in-out infinite; transition: transform 0.2s, box-shadow 0.2s; }
-                .poly-bet-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,0.12) !important; }
-                .poly-live-dot { display:inline-block;width:6px;height:6px;border-radius:50%;background:#16a34a;margin-right:4px;animation:liveDot 2s ease-in-out infinite; }
-                .poly-bar-fill { animation: barPulse 4s ease-in-out infinite; }
-                </style>""", unsafe_allow_html=True)
-
-                _poly_cols = st.columns(2, gap="medium")
-                for _pi, _bet in enumerate(_poly_bets[:6]):
-                    with _poly_cols[_pi % 2]:
-                        _bq = str(_bet.get("question", ""))
-                        _yes = _bet.get("yes_price")
-                        _no = _bet.get("no_price")
-                        _vol = str(_bet.get("volume_fmt", ""))
-                        _end = str(_bet.get("end_date", ""))
-                        _url = str(_bet.get("url", "https://polymarket.com"))
-                        _yes_html = _yes_badge(_yes)
-                        _no_val = f"NO {_no:.0f}%" if _no is not None else ""
-                        _meta_parts = []
-                        if _vol:
-                            _meta_parts.append(f"<span style='color:#6b7280;'>{html.escape(_vol)} vol</span>")
-                        if _end:
-                            _meta_parts.append(f"<span style='color:#9ca3af;'>ends {html.escape(_end)}</span>")
-                        _meta_html = "<span style='color:#d1d5db;margin:0 3px;'>·</span>".join(_meta_parts)
-                        # Probability bar
-                        _bar_pct = int(_yes or 50)
-                        _bar_col = "#16a34a" if _bar_pct >= 65 else ("#d97706" if _bar_pct >= 45 else "#dc2626")
-                        st.markdown(
-                            f"<a href='{_url}' target='_blank' rel='noopener' style='text-decoration:none;'>"
-                            f"<div class='poly-bet-card' style='background:#f9fafb;border:1px solid #e5e7eb;"
-                            f"border-left:3px solid #7c3aed;border-radius:6px;"
-                            f"padding:10px 12px;margin-bottom:8px;'>"
-                            f"<div style='display:flex;align-items:flex-start;justify-content:space-between;"
-                            f"gap:8px;margin-bottom:7px;'>"
-                            f"<p style='margin:0;font-size:0.83rem;color:#111827;"
-                            f"line-height:1.5;font-weight:500;flex:1;'><span class='poly-live-dot'></span>{html.escape(_bq)}</p>"
-                            f"{_yes_html}"
-                            f"</div>"
-                            f"<div style='background:#e5e7eb;border-radius:999px;height:4px;margin-bottom:6px;'>"
-                            f"<div class='poly-bar-fill' style='background:{_bar_col};width:{_bar_pct}%;height:4px;border-radius:999px;'></div>"
-                            f"</div>"
-                            f"<div style='display:flex;align-items:center;gap:4px;font-size:0.7rem;'>"
-                            f"{_meta_html}</div>"
-                            f"</div></a>",
-                            unsafe_allow_html=True,
-                        )
-
-                if len(_poly_bets) > 6:
-                    st.caption(
-                        f"Showing 6 of {len(_poly_bets)} bets — "
-                        f"[view all on Polymarket](https://polymarket.com)"
-                    )
-        except Exception:
-            pass
+            if len(_poly_bets) > 6:
+                st.caption(
+                    f"Showing 6 of {len(_poly_bets)} bets — "
+                    f"[view all on Polymarket](https://polymarket.com)"
+                )
+    except Exception:
+        pass
 
     company_insights_df = load_company_insights_text(data_processor.data_path)
 
@@ -4745,291 +4743,6 @@ def main():
 
     # Segment composition
     st.subheader("Segment Composition")
-
-    # ── Company DNA Radar ─────────────────────────────────────────────────
-    _radar_view = st.radio(
-        "Radar view",
-        ["Segment Mix", "Financial DNA"],
-        horizontal=True,
-        key="radar_view_mode",
-    )
-
-    if _radar_view == "Segment Mix":
-        st.markdown(
-            "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
-            "Segment revenue breakdown as a radar fingerprint. "
-            "Compare how the revenue mix shifts across years."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-        _sr_col1, _sr_col2 = st.columns([3, 2])
-        with _sr_col1:
-            _sr_years_sel = st.multiselect(
-                "Compare years",
-                options=sorted([int(y) for y in years], reverse=True),
-                default=[sorted([int(y) for y in years], reverse=True)[0]],
-                max_selections=4,
-                key="sr_years",
-            )
-        with _sr_col2:
-            _sr_pct_mode = st.checkbox("Show as % of total", value=True, key="sr_pct_mode")
-
-        if _sr_years_sel:
-            # Collect segment data for each year
-            _sr_all_labels = []
-            _sr_year_data = {}
-            for _yr in sorted(_sr_years_sel):
-                _segs = data_processor.get_segments(company, int(_yr))
-                if _segs and _segs.get("labels"):
-                    _slabels = _segs["labels"]
-                    _svalues = _segs["values"]
-                    _sr_year_data[_yr] = dict(zip(_slabels, _svalues))
-                    for _sl in _slabels:
-                        if _sl not in _sr_all_labels:
-                            _sr_all_labels.append(_sl)
-
-            if _sr_all_labels and _sr_year_data:
-                _sr_fig = go.Figure()
-                _yr_colors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b"]
-
-                for _yi, _yr in enumerate(sorted(_sr_year_data.keys())):
-                    _yd = _sr_year_data[_yr]
-                    _vals = []
-                    _raw_vals = []
-                    _total = sum(_yd.values()) if _yd else 1
-
-                    for _sl in _sr_all_labels:
-                        _rv = _yd.get(_sl, 0) or 0
-                        _raw_vals.append(_rv)
-                        if _sr_pct_mode:
-                            _vals.append((_rv / _total * 100) if _total else 0)
-                        else:
-                            _vals.append(_rv)
-
-                    # Percentile-rank within this year for better radar shape
-                    if not _sr_pct_mode and _vals:
-                        _max_v = max(_vals) if max(_vals) > 0 else 1
-                        _vals = [v / _max_v * 100 for v in _vals]
-
-                    _vals_closed = _vals + [_vals[0]]
-                    _theta_closed = _sr_all_labels + [_sr_all_labels[0]]
-                    _raw_closed = _raw_vals + [_raw_vals[0]]
-
-                    _hover_texts = []
-                    for _hi in range(len(_sr_all_labels)):
-                        _rv = _raw_vals[_hi]
-                        _pct = (_rv / _total * 100) if _total else 0
-                        _hover_texts.append(
-                            f"<b>{company} ({_yr})</b><br>"
-                            f"{_sr_all_labels[_hi]}: ${_rv:,.0f}M<br>"
-                            f"Share: {_pct:.1f}%"
-                        )
-                    _hover_texts.append(_hover_texts[0])
-
-                    _yc = _yr_colors[_yi % 4]
-                    def _hex_to_rgba_sr(hx, alpha=0.08):
-                        hx = hx.lstrip("#")
-                        return f"rgba({int(hx[0:2],16)},{int(hx[2:4],16)},{int(hx[4:6],16)},{alpha})"
-
-                    _sr_fig.add_trace(go.Scatterpolar(
-                        r=_vals_closed,
-                        theta=_theta_closed,
-                        name=str(_yr),
-                        fill="toself",
-                        fillcolor=_hex_to_rgba_sr(_yc, 0.08),
-                        line=dict(color=_yc, width=2.5),
-                        marker=dict(size=5, color=_yc),
-                        hovertemplate="%{text}<extra></extra>",
-                        text=_hover_texts,
-                    ))
-
-                _sr_fig.update_layout(
-                    polar=dict(
-                        bgcolor="rgba(0,0,0,0)",
-                        radialaxis=dict(
-                            visible=True,
-                            range=[0, 105] if _sr_pct_mode else [0, 110],
-                            ticksuffix="%" if _sr_pct_mode else "",
-                            tickfont=dict(size=9, color="#94a3b8"),
-                            gridcolor="rgba(0,0,0,0.06)",
-                            linecolor="rgba(0,0,0,0.06)",
-                        ),
-                        angularaxis=dict(
-                            tickfont=dict(size=11, color="#374151"),
-                            gridcolor="rgba(0,0,0,0.06)",
-                            linecolor="rgba(0,0,0,0.06)",
-                        ),
-                    ),
-                    showlegend=True,
-                    legend=dict(font=dict(color="#374151"), bgcolor="rgba(0,0,0,0)", borderwidth=0),
-                    height=480,
-                    margin=dict(t=40, r=60, l=60, b=40),
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#374151"),
-                    hoverlabel=HOVERLABEL_STYLE,
-                )
-                render_plotly(_sr_fig)
-            else:
-                st.info("No segment data available for the selected years.")
-        else:
-            st.info("Select at least one year to display the segment radar.")
-
-    else:
-        # Financial DNA radar — multi-axis company comparison
-        st.markdown(
-            "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
-            "Multi-axis fingerprint — compare up to 4 companies on 8 normalised dimensions. "
-            "Values are percentile-ranked so different scales (revenue vs margins) are directly comparable."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-        _radar_col1, _radar_col2 = st.columns([3, 2])
-        with _radar_col1:
-            _radar_companies = st.multiselect(
-                "Overlay companies",
-                options=companies,
-                default=[company],
-                max_selections=4,
-                key="radar_companies",
-            )
-        with _radar_col2:
-            _radar_year = st.selectbox(
-                "Year",
-                options=sorted([int(y) for y in years], reverse=True),
-                index=0,
-                key="radar_year",
-            )
-
-        if _radar_companies:
-            _radar_axes = [
-                ("Revenue", "revenue", False),
-                ("Rev Growth", "revenue_yoy", True),
-                ("Op Margin", None, True),
-                ("Net Margin", None, True),
-                ("R&D Intensity", None, True),
-                ("Cash", "cash_balance", False),
-                ("Market Cap", "market_cap", False),
-                ("Leverage", None, True),
-            ]
-
-            _all_co_raw = {}
-            for _co in companies:
-                _m = data_processor.get_metrics(_co, int(_radar_year))
-                if not _m:
-                    continue
-                _rev = _m.get("revenue") or 0
-                _ni = _m.get("net_income") or 0
-                _oi = _m.get("operating_income") or 0
-                _rd = _m.get("rd") or 0
-                _ta = _m.get("total_assets") or 0
-                _debt = _m.get("debt") or 0
-                _cash = _m.get("cash_balance") or 0
-                _mcap = _m.get("market_cap") or 0
-                _rev_yoy = _m.get("revenue_yoy")
-                _op_margin = (_oi / _rev * 100) if _rev else 0
-                _net_margin = (_ni / _rev * 100) if _rev else 0
-                _rd_pct = (_rd / _rev * 100) if _rev else 0
-                _leverage = (_debt / _ta) if _ta else 0
-                _all_co_raw[_co] = [_rev, _rev_yoy if _rev_yoy else 0,
-                                    _op_margin, _net_margin, _rd_pct,
-                                    _cash, _mcap, _leverage]
-
-            if _all_co_raw:
-                _raw_matrix = np.array(list(_all_co_raw.values()))
-                _pctile_matrix = np.zeros_like(_raw_matrix)
-                for _ax_i in range(_raw_matrix.shape[1]):
-                    _col = _raw_matrix[:, _ax_i]
-                    _sorted_unique = np.sort(np.unique(_col))
-                    if len(_sorted_unique) <= 1:
-                        _pctile_matrix[:, _ax_i] = 50
-                    else:
-                        for _row_i, _val in enumerate(_col):
-                            _rank = np.searchsorted(_sorted_unique, _val, side="right")
-                            _pctile_matrix[_row_i, _ax_i] = (_rank / len(_sorted_unique)) * 100
-
-                _co_keys = list(_all_co_raw.keys())
-                _theta_labels = [a[0] for a in _radar_axes]
-
-                _radar_fig = go.Figure()
-                _radar_palette = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b"]
-                for _ci, _rco in enumerate(_radar_companies):
-                    if _rco not in _co_keys:
-                        continue
-                    _idx = _co_keys.index(_rco)
-                    _vals = _pctile_matrix[_idx].tolist()
-                    _raw_vals = _raw_matrix[_idx].tolist()
-                    _vals_closed = _vals + [_vals[0]]
-                    _raw_closed = _raw_vals + [_raw_vals[0]]
-                    _theta_closed = _theta_labels + [_theta_labels[0]]
-
-                    _hover_texts = []
-                    for _hi in range(len(_theta_labels)):
-                        _ax_name = _theta_labels[_hi]
-                        _raw_v = _raw_vals[_hi]
-                        if _ax_name in ("Revenue", "Cash", "Market Cap"):
-                            _disp = f"${_raw_v:,.0f}M"
-                        elif _ax_name in ("Rev Growth", "Op Margin", "Net Margin", "R&D Intensity"):
-                            _disp = f"{_raw_v:.1f}%"
-                        elif _ax_name == "Leverage":
-                            _disp = f"{_raw_v:.2f}x"
-                        else:
-                            _disp = f"{_raw_v:,.0f}"
-                        _hover_texts.append(
-                            f"<b>{_rco}</b><br>{_ax_name}: {_disp}<br>Percentile: {_vals[_hi]:.0f}th"
-                        )
-                    _hover_texts.append(_hover_texts[0])
-
-                    _co_color = COMPANY_COLORS.get(_rco, _radar_palette[_ci % 4])
-                    def _hex_to_rgba(hx, alpha=0.08):
-                        hx = hx.lstrip("#")
-                        return f"rgba({int(hx[0:2],16)},{int(hx[2:4],16)},{int(hx[4:6],16)},{alpha})"
-                    if "rgb" in _co_color:
-                        _fill_color = _co_color.replace(")", ",0.08)").replace("rgb", "rgba")
-                    else:
-                        _fill_color = _hex_to_rgba(_co_color, 0.08)
-                    _radar_fig.add_trace(go.Scatterpolar(
-                        r=_vals_closed,
-                        theta=_theta_closed,
-                        name=_rco,
-                        fill="toself",
-                        fillcolor=_fill_color,
-                        line=dict(color=_co_color, width=2.5),
-                        marker=dict(size=5, color=_co_color),
-                        hovertemplate="%{text}<extra></extra>",
-                        text=_hover_texts,
-                    ))
-
-                _radar_fig.update_layout(
-                    polar=dict(
-                        bgcolor="rgba(0,0,0,0)",
-                        radialaxis=dict(
-                            visible=True, range=[0, 105],
-                            tickfont=dict(size=9, color="#94a3b8"),
-                            gridcolor="rgba(0,0,0,0.06)",
-                            linecolor="rgba(0,0,0,0.06)",
-                        ),
-                        angularaxis=dict(
-                            tickfont=dict(size=11, color="#374151"),
-                            gridcolor="rgba(0,0,0,0.06)",
-                            linecolor="rgba(0,0,0,0.06)",
-                        ),
-                    ),
-                    showlegend=True,
-                    legend=dict(font=dict(color="#374151"), bgcolor="rgba(0,0,0,0)", borderwidth=0),
-                    height=500,
-                    margin=dict(t=40, r=60, l=60, b=40),
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#374151"),
-                    hoverlabel=HOVERLABEL_STYLE,
-                )
-                render_plotly(_radar_fig)
-
-    st.divider()
-
 
     canonical_company = normalize_company(company)
     segments_quarterly_all = load_quarterly_segments(
@@ -5447,6 +5160,292 @@ def main():
                 """,
                 height=0,
             )
+
+
+        # ── Segment Radar & Financial DNA ─────────────────────────
+        _radar_view = st.radio(
+            "Radar view",
+            ["Segment Mix", "Financial DNA"],
+            horizontal=True,
+            key="radar_view_mode",
+        )
+
+        if _radar_view == "Segment Mix":
+            st.markdown(
+                "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
+                "Segment revenue breakdown as a radar fingerprint. "
+                "Compare how the revenue mix shifts across years."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+            _sr_col1, _sr_col2 = st.columns([3, 2])
+            with _sr_col1:
+                _sr_years_sel = st.multiselect(
+                    "Compare years",
+                    options=sorted([int(y) for y in years], reverse=True),
+                    default=[sorted([int(y) for y in years], reverse=True)[0]],
+                    max_selections=4,
+                    key="sr_years",
+                )
+            with _sr_col2:
+                _sr_pct_mode = st.checkbox("Show as % of total", value=True, key="sr_pct_mode")
+
+            if _sr_years_sel:
+                # Collect segment data for each year
+                _sr_all_labels = []
+                _sr_year_data = {}
+                for _yr in sorted(_sr_years_sel):
+                    _segs = data_processor.get_segments(company, int(_yr))
+                    if _segs and _segs.get("labels"):
+                        _slabels = _segs["labels"]
+                        _svalues = _segs["values"]
+                        _sr_year_data[_yr] = dict(zip(_slabels, _svalues))
+                        for _sl in _slabels:
+                            if _sl not in _sr_all_labels:
+                                _sr_all_labels.append(_sl)
+
+                if _sr_all_labels and _sr_year_data:
+                    _sr_fig = go.Figure()
+                    _yr_colors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b"]
+
+                    for _yi, _yr in enumerate(sorted(_sr_year_data.keys())):
+                        _yd = _sr_year_data[_yr]
+                        _vals = []
+                        _raw_vals = []
+                        _total = sum(_yd.values()) if _yd else 1
+
+                        for _sl in _sr_all_labels:
+                            _rv = _yd.get(_sl, 0) or 0
+                            _raw_vals.append(_rv)
+                            if _sr_pct_mode:
+                                _vals.append((_rv / _total * 100) if _total else 0)
+                            else:
+                                _vals.append(_rv)
+
+                        # Percentile-rank within this year for better radar shape
+                        if not _sr_pct_mode and _vals:
+                            _max_v = max(_vals) if max(_vals) > 0 else 1
+                            _vals = [v / _max_v * 100 for v in _vals]
+
+                        _vals_closed = _vals + [_vals[0]]
+                        _theta_closed = _sr_all_labels + [_sr_all_labels[0]]
+                        _raw_closed = _raw_vals + [_raw_vals[0]]
+
+                        _hover_texts = []
+                        for _hi in range(len(_sr_all_labels)):
+                            _rv = _raw_vals[_hi]
+                            _pct = (_rv / _total * 100) if _total else 0
+                            _hover_texts.append(
+                                f"<b>{company} ({_yr})</b><br>"
+                                f"{_sr_all_labels[_hi]}: ${_rv:,.0f}M<br>"
+                                f"Share: {_pct:.1f}%"
+                            )
+                        _hover_texts.append(_hover_texts[0])
+
+                        _yc = _yr_colors[_yi % 4]
+                        def _hex_to_rgba_sr(hx, alpha=0.08):
+                            hx = hx.lstrip("#")
+                            return f"rgba({int(hx[0:2],16)},{int(hx[2:4],16)},{int(hx[4:6],16)},{alpha})"
+
+                        _sr_fig.add_trace(go.Scatterpolar(
+                            r=_vals_closed,
+                            theta=_theta_closed,
+                            name=str(_yr),
+                            fill="toself",
+                            fillcolor=_hex_to_rgba_sr(_yc, 0.08),
+                            line=dict(color=_yc, width=2.5),
+                            marker=dict(size=5, color=_yc),
+                            hovertemplate="%{text}<extra></extra>",
+                            text=_hover_texts,
+                        ))
+
+                    _sr_fig.update_layout(
+                        polar=dict(
+                            bgcolor="rgba(0,0,0,0)",
+                            radialaxis=dict(
+                                visible=True,
+                                range=[0, 105] if _sr_pct_mode else [0, 110],
+                                ticksuffix="%" if _sr_pct_mode else "",
+                                tickfont=dict(size=9, color="#94a3b8"),
+                                gridcolor="rgba(0,0,0,0.06)",
+                                linecolor="rgba(0,0,0,0.06)",
+                            ),
+                            angularaxis=dict(
+                                tickfont=dict(size=11, color="#374151"),
+                                gridcolor="rgba(0,0,0,0.06)",
+                                linecolor="rgba(0,0,0,0.06)",
+                            ),
+                        ),
+                        showlegend=True,
+                        legend=dict(font=dict(color="#374151"), bgcolor="rgba(0,0,0,0)", borderwidth=0),
+                        height=480,
+                        margin=dict(t=40, r=60, l=60, b=40),
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#374151"),
+                        hoverlabel=HOVERLABEL_STYLE,
+                    )
+                    render_plotly(_sr_fig)
+                else:
+                    st.info("No segment data available for the selected years.")
+            else:
+                st.info("Select at least one year to display the segment radar.")
+
+        else:
+            # Financial DNA radar — multi-axis company comparison
+            st.markdown(
+                "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
+                "Multi-axis fingerprint — compare up to 4 companies on 8 normalised dimensions. "
+                "Values are percentile-ranked so different scales (revenue vs margins) are directly comparable."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+            _radar_col1, _radar_col2 = st.columns([3, 2])
+            with _radar_col1:
+                _radar_companies = st.multiselect(
+                    "Overlay companies",
+                    options=companies,
+                    default=[company],
+                    max_selections=4,
+                    key="radar_companies",
+                )
+            with _radar_col2:
+                _radar_year = st.selectbox(
+                    "Year",
+                    options=sorted([int(y) for y in years], reverse=True),
+                    index=0,
+                    key="radar_year",
+                )
+
+            if _radar_companies:
+                _radar_axes = [
+                    ("Revenue", "revenue", False),
+                    ("Rev Growth", "revenue_yoy", True),
+                    ("Op Margin", None, True),
+                    ("Net Margin", None, True),
+                    ("R&D Intensity", None, True),
+                    ("Cash", "cash_balance", False),
+                    ("Market Cap", "market_cap", False),
+                    ("Leverage", None, True),
+                ]
+
+                _all_co_raw = {}
+                for _co in companies:
+                    _m = data_processor.get_metrics(_co, int(_radar_year))
+                    if not _m:
+                        continue
+                    _rev = _m.get("revenue") or 0
+                    _ni = _m.get("net_income") or 0
+                    _oi = _m.get("operating_income") or 0
+                    _rd = _m.get("rd") or 0
+                    _ta = _m.get("total_assets") or 0
+                    _debt = _m.get("debt") or 0
+                    _cash = _m.get("cash_balance") or 0
+                    _mcap = _m.get("market_cap") or 0
+                    _rev_yoy = _m.get("revenue_yoy")
+                    _op_margin = (_oi / _rev * 100) if _rev else 0
+                    _net_margin = (_ni / _rev * 100) if _rev else 0
+                    _rd_pct = (_rd / _rev * 100) if _rev else 0
+                    _leverage = (_debt / _ta) if _ta else 0
+                    _all_co_raw[_co] = [_rev, _rev_yoy if _rev_yoy else 0,
+                                        _op_margin, _net_margin, _rd_pct,
+                                        _cash, _mcap, _leverage]
+
+                if _all_co_raw:
+                    _raw_matrix = np.array(list(_all_co_raw.values()))
+                    _pctile_matrix = np.zeros_like(_raw_matrix)
+                    for _ax_i in range(_raw_matrix.shape[1]):
+                        _col = _raw_matrix[:, _ax_i]
+                        _sorted_unique = np.sort(np.unique(_col))
+                        if len(_sorted_unique) <= 1:
+                            _pctile_matrix[:, _ax_i] = 50
+                        else:
+                            for _row_i, _val in enumerate(_col):
+                                _rank = np.searchsorted(_sorted_unique, _val, side="right")
+                                _pctile_matrix[_row_i, _ax_i] = (_rank / len(_sorted_unique)) * 100
+
+                    _co_keys = list(_all_co_raw.keys())
+                    _theta_labels = [a[0] for a in _radar_axes]
+
+                    _radar_fig = go.Figure()
+                    _radar_palette = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b"]
+                    for _ci, _rco in enumerate(_radar_companies):
+                        if _rco not in _co_keys:
+                            continue
+                        _idx = _co_keys.index(_rco)
+                        _vals = _pctile_matrix[_idx].tolist()
+                        _raw_vals = _raw_matrix[_idx].tolist()
+                        _vals_closed = _vals + [_vals[0]]
+                        _raw_closed = _raw_vals + [_raw_vals[0]]
+                        _theta_closed = _theta_labels + [_theta_labels[0]]
+
+                        _hover_texts = []
+                        for _hi in range(len(_theta_labels)):
+                            _ax_name = _theta_labels[_hi]
+                            _raw_v = _raw_vals[_hi]
+                            if _ax_name in ("Revenue", "Cash", "Market Cap"):
+                                _disp = f"${_raw_v:,.0f}M"
+                            elif _ax_name in ("Rev Growth", "Op Margin", "Net Margin", "R&D Intensity"):
+                                _disp = f"{_raw_v:.1f}%"
+                            elif _ax_name == "Leverage":
+                                _disp = f"{_raw_v:.2f}x"
+                            else:
+                                _disp = f"{_raw_v:,.0f}"
+                            _hover_texts.append(
+                                f"<b>{_rco}</b><br>{_ax_name}: {_disp}<br>Percentile: {_vals[_hi]:.0f}th"
+                            )
+                        _hover_texts.append(_hover_texts[0])
+
+                        _co_color = COMPANY_COLORS.get(_rco, _radar_palette[_ci % 4])
+                        def _hex_to_rgba(hx, alpha=0.08):
+                            hx = hx.lstrip("#")
+                            return f"rgba({int(hx[0:2],16)},{int(hx[2:4],16)},{int(hx[4:6],16)},{alpha})"
+                        if "rgb" in _co_color:
+                            _fill_color = _co_color.replace(")", ",0.08)").replace("rgb", "rgba")
+                        else:
+                            _fill_color = _hex_to_rgba(_co_color, 0.08)
+                        _radar_fig.add_trace(go.Scatterpolar(
+                            r=_vals_closed,
+                            theta=_theta_closed,
+                            name=_rco,
+                            fill="toself",
+                            fillcolor=_fill_color,
+                            line=dict(color=_co_color, width=2.5),
+                            marker=dict(size=5, color=_co_color),
+                            hovertemplate="%{text}<extra></extra>",
+                            text=_hover_texts,
+                        ))
+
+                    _radar_fig.update_layout(
+                        polar=dict(
+                            bgcolor="rgba(0,0,0,0)",
+                            radialaxis=dict(
+                                visible=True, range=[0, 105],
+                                tickfont=dict(size=9, color="#94a3b8"),
+                                gridcolor="rgba(0,0,0,0.06)",
+                                linecolor="rgba(0,0,0,0.06)",
+                            ),
+                            angularaxis=dict(
+                                tickfont=dict(size=11, color="#374151"),
+                                gridcolor="rgba(0,0,0,0.06)",
+                                linecolor="rgba(0,0,0,0.06)",
+                            ),
+                        ),
+                        showlegend=True,
+                        legend=dict(font=dict(color="#374151"), bgcolor="rgba(0,0,0,0)", borderwidth=0),
+                        height=500,
+                        margin=dict(t=40, r=60, l=60, b=40),
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#374151"),
+                        hoverlabel=HOVERLABEL_STYLE,
+                    )
+                    render_plotly(_radar_fig)
+
+
+
 
     with composition_cols[1]:
         import math as _math
@@ -6036,425 +6035,423 @@ def main():
     # ── Coinglass-style single-company performance heatmap ──────────────────
     st.markdown("<div class='metrics-section-spacer'></div>", unsafe_allow_html=True)
     st.divider()
-    _show_heatmap = st.toggle(f"Performance Heatmap — {company}", value=False, key="show_perf_heatmap",
-                               help="Quarterly & annual performance heat tables")
-    if _show_heatmap:
-        _hm_period_label = (
-            f"Q{selected_quarter.strip('Q')} {year}"
-            if str(selected_quarter).upper().startswith("Q")
-            else f"FY {year}"
-        )
-        st.markdown(
-            f"<p style='color:#6b7280;font-size:13px;margin-top:-6px;'>"
-            f"<b style='color:#374151;'>{_hm_period_label}</b> &nbsp;·&nbsp; "
-            f"Value shown · Color = YoY change · 9 metrics · Stock tabs show price return %</p>",
-            unsafe_allow_html=True,
-        )
+    st.subheader(f"Performance Heatmap — {company}")
+    _hm_period_label = (
+        f"Q{selected_quarter.strip('Q')} {year}"
+        if str(selected_quarter).upper().startswith("Q")
+        else f"FY {year}"
+    )
+    st.markdown(
+        f"<p style='color:#6b7280;font-size:13px;margin-top:-6px;'>"
+        f"<b style='color:#374151;'>{_hm_period_label}</b> &nbsp;·&nbsp; "
+        f"Value shown · Color = YoY change · 9 metrics · Stock tabs show price return %</p>",
+        unsafe_allow_html=True,
+    )
 
-        _HM_METRICS = {
-            "Revenue": "revenue",
-            "Net Income": "net_income",
-            "Operating Income": "operating_income",
-            "Cost of Revenue": "cost_of_revenue",
-            "R&D": "rd",
-            "CapEx": "capex",
-            "Total Assets": "total_assets",
-            "Debt": "debt",
-            "Cash Balance": "cash_balance",
-        }
-        _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    _HM_METRICS = {
+        "Revenue": "revenue",
+        "Net Income": "net_income",
+        "Operating Income": "operating_income",
+        "Cost of Revenue": "cost_of_revenue",
+        "R&D": "rd",
+        "CapEx": "capex",
+        "Total Assets": "total_assets",
+        "Debt": "debt",
+        "Cash Balance": "cash_balance",
+    }
+    _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-        # ── Quarterly: absolute values per quarter, colored by YoY (same Q vs prior year Q) ──
-        # {metric_label: {year: {qnum(1-4): float_or_None}}}
-        _cg_q_vals = {}
-        # {metric_label: {year: {qnum(1-4): yoy_pct_or_None}}}
-        _cg_q_yoy = {}
-        try:
-            # Use load_quarterly_company_metrics — same source as the existing heatmap,
-            # which has proper unit calibration against annual data (avoids raw-dollar scale bugs)
-            _cg_qm_df = load_quarterly_company_metrics(
-                data_processor.data_path, get_file_mtime(data_processor.data_path)
-            )
-            if _cg_qm_df is not None and not _cg_qm_df.empty:
-                _cg_co_qm = _cg_qm_df[_cg_qm_df["company"] == canonical_company]
+    # ── Quarterly: absolute values per quarter, colored by YoY (same Q vs prior year Q) ──
+    # {metric_label: {year: {qnum(1-4): float_or_None}}}
+    _cg_q_vals = {}
+    # {metric_label: {year: {qnum(1-4): yoy_pct_or_None}}}
+    _cg_q_yoy = {}
+    try:
+        # Use load_quarterly_company_metrics — same source as the existing heatmap,
+        # which has proper unit calibration against annual data (avoids raw-dollar scale bugs)
+        _cg_qm_df = load_quarterly_company_metrics(
+            data_processor.data_path, get_file_mtime(data_processor.data_path)
+        )
+        if _cg_qm_df is not None and not _cg_qm_df.empty:
+            _cg_co_qm = _cg_qm_df[_cg_qm_df["company"] == canonical_company]
+            for _ml, _mk in _HM_METRICS.items():
+                _rows = _cg_co_qm[_cg_co_qm["metric_key"] == _mk]
+                if _rows.empty:
+                    continue
+                _raw = {}
+                for _, _r in _rows.iterrows():
+                    _v = pd.to_numeric(_r.get("value"), errors="coerce")
+                    if not pd.isna(_v):
+                        _raw[(int(_r["year"]), int(_r["quarter_num"]))] = float(_v)
+                _cg_q_vals[_ml] = {}
+                _cg_q_yoy[_ml] = {}
+                for (_yr, _qn), _v in _raw.items():
+                    _cg_q_vals[_ml].setdefault(_yr, {})[_qn] = _v
+                    _pv = _raw.get((_yr - 1, _qn))
+                    _cg_q_yoy[_ml].setdefault(_yr, {})[_qn] = (
+                        round((_v - _pv) / abs(_pv) * 100, 2) if _pv and abs(_pv) > 0 else None
+                    )
+    except Exception:
+        pass
+
+    # ── Annual: YoY % changes ──
+    _cg_a = {}
+    try:
+        _amdf = data_processor.df_metrics
+        if _amdf is not None and not _amdf.empty:
+            _cg_co_a = _amdf[_amdf["company"] == canonical_company].copy()
+            _cg_co_a["year"] = pd.to_numeric(_cg_co_a["year"], errors="coerce")
+            _cg_co_a = _cg_co_a.dropna(subset=["year"]).sort_values("year")
+            _ap = {}
+            for _, _r in _cg_co_a.iterrows():
+                _yr = int(_r["year"])
                 for _ml, _mk in _HM_METRICS.items():
-                    _rows = _cg_co_qm[_cg_co_qm["metric_key"] == _mk]
-                    if _rows.empty:
+                    if _mk not in _cg_co_a.columns:
                         continue
-                    _raw = {}
-                    for _, _r in _rows.iterrows():
-                        _v = pd.to_numeric(_r.get("value"), errors="coerce")
-                        if not pd.isna(_v):
-                            _raw[(int(_r["year"]), int(_r["quarter_num"]))] = float(_v)
-                    _cg_q_vals[_ml] = {}
-                    _cg_q_yoy[_ml] = {}
-                    for (_yr, _qn), _v in _raw.items():
-                        _cg_q_vals[_ml].setdefault(_yr, {})[_qn] = _v
-                        _pv = _raw.get((_yr - 1, _qn))
-                        _cg_q_yoy[_ml].setdefault(_yr, {})[_qn] = (
+                    _v = pd.to_numeric(_r.get(_mk), errors="coerce")
+                    _cg_a.setdefault(_ml, {})
+                    _pv = _ap.get(_ml)
+                    if pd.isna(_v):
+                        _cg_a[_ml][_yr] = None
+                    elif _pv and abs(_pv) > 0:
+                        _cg_a[_ml][_yr] = round((float(_v) - _pv) / abs(_pv) * 100, 2)
+                    else:
+                        _cg_a[_ml][_yr] = None
+                    if not pd.isna(_v):
+                        _ap[_ml] = float(_v)
+    except Exception:
+        pass
+
+    # ── Segments quarterly: absolute $M values, colored by YoY ──
+    # {segment_name: {year: {qnum: val_or_None}}}
+    _cg_seg_vals = {}
+    _cg_seg_yoy = {}
+    _cg_seg_names = []
+    try:
+        if segments_quarterly_all is not None and not segments_quarterly_all.empty:
+            _sq = segments_quarterly_all[
+                segments_quarterly_all["company"] == canonical_company
+            ].copy()
+            _sq["segment"] = _sq["segment"].apply(
+                lambda s: normalize_segment_label(canonical_company, s)
+            )
+            _sq = _sq[
+                _sq["segment"].notna()
+                & (_sq["segment"] != "")
+                & (_sq["segment"] != "Total Revenue")
+            ]
+            if not _sq.empty:
+                _sq["year"] = pd.to_numeric(_sq["year"], errors="coerce")
+                _sq["quarter_num"] = pd.to_numeric(_sq["quarter_num"], errors="coerce")
+                _sq["revenue"] = pd.to_numeric(_sq["revenue"], errors="coerce")
+                _sq = _sq.dropna(subset=["year", "quarter_num", "revenue"])
+                _cg_seg_names = sorted(_sq["segment"].dropna().unique().tolist())
+                for _seg in _cg_seg_names:
+                    _sd = _sq[_sq["segment"] == _seg]
+                    _raw_s = {}
+                    for _, _r in _sd.iterrows():
+                        _raw_s[(int(_r["year"]), int(_r["quarter_num"]))] = float(_r["revenue"])
+                    _cg_seg_vals[_seg] = {}
+                    _cg_seg_yoy[_seg] = {}
+                    for (_yr, _qn), _v in _raw_s.items():
+                        _cg_seg_vals[_seg].setdefault(_yr, {})[_qn] = _v
+                        _pv = _raw_s.get((_yr - 1, _qn))
+                        _cg_seg_yoy[_seg].setdefault(_yr, {})[_qn] = (
                             round((_v - _pv) / abs(_pv) * 100, 2) if _pv and abs(_pv) > 0 else None
                         )
-        except Exception:
-            pass
+    except Exception:
+        pass
 
-        # ── Annual: YoY % changes ──
-        _cg_a = {}
-        try:
-            _amdf = data_processor.df_metrics
-            if _amdf is not None and not _amdf.empty:
-                _cg_co_a = _amdf[_amdf["company"] == canonical_company].copy()
-                _cg_co_a["year"] = pd.to_numeric(_cg_co_a["year"], errors="coerce")
-                _cg_co_a = _cg_co_a.dropna(subset=["year"]).sort_values("year")
-                _ap = {}
-                for _, _r in _cg_co_a.iterrows():
-                    _yr = int(_r["year"])
-                    for _ml, _mk in _HM_METRICS.items():
-                        if _mk not in _cg_co_a.columns:
-                            continue
-                        _v = pd.to_numeric(_r.get(_mk), errors="coerce")
-                        _cg_a.setdefault(_ml, {})
-                        _pv = _ap.get(_ml)
-                        if pd.isna(_v):
-                            _cg_a[_ml][_yr] = None
-                        elif _pv and abs(_pv) > 0:
-                            _cg_a[_ml][_yr] = round((float(_v) - _pv) / abs(_pv) * 100, 2)
-                        else:
-                            _cg_a[_ml][_yr] = None
-                        if not pd.isna(_v):
-                            _ap[_ml] = float(_v)
-        except Exception:
-            pass
-
-        # ── Segments quarterly: absolute $M values, colored by YoY ──
-        # {segment_name: {year: {qnum: val_or_None}}}
-        _cg_seg_vals = {}
-        _cg_seg_yoy = {}
-        _cg_seg_names = []
-        try:
-            if segments_quarterly_all is not None and not segments_quarterly_all.empty:
-                _sq = segments_quarterly_all[
-                    segments_quarterly_all["company"] == canonical_company
-                ].copy()
-                _sq["segment"] = _sq["segment"].apply(
-                    lambda s: normalize_segment_label(canonical_company, s)
+    # ── Stock period returns ──
+    _cg_mon = {}
+    _cg_wk = {}
+    _cg_day = {}
+    try:
+        _cg_st = filter_stock_for_company(stock_df, canonical_company)
+        if not _cg_st.empty:
+            _ps = _cg_st.sort_values("date").set_index("date")["price"]
+            _ps.index = pd.to_datetime(_ps.index, errors="coerce")
+            _ps = _ps[_ps.index.notna()].sort_index()
+            _ps = _ps[~_ps.index.duplicated(keep="last")]
+            for _dt, _pct in (_ps.resample("ME").last().pct_change() * 100).items():
+                _cg_mon.setdefault(_dt.year, {})[_MONTHS[_dt.month - 1]] = (
+                    None if pd.isna(_pct) else round(float(_pct), 2)
                 )
-                _sq = _sq[
-                    _sq["segment"].notna()
-                    & (_sq["segment"] != "")
-                    & (_sq["segment"] != "Total Revenue")
-                ]
-                if not _sq.empty:
-                    _sq["year"] = pd.to_numeric(_sq["year"], errors="coerce")
-                    _sq["quarter_num"] = pd.to_numeric(_sq["quarter_num"], errors="coerce")
-                    _sq["revenue"] = pd.to_numeric(_sq["revenue"], errors="coerce")
-                    _sq = _sq.dropna(subset=["year", "quarter_num", "revenue"])
-                    _cg_seg_names = sorted(_sq["segment"].dropna().unique().tolist())
-                    for _seg in _cg_seg_names:
-                        _sd = _sq[_sq["segment"] == _seg]
-                        _raw_s = {}
-                        for _, _r in _sd.iterrows():
-                            _raw_s[(int(_r["year"]), int(_r["quarter_num"]))] = float(_r["revenue"])
-                        _cg_seg_vals[_seg] = {}
-                        _cg_seg_yoy[_seg] = {}
-                        for (_yr, _qn), _v in _raw_s.items():
-                            _cg_seg_vals[_seg].setdefault(_yr, {})[_qn] = _v
-                            _pv = _raw_s.get((_yr - 1, _qn))
-                            _cg_seg_yoy[_seg].setdefault(_yr, {})[_qn] = (
-                                round((_v - _pv) / abs(_pv) * 100, 2) if _pv and abs(_pv) > 0 else None
-                            )
-        except Exception:
-            pass
-
-        # ── Stock period returns ──
-        _cg_mon = {}
-        _cg_wk = {}
-        _cg_day = {}
-        try:
-            _cg_st = filter_stock_for_company(stock_df, canonical_company)
-            if not _cg_st.empty:
-                _ps = _cg_st.sort_values("date").set_index("date")["price"]
-                _ps.index = pd.to_datetime(_ps.index, errors="coerce")
-                _ps = _ps[_ps.index.notna()].sort_index()
-                _ps = _ps[~_ps.index.duplicated(keep="last")]
-                for _dt, _pct in (_ps.resample("ME").last().pct_change() * 100).items():
-                    _cg_mon.setdefault(_dt.year, {})[_MONTHS[_dt.month - 1]] = (
-                        None if pd.isna(_pct) else round(float(_pct), 2)
-                    )
-                _wk_cut = _ps.index.max() - pd.Timedelta(days=3 * 365)
-                for _dt, _pct in (_ps[_ps.index >= _wk_cut].resample("W").last().pct_change() * 100).items():
-                    _cg_wk.setdefault(_dt.year, {})[f"W{_dt.isocalendar()[1]:02d}"] = (
-                        None if pd.isna(_pct) else round(float(_pct), 2)
-                    )
-                _dy_cut = _ps.index.max() - pd.Timedelta(days=365)
-                for _dt, _pct in (_ps[_ps.index >= _dy_cut].pct_change() * 100).items():
-                    _cg_day.setdefault(_dt.strftime("%Y-%m"), {})[_dt.day] = (
-                        None if pd.isna(_pct) else round(float(_pct), 2)
-                    )
-        except Exception:
-            pass
-
-        # ── HTML cell builder helpers ──
-        _TD = "padding:7px 6px;font-size:11px;border:none;border-bottom:1px solid #e5e7eb;"
-
-        def _cg_hdr(text):
-            return (
-                f"<th style='background:#f3f4f6;color:#6b7280;text-align:center;"
-                f"padding:9px 6px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;"
-                f"border:none;border-bottom:1px solid #e5e7eb;white-space:nowrap;'>{text}</th>"
-            )
-
-        def _cg_time(text):
-            return (
-                f"<td style='background:transparent;color:#374151;text-align:center;"
-                f"padding:7px 10px;font-size:12px;font-weight:600;border:none;"
-                f"border-bottom:1px solid #e5e7eb;white-space:nowrap;'>{text}</td>"
-            )
-
-        def _cg_foot(text):
-            return (
-                f"<td style='background:#f3f4f6;color:#6b7280;text-align:center;"
-                f"padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;"
-                f"border:none;border-top:1px solid #e2e8f0;'>{text}</td>"
-            )
-
-        def _heatmap_text_color(normalized_val):
-            """Return dark or white text based on colorscale position (0=min, 1=max).
-            Yellow zone (near neutral 0.5) gets dark text for readability on pastel bg.
-            """
-            if 0.30 <= normalized_val <= 0.70:
-                return "#0d1117"
-            return "#ffffff"
-
-        def _cg_val_cell(val, yoy, scale=1000.0):
-            """Cell showing absolute $B value, background colored by YoY change."""
-            if val is None or (isinstance(val, float) and pd.isna(val)):
-                return (
-                    f"<td style='background:transparent;color:#9ca3af;text-align:center;{_TD}'>—</td>"
+            _wk_cut = _ps.index.max() - pd.Timedelta(days=3 * 365)
+            for _dt, _pct in (_ps[_ps.index >= _wk_cut].resample("W").last().pct_change() * 100).items():
+                _cg_wk.setdefault(_dt.year, {})[f"W{_dt.isocalendar()[1]:02d}"] = (
+                    None if pd.isna(_pct) else round(float(_pct), 2)
                 )
-            v_b = val / scale
-            if abs(v_b) >= 100:
-                fmt = f"${v_b:.0f}B"
-            elif abs(v_b) >= 10:
-                fmt = f"${v_b:.1f}B"
-            elif abs(v_b) >= 1:
-                fmt = f"${v_b:.2f}B"
-            else:
-                fmt = f"${v_b * 1000:.0f}M"
-            if yoy is None:
-                bg = "#f3f4f6"
-                col = "#374151"
-            elif yoy >= 0:
-                alpha = min(0.85, yoy / 25)
-                bg = f"rgba(22,199,132,{alpha:.2f})"
-                col = _heatmap_text_color(0.5 + (alpha / 0.85) * 0.5)
-            else:
-                alpha = min(0.85, abs(yoy) / 25)
-                bg = f"rgba(234,57,67,{alpha:.2f})"
-                col = _heatmap_text_color(0.5 - (alpha / 0.85) * 0.5)
-            yoy_str = f"<br><span style='font-size:9px;opacity:.75;'>{'+'if yoy and yoy>0 else ''}{yoy:.1f}%</span>" if yoy is not None else ""
+            _dy_cut = _ps.index.max() - pd.Timedelta(days=365)
+            for _dt, _pct in (_ps[_ps.index >= _dy_cut].pct_change() * 100).items():
+                _cg_day.setdefault(_dt.strftime("%Y-%m"), {})[_dt.day] = (
+                    None if pd.isna(_pct) else round(float(_pct), 2)
+                )
+    except Exception:
+        pass
+
+    # ── HTML cell builder helpers ──
+    _TD = "padding:7px 6px;font-size:11px;border:none;border-bottom:1px solid #e5e7eb;"
+
+    def _cg_hdr(text):
+        return (
+            f"<th style='background:#f3f4f6;color:#6b7280;text-align:center;"
+            f"padding:9px 6px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;"
+            f"border:none;border-bottom:1px solid #e5e7eb;white-space:nowrap;'>{text}</th>"
+        )
+
+    def _cg_time(text):
+        return (
+            f"<td style='background:transparent;color:#374151;text-align:center;"
+            f"padding:7px 10px;font-size:12px;font-weight:600;border:none;"
+            f"border-bottom:1px solid #e5e7eb;white-space:nowrap;'>{text}</td>"
+        )
+
+    def _cg_foot(text):
+        return (
+            f"<td style='background:#f3f4f6;color:#6b7280;text-align:center;"
+            f"padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;"
+            f"border:none;border-top:1px solid #e2e8f0;'>{text}</td>"
+        )
+
+    def _heatmap_text_color(normalized_val):
+        """Return dark or white text based on colorscale position (0=min, 1=max).
+        Yellow zone (near neutral 0.5) gets dark text for readability on pastel bg.
+        """
+        if 0.30 <= normalized_val <= 0.70:
+            return "#0d1117"
+        return "#ffffff"
+
+    def _cg_val_cell(val, yoy, scale=1000.0):
+        """Cell showing absolute $B value, background colored by YoY change."""
+        if val is None or (isinstance(val, float) and pd.isna(val)):
             return (
-                f"<td style='background:{bg};color:{col};text-align:center;{_TD}'>{fmt}{yoy_str}</td>"
+                f"<td style='background:transparent;color:#9ca3af;text-align:center;{_TD}'>—</td>"
             )
-
-        def _cg_pct_cell(pct):
-            """Cell for stock % return."""
-            if pct is None:
-                return f"<td style='background:transparent;color:#9ca3af;text-align:center;{_TD}'>—</td>"
-            alpha = min(0.92, abs(pct) / 30)
-            if pct >= 0:
-                bg = f"rgba(22,199,132,{alpha:.2f})"
-                col = _heatmap_text_color(0.5 + (alpha / 0.92) * 0.5)
-            else:
-                bg = f"rgba(234,57,67,{alpha:.2f})"
-                col = _heatmap_text_color(0.5 - (alpha / 0.92) * 0.5)
-            sign = "+" if pct > 0 else ""
-            return f"<td style='background:{bg};color:{col};text-align:center;{_TD}'>{sign}{pct:.2f}%</td>"
-
-        def _cg_stat_val(val_list, stat="avg", scale=1000.0):
-            valid = [v for v in val_list if v is not None]
-            if not valid:
-                return f"<td style='background:#f3f4f6;color:#9ca3af;text-align:center;{_TD}'>—</td>"
-            if stat == "avg":
-                v = sum(valid) / len(valid)
-            else:
-                sv = sorted(valid); n = len(sv)
-                v = sv[n // 2] if n % 2 else (sv[n // 2 - 1] + sv[n // 2]) / 2
-            v_b = v / scale
-            if abs(v_b) >= 100:
-                fmt = f"${v_b:.0f}B"
-            elif abs(v_b) >= 10:
-                fmt = f"${v_b:.1f}B"
-            else:
-                fmt = f"${v_b:.2f}B"
-            return f"<td style='background:#f3f4f6;color:#6b7280;text-align:center;{_TD}'>{fmt}</td>"
-
-        def _cg_stat_pct(pct_list, stat="avg"):
-            valid = [v for v in pct_list if v is not None]
-            if not valid:
-                return f"<td style='background:#f3f4f6;color:#9ca3af;text-align:center;{_TD}'>—</td>"
-            if stat == "avg":
-                v = sum(valid) / len(valid)
-            else:
-                sv = sorted(valid); n = len(sv)
-                v = sv[n // 2] if n % 2 else (sv[n // 2 - 1] + sv[n // 2]) / 2
-            sign = "+" if v > 0 else ""
-            return f"<td style='background:#f3f4f6;color:#6b7280;text-align:center;{_TD}'>{sign}{v:.2f}%</td>"
-
-        def _detect_scale(vals_dict):
-            """Return divisor to convert raw value → $B. Handles raw $, $M, and $B sources."""
-            all_vals = [
-                v for yr_d in vals_dict.values()
-                for v in (yr_d.values() if isinstance(yr_d, dict) else [yr_d])
-                if v is not None
-            ]
-            if not all_vals:
-                return 1000.0
-            med = sorted([abs(v) for v in all_vals])[len(all_vals) // 2]
-            if med >= 1e9:
-                return 1e9    # raw dollars → $B
-            if med >= 1e6:
-                return 1e6    # raw millions → $B (unlikely but guard)
-            if med > 500:
-                return 1000.0  # $M → $B
-            return 1.0         # already $B
-
-        def _build_q_table(metric_label):
-            vals = _cg_q_vals.get(metric_label, {})
-            yoys = _cg_q_yoy.get(metric_label, {})
-            if not vals:
-                return "<p style='color:#6b7280;padding:20px;text-align:center;'>No quarterly data available for this metric.</p>"
-            scale = _detect_scale(vals)
-            years = sorted(vals.keys(), reverse=True)
-            rows = [
-                "<table style='width:100%;border-collapse:collapse;'>",
-                "<thead><tr>" + _cg_hdr("Time") + "".join(_cg_hdr(f"Q{q}") for q in [1,2,3,4]) + "</tr></thead><tbody>",
-            ]
-            col_vals = {q: [] for q in [1, 2, 3, 4]}
-            for yr in years:
-                yd = vals.get(yr, {})
-                yd_yoy = yoys.get(yr, {})
-                rows.append("<tr>" + _cg_time(str(yr)))
-                for q in [1, 2, 3, 4]:
-                    v = yd.get(q)
-                    if v is not None:
-                        col_vals[q].append(v)
-                    rows.append(_cg_val_cell(v, yd_yoy.get(q), scale))
-                rows.append("</tr>")
-            rows.append("<tr>" + _cg_foot("Avg") + "".join(_cg_stat_val(col_vals[q], "avg", scale) for q in [1,2,3,4]) + "</tr>")
-            rows.append("<tr>" + _cg_foot("Med") + "".join(_cg_stat_val(col_vals[q], "med", scale) for q in [1,2,3,4]) + "</tr>")
-            rows.append("</tbody></table>")
-            return "".join(rows)
-
-        def _build_a_table(metric_label):
-            data = _cg_a.get(metric_label, {})
-            if not data:
-                return "<p style='color:#6b7280;padding:20px;text-align:center;'>No annual data available.</p>"
-            years = sorted(data.keys(), reverse=True)
-            rows = [
-                "<table style='width:260px;border-collapse:collapse;'>",
-                "<thead><tr>" + _cg_hdr("Year") + _cg_hdr("YoY %") + "</tr></thead><tbody>",
-            ]
-            all_vals = []
-            for yr in years:
-                pct = data.get(yr)
-                if pct is not None:
-                    all_vals.append(pct)
-                rows.append("<tr>" + _cg_time(str(yr)) + _cg_pct_cell(pct) + "</tr>")
-            rows.append("<tr>" + _cg_foot("Avg") + _cg_stat_pct(all_vals, "avg") + "</tr>")
-            rows.append("<tr>" + _cg_foot("Med") + _cg_stat_pct(all_vals, "med") + "</tr>")
-            rows.append("</tbody></table>")
-            return "".join(rows)
-
-        def _build_seg_table(seg_name):
-            vals = _cg_seg_vals.get(seg_name, {})
-            yoys = _cg_seg_yoy.get(seg_name, {})
-            if not vals:
-                return "<p style='color:#6b7280;padding:20px;text-align:center;'>No segment data available.</p>"
-            scale = _detect_scale(vals)
-            years = sorted(vals.keys(), reverse=True)
-            rows = [
-                "<table style='width:100%;border-collapse:collapse;'>",
-                "<thead><tr>" + _cg_hdr("Time") + "".join(_cg_hdr(f"Q{q}") for q in [1,2,3,4]) + "</tr></thead><tbody>",
-            ]
-            col_vals = {q: [] for q in [1, 2, 3, 4]}
-            for yr in years:
-                yd = vals.get(yr, {})
-                yd_yoy = yoys.get(yr, {})
-                rows.append("<tr>" + _cg_time(str(yr)))
-                for q in [1, 2, 3, 4]:
-                    v = yd.get(q)
-                    if v is not None:
-                        col_vals[q].append(v)
-                    rows.append(_cg_val_cell(v, yd_yoy.get(q), scale))
-                rows.append("</tr>")
-            rows.append("<tr>" + _cg_foot("Avg") + "".join(_cg_stat_val(col_vals[q], "avg", scale) for q in [1,2,3,4]) + "</tr>")
-            rows.append("<tr>" + _cg_foot("Med") + "".join(_cg_stat_val(col_vals[q], "med", scale) for q in [1,2,3,4]) + "</tr>")
-            rows.append("</tbody></table>")
-            return "".join(rows)
-
-        def _build_stock_table(data_dict, col_keys, empty_msg):
-            if not data_dict:
-                return f"<p style='color:#6b7280;padding:20px;text-align:center;'>{empty_msg}</p>"
-            rows_keys = sorted(data_dict.keys(), reverse=True)
-            col_vals = {k: [] for k in col_keys}
-            rows = [
-                "<div style='overflow-x:auto;'>",
-                "<table style='border-collapse:collapse;min-width:400px;width:100%;'>",
-                "<thead><tr>" + _cg_hdr("Time") + "".join(_cg_hdr(str(k)) for k in col_keys) + "</tr></thead><tbody>",
-            ]
-            for rk in rows_keys:
-                rd = data_dict.get(rk, {})
-                rows.append("<tr>" + _cg_time(str(rk)))
-                for ck in col_keys:
-                    pct = rd.get(ck)
-                    if pct is not None:
-                        col_vals[ck].append(pct)
-                    rows.append(_cg_pct_cell(pct))
-                rows.append("</tr>")
-            rows.append("<tr>" + _cg_foot("Avg") + "".join(_cg_stat_pct(col_vals[k], "avg") for k in col_keys) + "</tr>")
-            rows.append("<tr>" + _cg_foot("Med") + "".join(_cg_stat_pct(col_vals[k], "med") for k in col_keys) + "</tr>")
-            rows.append("</tbody></table></div>")
-            return "".join(rows)
-
-        # Build all table HTML
-        _metric_ids = [ml.lower().replace(" ", "_").replace("/", "_").replace("&", "") for ml in _HM_METRICS]
-
-        _q_panes = ""
-        _a_panes = ""
-        _q_pills = ""
-        _a_pills = ""
-        for i, (ml, _) in enumerate(_HM_METRICS.items()):
-            mid = _metric_ids[i]
-            disp = "block" if i == 0 else "none"
-            _q_panes += f"<div id='cg-q-{mid}' class='cg-mpane' style='display:{disp};'>{_build_q_table(ml)}</div>"
-            _a_panes += f"<div id='cg-a-{mid}' class='cg-mpane' style='display:{disp};'>{_build_a_table(ml)}</div>"
-            ac = " active" if i == 0 else ""
-            _q_pills += f"<button class='cg-pill{ac}' onclick=\"cgMetric('q','{mid}',this)\">{ml}</button>"
-            _a_pills += f"<button class='cg-pill{ac}' onclick=\"cgMetric('a','{mid}',this)\">{ml}</button>"
-
-        _seg_panes = ""
-        _seg_pills = ""
-        if _cg_seg_names:
-            for i, seg in enumerate(_cg_seg_names):
-                sid = seg.lower().replace(" ", "_").replace("/", "_").replace("&", "").replace(".", "")[:30]
-                disp = "block" if i == 0 else "none"
-                _seg_panes += f"<div id='cg-s-{sid}' class='cg-mpane' style='display:{disp};'>{_build_seg_table(seg)}</div>"
-                ac = " active" if i == 0 else ""
-                _seg_pills += f"<button class='cg-pill{ac}' onclick=\"cgMetric('s','{sid}',this)\">{seg}</button>"
+        v_b = val / scale
+        if abs(v_b) >= 100:
+            fmt = f"${v_b:.0f}B"
+        elif abs(v_b) >= 10:
+            fmt = f"${v_b:.1f}B"
+        elif abs(v_b) >= 1:
+            fmt = f"${v_b:.2f}B"
         else:
-            _seg_panes = "<p style='color:#6b7280;padding:24px;text-align:center;'>No segment data available for this company.</p>"
+            fmt = f"${v_b * 1000:.0f}M"
+        if yoy is None:
+            bg = "#f3f4f6"
+            col = "#374151"
+        elif yoy >= 0:
+            alpha = min(0.85, yoy / 25)
+            bg = f"rgba(22,199,132,{alpha:.2f})"
+            col = _heatmap_text_color(0.5 + (alpha / 0.85) * 0.5)
+        else:
+            alpha = min(0.85, abs(yoy) / 25)
+            bg = f"rgba(234,57,67,{alpha:.2f})"
+            col = _heatmap_text_color(0.5 - (alpha / 0.85) * 0.5)
+        yoy_str = f"<br><span style='font-size:9px;opacity:.75;'>{'+'if yoy and yoy>0 else ''}{yoy:.1f}%</span>" if yoy is not None else ""
+        return (
+            f"<td style='background:{bg};color:{col};text-align:center;{_TD}'>{fmt}{yoy_str}</td>"
+        )
 
-        _all_wk_keys = sorted({wk for yd in _cg_wk.values() for wk in yd})
-        _all_day_keys = list(range(1, 32))
-        _mon_html = _build_stock_table({str(k): v for k, v in _cg_mon.items()}, _MONTHS, "No monthly stock data available.")
-        _wk_html = _build_stock_table({str(k): v for k, v in _cg_wk.items()}, _all_wk_keys, "No weekly stock data available.")
-        _day_html = _build_stock_table(_cg_day, _all_day_keys, "No daily stock data available.")
+    def _cg_pct_cell(pct):
+        """Cell for stock % return."""
+        if pct is None:
+            return f"<td style='background:transparent;color:#9ca3af;text-align:center;{_TD}'>—</td>"
+        alpha = min(0.92, abs(pct) / 30)
+        if pct >= 0:
+            bg = f"rgba(22,199,132,{alpha:.2f})"
+            col = _heatmap_text_color(0.5 + (alpha / 0.92) * 0.5)
+        else:
+            bg = f"rgba(234,57,67,{alpha:.2f})"
+            col = _heatmap_text_color(0.5 - (alpha / 0.92) * 0.5)
+        sign = "+" if pct > 0 else ""
+        return f"<td style='background:{bg};color:{col};text-align:center;{_TD}'>{sign}{pct:.2f}%</td>"
 
-        _cg_q_years = max((len(_cg_q_vals.get(ml, {})) for ml in _HM_METRICS), default=0)
-        _cg_height = max(540, 260 + _cg_q_years * 38)
+    def _cg_stat_val(val_list, stat="avg", scale=1000.0):
+        valid = [v for v in val_list if v is not None]
+        if not valid:
+            return f"<td style='background:#f3f4f6;color:#9ca3af;text-align:center;{_TD}'>—</td>"
+        if stat == "avg":
+            v = sum(valid) / len(valid)
+        else:
+            sv = sorted(valid); n = len(sv)
+            v = sv[n // 2] if n % 2 else (sv[n // 2 - 1] + sv[n // 2]) / 2
+        v_b = v / scale
+        if abs(v_b) >= 100:
+            fmt = f"${v_b:.0f}B"
+        elif abs(v_b) >= 10:
+            fmt = f"${v_b:.1f}B"
+        else:
+            fmt = f"${v_b:.2f}B"
+        return f"<td style='background:#f3f4f6;color:#6b7280;text-align:center;{_TD}'>{fmt}</td>"
 
-        _cg_html = (
-            """<!DOCTYPE html><html><head><meta charset='utf-8'>
+    def _cg_stat_pct(pct_list, stat="avg"):
+        valid = [v for v in pct_list if v is not None]
+        if not valid:
+            return f"<td style='background:#f3f4f6;color:#9ca3af;text-align:center;{_TD}'>—</td>"
+        if stat == "avg":
+            v = sum(valid) / len(valid)
+        else:
+            sv = sorted(valid); n = len(sv)
+            v = sv[n // 2] if n % 2 else (sv[n // 2 - 1] + sv[n // 2]) / 2
+        sign = "+" if v > 0 else ""
+        return f"<td style='background:#f3f4f6;color:#6b7280;text-align:center;{_TD}'>{sign}{v:.2f}%</td>"
+
+    def _detect_scale(vals_dict):
+        """Return divisor to convert raw value → $B. Handles raw $, $M, and $B sources."""
+        all_vals = [
+            v for yr_d in vals_dict.values()
+            for v in (yr_d.values() if isinstance(yr_d, dict) else [yr_d])
+            if v is not None
+        ]
+        if not all_vals:
+            return 1000.0
+        med = sorted([abs(v) for v in all_vals])[len(all_vals) // 2]
+        if med >= 1e9:
+            return 1e9    # raw dollars → $B
+        if med >= 1e6:
+            return 1e6    # raw millions → $B (unlikely but guard)
+        if med > 500:
+            return 1000.0  # $M → $B
+        return 1.0         # already $B
+
+    def _build_q_table(metric_label):
+        vals = _cg_q_vals.get(metric_label, {})
+        yoys = _cg_q_yoy.get(metric_label, {})
+        if not vals:
+            return "<p style='color:#6b7280;padding:20px;text-align:center;'>No quarterly data available for this metric.</p>"
+        scale = _detect_scale(vals)
+        years = sorted(vals.keys(), reverse=True)
+        rows = [
+            "<table style='width:100%;border-collapse:collapse;'>",
+            "<thead><tr>" + _cg_hdr("Time") + "".join(_cg_hdr(f"Q{q}") for q in [1,2,3,4]) + "</tr></thead><tbody>",
+        ]
+        col_vals = {q: [] for q in [1, 2, 3, 4]}
+        for yr in years:
+            yd = vals.get(yr, {})
+            yd_yoy = yoys.get(yr, {})
+            rows.append("<tr>" + _cg_time(str(yr)))
+            for q in [1, 2, 3, 4]:
+                v = yd.get(q)
+                if v is not None:
+                    col_vals[q].append(v)
+                rows.append(_cg_val_cell(v, yd_yoy.get(q), scale))
+            rows.append("</tr>")
+        rows.append("<tr>" + _cg_foot("Avg") + "".join(_cg_stat_val(col_vals[q], "avg", scale) for q in [1,2,3,4]) + "</tr>")
+        rows.append("<tr>" + _cg_foot("Med") + "".join(_cg_stat_val(col_vals[q], "med", scale) for q in [1,2,3,4]) + "</tr>")
+        rows.append("</tbody></table>")
+        return "".join(rows)
+
+    def _build_a_table(metric_label):
+        data = _cg_a.get(metric_label, {})
+        if not data:
+            return "<p style='color:#6b7280;padding:20px;text-align:center;'>No annual data available.</p>"
+        years = sorted(data.keys(), reverse=True)
+        rows = [
+            "<table style='width:260px;border-collapse:collapse;'>",
+            "<thead><tr>" + _cg_hdr("Year") + _cg_hdr("YoY %") + "</tr></thead><tbody>",
+        ]
+        all_vals = []
+        for yr in years:
+            pct = data.get(yr)
+            if pct is not None:
+                all_vals.append(pct)
+            rows.append("<tr>" + _cg_time(str(yr)) + _cg_pct_cell(pct) + "</tr>")
+        rows.append("<tr>" + _cg_foot("Avg") + _cg_stat_pct(all_vals, "avg") + "</tr>")
+        rows.append("<tr>" + _cg_foot("Med") + _cg_stat_pct(all_vals, "med") + "</tr>")
+        rows.append("</tbody></table>")
+        return "".join(rows)
+
+    def _build_seg_table(seg_name):
+        vals = _cg_seg_vals.get(seg_name, {})
+        yoys = _cg_seg_yoy.get(seg_name, {})
+        if not vals:
+            return "<p style='color:#6b7280;padding:20px;text-align:center;'>No segment data available.</p>"
+        scale = _detect_scale(vals)
+        years = sorted(vals.keys(), reverse=True)
+        rows = [
+            "<table style='width:100%;border-collapse:collapse;'>",
+            "<thead><tr>" + _cg_hdr("Time") + "".join(_cg_hdr(f"Q{q}") for q in [1,2,3,4]) + "</tr></thead><tbody>",
+        ]
+        col_vals = {q: [] for q in [1, 2, 3, 4]}
+        for yr in years:
+            yd = vals.get(yr, {})
+            yd_yoy = yoys.get(yr, {})
+            rows.append("<tr>" + _cg_time(str(yr)))
+            for q in [1, 2, 3, 4]:
+                v = yd.get(q)
+                if v is not None:
+                    col_vals[q].append(v)
+                rows.append(_cg_val_cell(v, yd_yoy.get(q), scale))
+            rows.append("</tr>")
+        rows.append("<tr>" + _cg_foot("Avg") + "".join(_cg_stat_val(col_vals[q], "avg", scale) for q in [1,2,3,4]) + "</tr>")
+        rows.append("<tr>" + _cg_foot("Med") + "".join(_cg_stat_val(col_vals[q], "med", scale) for q in [1,2,3,4]) + "</tr>")
+        rows.append("</tbody></table>")
+        return "".join(rows)
+
+    def _build_stock_table(data_dict, col_keys, empty_msg):
+        if not data_dict:
+            return f"<p style='color:#6b7280;padding:20px;text-align:center;'>{empty_msg}</p>"
+        rows_keys = sorted(data_dict.keys(), reverse=True)
+        col_vals = {k: [] for k in col_keys}
+        rows = [
+            "<div style='overflow-x:auto;'>",
+            "<table style='border-collapse:collapse;min-width:400px;width:100%;'>",
+            "<thead><tr>" + _cg_hdr("Time") + "".join(_cg_hdr(str(k)) for k in col_keys) + "</tr></thead><tbody>",
+        ]
+        for rk in rows_keys:
+            rd = data_dict.get(rk, {})
+            rows.append("<tr>" + _cg_time(str(rk)))
+            for ck in col_keys:
+                pct = rd.get(ck)
+                if pct is not None:
+                    col_vals[ck].append(pct)
+                rows.append(_cg_pct_cell(pct))
+            rows.append("</tr>")
+        rows.append("<tr>" + _cg_foot("Avg") + "".join(_cg_stat_pct(col_vals[k], "avg") for k in col_keys) + "</tr>")
+        rows.append("<tr>" + _cg_foot("Med") + "".join(_cg_stat_pct(col_vals[k], "med") for k in col_keys) + "</tr>")
+        rows.append("</tbody></table></div>")
+        return "".join(rows)
+
+    # Build all table HTML
+    _metric_ids = [ml.lower().replace(" ", "_").replace("/", "_").replace("&", "") for ml in _HM_METRICS]
+
+    _q_panes = ""
+    _a_panes = ""
+    _q_pills = ""
+    _a_pills = ""
+    for i, (ml, _) in enumerate(_HM_METRICS.items()):
+        mid = _metric_ids[i]
+        disp = "block" if i == 0 else "none"
+        _q_panes += f"<div id='cg-q-{mid}' class='cg-mpane' style='display:{disp};'>{_build_q_table(ml)}</div>"
+        _a_panes += f"<div id='cg-a-{mid}' class='cg-mpane' style='display:{disp};'>{_build_a_table(ml)}</div>"
+        ac = " active" if i == 0 else ""
+        _q_pills += f"<button class='cg-pill{ac}' onclick=\"cgMetric('q','{mid}',this)\">{ml}</button>"
+        _a_pills += f"<button class='cg-pill{ac}' onclick=\"cgMetric('a','{mid}',this)\">{ml}</button>"
+
+    _seg_panes = ""
+    _seg_pills = ""
+    if _cg_seg_names:
+        for i, seg in enumerate(_cg_seg_names):
+            sid = seg.lower().replace(" ", "_").replace("/", "_").replace("&", "").replace(".", "")[:30]
+            disp = "block" if i == 0 else "none"
+            _seg_panes += f"<div id='cg-s-{sid}' class='cg-mpane' style='display:{disp};'>{_build_seg_table(seg)}</div>"
+            ac = " active" if i == 0 else ""
+            _seg_pills += f"<button class='cg-pill{ac}' onclick=\"cgMetric('s','{sid}',this)\">{seg}</button>"
+    else:
+        _seg_panes = "<p style='color:#6b7280;padding:24px;text-align:center;'>No segment data available for this company.</p>"
+
+    _all_wk_keys = sorted({wk for yd in _cg_wk.values() for wk in yd})
+    _all_day_keys = list(range(1, 32))
+    _mon_html = _build_stock_table({str(k): v for k, v in _cg_mon.items()}, _MONTHS, "No monthly stock data available.")
+    _wk_html = _build_stock_table({str(k): v for k, v in _cg_wk.items()}, _all_wk_keys, "No weekly stock data available.")
+    _day_html = _build_stock_table(_cg_day, _all_day_keys, "No daily stock data available.")
+
+    _cg_q_years = max((len(_cg_q_vals.get(ml, {})) for ml in _HM_METRICS), default=0)
+    _cg_height = max(540, 260 + _cg_q_years * 38)
+
+    _cg_html = (
+        """<!DOCTYPE html><html><head><meta charset='utf-8'>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{background:rgba(0,0,0,0);color:#374151;font-family:'DM Sans','Montserrat',sans-serif;}
@@ -6479,43 +6476,43 @@ html,body{background:rgba(0,0,0,0);color:#374151;font-family:'DM Sans','Montserr
 </div>
 <div id="cg-pq" class="cg-panel active">
   <div class="cg-pills">"""
-        + _q_pills
-        + """</div>
+    + _q_pills
+    + """</div>
   <div class="cg-note">Value in $B &nbsp;|&nbsp; Cell color = YoY change (same quarter, prior year)</div>
   <div class="cg-body">"""
-        + _q_panes
-        + """</div></div>
+    + _q_panes
+    + """</div></div>
 <div id="cg-pa" class="cg-panel">
   <div class="cg-pills">"""
-        + _a_pills
-        + """</div>
+    + _a_pills
+    + """</div>
   <div class="cg-note">Annual YoY % change</div>
   <div class="cg-body">"""
-        + _a_panes
-        + """</div></div>
+    + _a_panes
+    + """</div></div>
 <div id="cg-ps" class="cg-panel">
   <div class="cg-pills">"""
-        + _seg_pills
-        + """</div>
+    + _seg_pills
+    + """</div>
   <div class="cg-note">Segment revenue in $B &nbsp;|&nbsp; Cell color = YoY change</div>
   <div class="cg-body">"""
-        + _seg_panes
-        + """</div></div>
+    + _seg_panes
+    + """</div></div>
 <div id="cg-pmon" class="cg-panel">
   <div class="cg-note">Stock price — month-over-month % return</div>
   <div class="cg-body">"""
-        + _mon_html
-        + """</div></div>
+    + _mon_html
+    + """</div></div>
 <div id="cg-pwk" class="cg-panel">
   <div class="cg-note">Stock price — week-over-week % return (last 3 years)</div>
   <div class="cg-body">"""
-        + _wk_html
-        + """</div></div>
+    + _wk_html
+    + """</div></div>
 <div id="cg-pday" class="cg-panel">
   <div class="cg-note">Stock price — day-over-day % return (last 12 months)</div>
   <div class="cg-body">"""
-        + _day_html
-        + """</div></div>
+    + _day_html
+    + """</div></div>
 </div>
 <script>
 var TABS={q:'cg-pq',a:'cg-pa',s:'cg-ps',mon:'cg-pmon',wk:'cg-pwk',day:'cg-pday'};
@@ -6523,8 +6520,8 @@ function cgTab(id,btn){
   document.querySelectorAll('.cg-tab').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
   Object.keys(TABS).forEach(function(k){
-    var p=document.getElementById(TABS[k]);
-    if(p)p.classList.toggle('active',k===id);
+var p=document.getElementById(TABS[k]);
+if(p)p.classList.toggle('active',k===id);
   });
 }
 function cgMetric(tab,mid,btn){
@@ -6538,11 +6535,11 @@ function cgMetric(tab,mid,btn){
 }
 </script>
 </body></html>"""
-    )
-    components.html(_cg_html, height=_cg_height, scrolling=False)
+)
+components.html(_cg_html, height=_cg_height, scrolling=False)
 
 
-    # Transcript Intelligence removed — now in Overview Narrative & Sentiment
+# Transcript Intelligence removed — now in Overview Narrative & Sentiment
 
 
 if __name__ == '__main__' or True:
