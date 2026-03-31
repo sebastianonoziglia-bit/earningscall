@@ -4425,6 +4425,19 @@ def main():
         st.caption(f"Flow charts unavailable: {_flow_err}")
 
 
+    # ── Earnings Call Sentiment Timeline ───────────────────────────────────
+    try:
+        from utils.sentiment_scorer import render_sentiment_timeline
+        render_sentiment_timeline(
+            company,
+            sorted([int(y) for y in years], reverse=True),
+            render_fn=render_plotly,
+            theme="light",
+        )
+    except Exception as _sent_err:
+        st.caption(f"Sentiment timeline unavailable: {_sent_err}")
+
+
     # ── Insights — independent year/quarter filter ─────────────────────────
     st.markdown(
         "<div style='margin:2rem 0 0.6rem 0;'>"

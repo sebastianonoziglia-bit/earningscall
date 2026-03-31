@@ -8,3 +8,5 @@ requests
 openai
 python-dateutil
 yfinance
+vaderSentiment
+scipy
