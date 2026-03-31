@@ -4071,372 +4071,66 @@ def main():
 
 
     st.divider()
-    _show_advanced = st.toggle("Advanced Analytics", value=False, key="show_advanced_viz",
-                               help="Radar · Sunburst · Revenue Flow · Waterfall · Sentiment")
-    if _show_advanced:
-        # ── Radar / Spider Company Comparison ──────────────────────────────────
-        st.divider()
-        st.markdown(
-            "<div style='margin:0.8rem 0 0.4rem 0;'>"
-            "<span style='font-weight:800;font-size:1.15rem;color:#111827;'>Company DNA Radar</span>"
-            "</div>"
-            "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
-            "Multi-axis fingerprint — compare up to 4 companies on 8 normalised dimensions. "
-            "Values are percentile-ranked so different scales (revenue vs margins) are directly comparable."
-            "</div>",
-            unsafe_allow_html=True,
+
+    # ── Revenue Flow & P&L Bridge ─────────────────────────────────────────
+    st.markdown(
+        "<div style='margin:0.8rem 0 0.4rem 0;'>"
+        "<span style='font-weight:800;font-size:1.15rem;color:#111827;'>Revenue Flow & P&L Bridge</span>"
+        "</div>"
+        "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
+        "Trace how revenue turns into profit. The Sankey shows money flowing through the P&L; "
+        "the Waterfall shows the incremental steps from revenue to net income."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    _flow_tab_names = ["Sankey Flow", "Waterfall Bridge"]
+    _flow_tabs = st.tabs(_flow_tab_names)
+
+    _flow_col1, _flow_col2 = st.columns([2, 3])
+    with _flow_col1:
+        _flow_company = st.selectbox(
+            "Company", options=[company] + [c for c in companies if c != company],
+            index=0, key="flow_company",
+        )
+    with _flow_col2:
+        _flow_year = st.selectbox(
+            "Year",
+            options=sorted([int(y) for y in years], reverse=True),
+            index=0,
+            key="flow_year",
         )
 
-        _radar_col1, _radar_col2 = st.columns([3, 2])
-        with _radar_col1:
-            _radar_companies = st.multiselect(
-                "Overlay companies",
-                options=companies,
-                default=[company],
-                max_selections=4,
-                key="radar_companies",
+    _flow_metrics = data_processor.get_metrics(_flow_company, int(_flow_year))
+    _flow_segments = data_processor.get_segments(_flow_company, int(_flow_year))
+
+    try:
+        from utils.sankey_builder import build_sankey_figure, build_waterfall_figure
+
+        with _flow_tabs[0]:
+            _sankey_fig = build_sankey_figure(
+                _flow_metrics, _flow_segments, _flow_company, int(_flow_year)
             )
-        with _radar_col2:
-            _radar_year = st.selectbox(
-                "Year",
-                options=sorted([int(y) for y in years], reverse=True),
-                index=0,
-                key="radar_year",
-            )
-
-        if _radar_companies:
-            # Gather raw values for all companies for percentile ranking
-            _radar_axes = [
-                ("Revenue", "revenue", False),
-                ("Rev Growth", "revenue_yoy", True),
-                ("Op Margin", None, True),         # computed
-                ("Net Margin", None, True),        # computed
-                ("R&D Intensity", None, True),     # computed
-                ("Cash", "cash_balance", False),
-                ("Market Cap", "market_cap", False),
-                ("Leverage", None, True),          # debt / total_assets
-            ]
-
-            # Collect raw values across ALL companies for percentile context
-            _all_co_raw = {}
-            for _co in companies:
-                _m = data_processor.get_metrics(_co, int(_radar_year))
-                if not _m:
-                    continue
-                _rev = _m.get("revenue") or 0
-                _ni = _m.get("net_income") or 0
-                _oi = _m.get("operating_income") or 0
-                _rd = _m.get("rd") or 0
-                _ta = _m.get("total_assets") or 0
-                _debt = _m.get("debt") or 0
-                _cash = _m.get("cash_balance") or 0
-                _mcap = _m.get("market_cap") or 0
-                _rev_yoy = _m.get("revenue_yoy")
-                _op_margin = (_oi / _rev * 100) if _rev else 0
-                _net_margin = (_ni / _rev * 100) if _rev else 0
-                _rd_pct = (_rd / _rev * 100) if _rev else 0
-                _leverage = (_debt / _ta) if _ta else 0
-                _all_co_raw[_co] = [_rev, _rev_yoy if _rev_yoy else 0,
-                                    _op_margin, _net_margin, _rd_pct,
-                                    _cash, _mcap, _leverage]
-
-            if _all_co_raw:
-                # Percentile-rank each axis across all companies
-                _raw_matrix = np.array(list(_all_co_raw.values()))
-                _pctile_matrix = np.zeros_like(_raw_matrix)
-                for _ax_i in range(_raw_matrix.shape[1]):
-                    _col = _raw_matrix[:, _ax_i]
-                    _sorted_unique = np.sort(np.unique(_col))
-                    if len(_sorted_unique) <= 1:
-                        _pctile_matrix[:, _ax_i] = 50
-                    else:
-                        for _row_i, _val in enumerate(_col):
-                            _rank = np.searchsorted(_sorted_unique, _val, side="right")
-                            _pctile_matrix[_row_i, _ax_i] = (_rank / len(_sorted_unique)) * 100
-
-                _co_keys = list(_all_co_raw.keys())
-                _theta_labels = [a[0] for a in _radar_axes]
-
-                _radar_fig = go.Figure()
-                _radar_palette = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b"]
-                for _ci, _rco in enumerate(_radar_companies):
-                    if _rco not in _co_keys:
-                        continue
-                    _idx = _co_keys.index(_rco)
-                    _vals = _pctile_matrix[_idx].tolist()
-                    _raw_vals = _raw_matrix[_idx].tolist()
-                    _vals_closed = _vals + [_vals[0]]
-                    _raw_closed = _raw_vals + [_raw_vals[0]]
-                    _theta_closed = _theta_labels + [_theta_labels[0]]
-
-                    _hover_texts = []
-                    for _hi in range(len(_theta_labels)):
-                        _ax_name = _theta_labels[_hi]
-                        _raw_v = _raw_vals[_hi]
-                        if _ax_name in ("Revenue", "Cash", "Market Cap"):
-                            _disp = f"${_raw_v:,.0f}M"
-                        elif _ax_name in ("Rev Growth", "Op Margin", "Net Margin", "R&D Intensity"):
-                            _disp = f"{_raw_v:.1f}%"
-                        elif _ax_name == "Leverage":
-                            _disp = f"{_raw_v:.2f}x"
-                        else:
-                            _disp = f"{_raw_v:,.0f}"
-                        _hover_texts.append(
-                            f"<b>{_rco}</b><br>{_ax_name}: {_disp}<br>Percentile: {_vals[_hi]:.0f}th"
-                        )
-                    _hover_texts.append(_hover_texts[0])
-
-                    _co_color = COMPANY_COLORS.get(_rco, _radar_palette[_ci % 4])
-                    def _hex_to_rgba(hx, alpha=0.08):
-                        hx = hx.lstrip("#")
-                        return f"rgba({int(hx[0:2],16)},{int(hx[2:4],16)},{int(hx[4:6],16)},{alpha})"
-                    if "rgb" in _co_color:
-                        _fill_color = _co_color.replace(")", ",0.08)").replace("rgb", "rgba")
-                    else:
-                        _fill_color = _hex_to_rgba(_co_color, 0.08)
-                    _radar_fig.add_trace(go.Scatterpolar(
-                        r=_vals_closed,
-                        theta=_theta_closed,
-                        name=_rco,
-                        fill="toself",
-                        fillcolor=_fill_color,
-                        line=dict(color=_co_color, width=2.5),
-                        marker=dict(size=5, color=_co_color),
-                        hovertemplate="%{text}<extra></extra>",
-                        text=_hover_texts,
-                    ))
-
-                _radar_fig.update_layout(
-                    polar=dict(
-                        bgcolor="rgba(0,0,0,0)",
-                        radialaxis=dict(
-                            visible=True, range=[0, 105],
-                            tickfont=dict(size=9, color="#94a3b8"),
-                            gridcolor="rgba(0,0,0,0.06)",
-                            linecolor="rgba(0,0,0,0.06)",
-                        ),
-                        angularaxis=dict(
-                            tickfont=dict(size=11, color="#374151"),
-                            gridcolor="rgba(0,0,0,0.06)",
-                            linecolor="rgba(0,0,0,0.06)",
-                        ),
-                    ),
-                    showlegend=True,
-                    legend=dict(font=dict(color="#374151"), bgcolor="rgba(0,0,0,0)", borderwidth=0),
-                    height=500,
-                    margin=dict(t=40, r=60, l=60, b=40),
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#374151"),
-                    hoverlabel=HOVERLABEL_STYLE,
-                )
-                render_plotly(_radar_fig)
-
-
-        # ── Sunburst Revenue Drill-Down ────────────────────────────────────────
-        st.divider()
-        st.markdown(
-            "<div style='margin:0.8rem 0 0.4rem 0;'>"
-            "<span style='font-weight:800;font-size:1.15rem;color:#111827;'>Revenue Sunburst</span>"
-            "</div>"
-            "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
-            "Drill from total market down to each company's segments. "
-            "Ring size = revenue, colour = YoY growth rate (green = growing, red = shrinking). "
-            "Click a ring to zoom in."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-        _sun_col1, _sun_col2 = st.columns([2, 3])
-        with _sun_col1:
-            _sun_companies = st.multiselect(
-                "Companies",
-                options=companies,
-                default=companies[:6] if len(companies) >= 6 else companies,
-                key="sun_companies",
-            )
-        with _sun_col2:
-            _sun_year = st.selectbox(
-                "Year",
-                options=sorted([int(y) for y in years], reverse=True),
-                index=0,
-                key="sun_year",
-            )
-
-        if _sun_companies:
-            _sun_ids = ["Total"]
-            _sun_labels = ["Total"]
-            _sun_parents = [""]
-            _sun_values = []
-            _sun_colors_list = []
-
-            # Growth diverging: red→white→green mapped to [-50%, 0, +50%] YoY
-            def _growth_color(growth_pct):
-                """Map growth % to a diverging red-white-green hex color."""
-                if growth_pct is None or (isinstance(growth_pct, float) and np.isnan(growth_pct)):
-                    return "#e5e7eb"  # grey for no data
-                g = max(-50, min(50, growth_pct))
-                t = (g + 50) / 100  # 0 = -50%, 0.5 = 0%, 1 = +50%
-                if t < 0.5:
-                    # Red to white
-                    r, gv, b = 220, int(53 + (255 - 53) * (t / 0.5)), int(69 + (255 - 69) * (t / 0.5))
-                else:
-                    # White to green
-                    frac = (t - 0.5) / 0.5
-                    r, gv, b = int(255 - (255 - 34) * frac), int(255 - (255 - 197) * frac), int(255 - (255 - 94) * frac)
-                return f"#{r:02x}{gv:02x}{b:02x}"
-
-            _total_rev = 0
-            _co_data = {}
-            for _sco in _sun_companies:
-                _m = data_processor.get_metrics(_sco, int(_sun_year))
-                _m_prev = data_processor.get_metrics(_sco, int(_sun_year) - 1)
-                _rev = (_m.get("revenue") or 0) if _m else 0
-                _rev_prev = (_m_prev.get("revenue") or 0) if _m_prev else 0
-                _yoy = ((_rev - _rev_prev) / _rev_prev * 100) if _rev_prev else None
-                _segs = data_processor.get_segments(_sco, int(_sun_year))
-                _segs_prev = data_processor.get_segments(_sco, int(_sun_year) - 1)
-
-                # Build a lookup of prev-year segment values
-                _prev_lookup = {}
-                if _segs_prev and _segs_prev.get("labels"):
-                    for _li, _lbl in enumerate(_segs_prev["labels"]):
-                        _prev_lookup[_lbl] = _segs_prev["values"][_li] if _li < len(_segs_prev["values"]) else 0
-
-                _co_data[_sco] = {
-                    "rev": _rev, "yoy": _yoy,
-                    "segs": _segs, "prev_lookup": _prev_lookup,
-                }
-                _total_rev += _rev
-
-            _sun_values.append(_total_rev)
-            _sun_colors_list.append("#f1f5f9")  # neutral for root
-
-            for _sco in _sun_companies:
-                _cd = _co_data[_sco]
-                _sun_ids.append(_sco)
-                _sun_labels.append(_sco)
-                _sun_parents.append("Total")
-                _sun_values.append(_cd["rev"])
-                _sun_colors_list.append(_growth_color(_cd["yoy"]))
-
-                # Segments under company
-                if _cd["segs"] and _cd["segs"].get("labels"):
-                    _seg_color_map = get_segment_color_map(data_processor.df_segments, _sco) if data_processor.df_segments is not None else {}
-                    for _si, _seg_name in enumerate(_cd["segs"]["labels"]):
-                        _seg_val = _cd["segs"]["values"][_si] if _si < len(_cd["segs"]["values"]) else 0
-                        if _seg_val <= 0:
-                            continue
-                        _seg_prev_val = _cd["prev_lookup"].get(_seg_name, 0)
-                        _seg_yoy = ((_seg_val - _seg_prev_val) / _seg_prev_val * 100) if _seg_prev_val else None
-
-                        _sun_ids.append(f"{_sco}|{_seg_name}")
-                        _sun_labels.append(_seg_name)
-                        _sun_parents.append(_sco)
-                        _sun_values.append(_seg_val)
-                        _sun_colors_list.append(_growth_color(_seg_yoy))
-
-            if _total_rev > 0:
-                _sun_fig = go.Figure(go.Sunburst(
-                    ids=_sun_ids,
-                    labels=_sun_labels,
-                    parents=_sun_parents,
-                    values=_sun_values,
-                    marker=dict(colors=_sun_colors_list, line=dict(width=1.5, color="rgba(255,255,255,0.7)")),
-                    branchvalues="total",
-                    hovertemplate=(
-                        "<b>%{label}</b><br>"
-                        "Revenue: $%{value:,.0f}M<br>"
-                        "Share: %{percentRoot:.1%}"
-                        "<extra></extra>"
-                    ),
-                    textinfo="label+percent parent",
-                    textfont=dict(size=11, color="#111827"),
-                    insidetextorientation="radial",
-                    maxdepth=3,
-                ))
-
-                _sun_fig.update_layout(
-                    height=560,
-                    margin=dict(t=30, r=10, l=10, b=10),
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#374151"),
-                    hoverlabel=HOVERLABEL_STYLE,
-                )
-                render_plotly(_sun_fig)
-
-                # Legend: green=growing, red=shrinking
-                st.markdown(
-                    "<div style='display:flex;gap:16px;align-items:center;font-size:0.78rem;color:#6b7280;margin-top:-8px;'>"
-                    "<span style='display:inline-block;width:12px;height:12px;background:#22c55e;border-radius:2px;'></span> Growing"
-                    "<span style='display:inline-block;width:12px;height:12px;background:#e5e7eb;border-radius:2px;margin-left:8px;'></span> No data"
-                    "<span style='display:inline-block;width:12px;height:12px;background:#dc3545;border-radius:2px;margin-left:8px;'></span> Shrinking"
-                    "</div>",
-                    unsafe_allow_html=True,
-                )
+            if _sankey_fig:
+                render_plotly(_sankey_fig)
             else:
-                st.info("No revenue data available for the selected companies and year.")
+                st.info("Not enough financial data for this company/year to build the Sankey flow.")
 
-
-        # ── Sankey Revenue Flow & Waterfall Bridge ─────────────────────────────
-        st.divider()
-        st.markdown(
-            "<div style='margin:0.8rem 0 0.4rem 0;'>"
-            "<span style='font-weight:800;font-size:1.15rem;color:#111827;'>Revenue Flow & P&L Bridge</span>"
-            "</div>"
-            "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
-            "Trace how revenue turns into profit. The Sankey shows money flowing through the P&L; "
-            "the Waterfall shows the incremental steps from revenue to net income."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-        _flow_tab_names = ["Sankey Flow", "Waterfall Bridge"]
-        _flow_tabs = st.tabs(_flow_tab_names)
-
-        _flow_col1, _flow_col2 = st.columns([2, 3])
-        with _flow_col1:
-            _flow_company = st.selectbox(
-                "Company", options=[company] + [c for c in companies if c != company],
-                index=0, key="flow_company",
+        with _flow_tabs[1]:
+            _wf_fig = build_waterfall_figure(
+                _flow_metrics, _flow_company, int(_flow_year)
             )
-        with _flow_col2:
-            _flow_year = st.selectbox(
-                "Year",
-                options=sorted([int(y) for y in years], reverse=True),
-                index=0,
-                key="flow_year",
-            )
+            if _wf_fig:
+                render_plotly(_wf_fig)
+            else:
+                st.info("Not enough financial data for this company/year to build the waterfall.")
+    except Exception as _flow_err:
+        st.caption(f"Flow charts unavailable: {_flow_err}")
 
-        _flow_metrics = data_processor.get_metrics(_flow_company, int(_flow_year))
-        _flow_segments = data_processor.get_segments(_flow_company, int(_flow_year))
-
-        try:
-            from utils.sankey_builder import build_sankey_figure, build_waterfall_figure
-
-            with _flow_tabs[0]:
-                _sankey_fig = build_sankey_figure(
-                    _flow_metrics, _flow_segments, _flow_company, int(_flow_year)
-                )
-                if _sankey_fig:
-                    render_plotly(_sankey_fig)
-                else:
-                    st.info("Not enough financial data for this company/year to build the Sankey flow.")
-
-            with _flow_tabs[1]:
-                _wf_fig = build_waterfall_figure(
-                    _flow_metrics, _flow_company, int(_flow_year)
-                )
-                if _wf_fig:
-                    render_plotly(_wf_fig)
-                else:
-                    st.info("Not enough financial data for this company/year to build the waterfall.")
-        except Exception as _flow_err:
-            st.caption(f"Flow charts unavailable: {_flow_err}")
-
-
-        # ── Earnings Call Sentiment Timeline ───────────────────────────────────
+    st.divider()
+    _show_sentiment = st.toggle("Earnings Call Sentiment", value=False, key="show_sentiment_viz",
+                                help="Sentiment analysis of earnings call transcripts")
+    if _show_sentiment:
         try:
             from utils.sentiment_scorer import render_sentiment_timeline
             render_sentiment_timeline(
@@ -5094,6 +4788,292 @@ def main():
 
     # Segment composition
     st.subheader("Segment Composition")
+
+    # ── Company DNA Radar ─────────────────────────────────────────────────
+    _radar_view = st.radio(
+        "Radar view",
+        ["Segment Mix", "Financial DNA"],
+        horizontal=True,
+        key="radar_view_mode",
+    )
+
+    if _radar_view == "Segment Mix":
+        st.markdown(
+            "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
+            "Segment revenue breakdown as a radar fingerprint. "
+            "Compare how the revenue mix shifts across years."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        _sr_col1, _sr_col2 = st.columns([3, 2])
+        with _sr_col1:
+            _sr_years_sel = st.multiselect(
+                "Compare years",
+                options=sorted([int(y) for y in years], reverse=True),
+                default=[sorted([int(y) for y in years], reverse=True)[0]],
+                max_selections=4,
+                key="sr_years",
+            )
+        with _sr_col2:
+            _sr_pct_mode = st.checkbox("Show as % of total", value=True, key="sr_pct_mode")
+
+        if _sr_years_sel:
+            # Collect segment data for each year
+            _sr_all_labels = []
+            _sr_year_data = {}
+            for _yr in sorted(_sr_years_sel):
+                _segs = data_processor.get_segments(company, int(_yr))
+                if _segs and _segs.get("labels"):
+                    _slabels = _segs["labels"]
+                    _svalues = _segs["values"]
+                    _sr_year_data[_yr] = dict(zip(_slabels, _svalues))
+                    for _sl in _slabels:
+                        if _sl not in _sr_all_labels:
+                            _sr_all_labels.append(_sl)
+
+            if _sr_all_labels and _sr_year_data:
+                _sr_fig = go.Figure()
+                _yr_colors = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b"]
+
+                for _yi, _yr in enumerate(sorted(_sr_year_data.keys())):
+                    _yd = _sr_year_data[_yr]
+                    _vals = []
+                    _raw_vals = []
+                    _total = sum(_yd.values()) if _yd else 1
+
+                    for _sl in _sr_all_labels:
+                        _rv = _yd.get(_sl, 0) or 0
+                        _raw_vals.append(_rv)
+                        if _sr_pct_mode:
+                            _vals.append((_rv / _total * 100) if _total else 0)
+                        else:
+                            _vals.append(_rv)
+
+                    # Percentile-rank within this year for better radar shape
+                    if not _sr_pct_mode and _vals:
+                        _max_v = max(_vals) if max(_vals) > 0 else 1
+                        _vals = [v / _max_v * 100 for v in _vals]
+
+                    _vals_closed = _vals + [_vals[0]]
+                    _theta_closed = _sr_all_labels + [_sr_all_labels[0]]
+                    _raw_closed = _raw_vals + [_raw_vals[0]]
+
+                    _hover_texts = []
+                    for _hi in range(len(_sr_all_labels)):
+                        _rv = _raw_vals[_hi]
+                        _pct = (_rv / _total * 100) if _total else 0
+                        _hover_texts.append(
+                            f"<b>{company} ({_yr})</b><br>"
+                            f"{_sr_all_labels[_hi]}: ${_rv:,.0f}M<br>"
+                            f"Share: {_pct:.1f}%"
+                        )
+                    _hover_texts.append(_hover_texts[0])
+
+                    _yc = _yr_colors[_yi % 4]
+                    def _hex_to_rgba_sr(hx, alpha=0.08):
+                        hx = hx.lstrip("#")
+                        return f"rgba({int(hx[0:2],16)},{int(hx[2:4],16)},{int(hx[4:6],16)},{alpha})"
+
+                    _sr_fig.add_trace(go.Scatterpolar(
+                        r=_vals_closed,
+                        theta=_theta_closed,
+                        name=str(_yr),
+                        fill="toself",
+                        fillcolor=_hex_to_rgba_sr(_yc, 0.08),
+                        line=dict(color=_yc, width=2.5),
+                        marker=dict(size=5, color=_yc),
+                        hovertemplate="%{text}<extra></extra>",
+                        text=_hover_texts,
+                    ))
+
+                _sr_fig.update_layout(
+                    polar=dict(
+                        bgcolor="rgba(0,0,0,0)",
+                        radialaxis=dict(
+                            visible=True,
+                            range=[0, 105] if _sr_pct_mode else [0, 110],
+                            ticksuffix="%" if _sr_pct_mode else "",
+                            tickfont=dict(size=9, color="#94a3b8"),
+                            gridcolor="rgba(0,0,0,0.06)",
+                            linecolor="rgba(0,0,0,0.06)",
+                        ),
+                        angularaxis=dict(
+                            tickfont=dict(size=11, color="#374151"),
+                            gridcolor="rgba(0,0,0,0.06)",
+                            linecolor="rgba(0,0,0,0.06)",
+                        ),
+                    ),
+                    showlegend=True,
+                    legend=dict(font=dict(color="#374151"), bgcolor="rgba(0,0,0,0)", borderwidth=0),
+                    height=480,
+                    margin=dict(t=40, r=60, l=60, b=40),
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#374151"),
+                    hoverlabel=HOVERLABEL_STYLE,
+                )
+                render_plotly(_sr_fig)
+            else:
+                st.info("No segment data available for the selected years.")
+        else:
+            st.info("Select at least one year to display the segment radar.")
+
+    else:
+        # Financial DNA radar — multi-axis company comparison
+        st.markdown(
+            "<div style='font-size:0.85rem;color:#6b7280;margin-bottom:0.6rem;'>"
+            "Multi-axis fingerprint — compare up to 4 companies on 8 normalised dimensions. "
+            "Values are percentile-ranked so different scales (revenue vs margins) are directly comparable."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        _radar_col1, _radar_col2 = st.columns([3, 2])
+        with _radar_col1:
+            _radar_companies = st.multiselect(
+                "Overlay companies",
+                options=companies,
+                default=[company],
+                max_selections=4,
+                key="radar_companies",
+            )
+        with _radar_col2:
+            _radar_year = st.selectbox(
+                "Year",
+                options=sorted([int(y) for y in years], reverse=True),
+                index=0,
+                key="radar_year",
+            )
+
+        if _radar_companies:
+            _radar_axes = [
+                ("Revenue", "revenue", False),
+                ("Rev Growth", "revenue_yoy", True),
+                ("Op Margin", None, True),
+                ("Net Margin", None, True),
+                ("R&D Intensity", None, True),
+                ("Cash", "cash_balance", False),
+                ("Market Cap", "market_cap", False),
+                ("Leverage", None, True),
+            ]
+
+            _all_co_raw = {}
+            for _co in companies:
+                _m = data_processor.get_metrics(_co, int(_radar_year))
+                if not _m:
+                    continue
+                _rev = _m.get("revenue") or 0
+                _ni = _m.get("net_income") or 0
+                _oi = _m.get("operating_income") or 0
+                _rd = _m.get("rd") or 0
+                _ta = _m.get("total_assets") or 0
+                _debt = _m.get("debt") or 0
+                _cash = _m.get("cash_balance") or 0
+                _mcap = _m.get("market_cap") or 0
+                _rev_yoy = _m.get("revenue_yoy")
+                _op_margin = (_oi / _rev * 100) if _rev else 0
+                _net_margin = (_ni / _rev * 100) if _rev else 0
+                _rd_pct = (_rd / _rev * 100) if _rev else 0
+                _leverage = (_debt / _ta) if _ta else 0
+                _all_co_raw[_co] = [_rev, _rev_yoy if _rev_yoy else 0,
+                                    _op_margin, _net_margin, _rd_pct,
+                                    _cash, _mcap, _leverage]
+
+            if _all_co_raw:
+                _raw_matrix = np.array(list(_all_co_raw.values()))
+                _pctile_matrix = np.zeros_like(_raw_matrix)
+                for _ax_i in range(_raw_matrix.shape[1]):
+                    _col = _raw_matrix[:, _ax_i]
+                    _sorted_unique = np.sort(np.unique(_col))
+                    if len(_sorted_unique) <= 1:
+                        _pctile_matrix[:, _ax_i] = 50
+                    else:
+                        for _row_i, _val in enumerate(_col):
+                            _rank = np.searchsorted(_sorted_unique, _val, side="right")
+                            _pctile_matrix[_row_i, _ax_i] = (_rank / len(_sorted_unique)) * 100
+
+                _co_keys = list(_all_co_raw.keys())
+                _theta_labels = [a[0] for a in _radar_axes]
+
+                _radar_fig = go.Figure()
+                _radar_palette = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b"]
+                for _ci, _rco in enumerate(_radar_companies):
+                    if _rco not in _co_keys:
+                        continue
+                    _idx = _co_keys.index(_rco)
+                    _vals = _pctile_matrix[_idx].tolist()
+                    _raw_vals = _raw_matrix[_idx].tolist()
+                    _vals_closed = _vals + [_vals[0]]
+                    _raw_closed = _raw_vals + [_raw_vals[0]]
+                    _theta_closed = _theta_labels + [_theta_labels[0]]
+
+                    _hover_texts = []
+                    for _hi in range(len(_theta_labels)):
+                        _ax_name = _theta_labels[_hi]
+                        _raw_v = _raw_vals[_hi]
+                        if _ax_name in ("Revenue", "Cash", "Market Cap"):
+                            _disp = f"${_raw_v:,.0f}M"
+                        elif _ax_name in ("Rev Growth", "Op Margin", "Net Margin", "R&D Intensity"):
+                            _disp = f"{_raw_v:.1f}%"
+                        elif _ax_name == "Leverage":
+                            _disp = f"{_raw_v:.2f}x"
+                        else:
+                            _disp = f"{_raw_v:,.0f}"
+                        _hover_texts.append(
+                            f"<b>{_rco}</b><br>{_ax_name}: {_disp}<br>Percentile: {_vals[_hi]:.0f}th"
+                        )
+                    _hover_texts.append(_hover_texts[0])
+
+                    _co_color = COMPANY_COLORS.get(_rco, _radar_palette[_ci % 4])
+                    def _hex_to_rgba(hx, alpha=0.08):
+                        hx = hx.lstrip("#")
+                        return f"rgba({int(hx[0:2],16)},{int(hx[2:4],16)},{int(hx[4:6],16)},{alpha})"
+                    if "rgb" in _co_color:
+                        _fill_color = _co_color.replace(")", ",0.08)").replace("rgb", "rgba")
+                    else:
+                        _fill_color = _hex_to_rgba(_co_color, 0.08)
+                    _radar_fig.add_trace(go.Scatterpolar(
+                        r=_vals_closed,
+                        theta=_theta_closed,
+                        name=_rco,
+                        fill="toself",
+                        fillcolor=_fill_color,
+                        line=dict(color=_co_color, width=2.5),
+                        marker=dict(size=5, color=_co_color),
+                        hovertemplate="%{text}<extra></extra>",
+                        text=_hover_texts,
+                    ))
+
+                _radar_fig.update_layout(
+                    polar=dict(
+                        bgcolor="rgba(0,0,0,0)",
+                        radialaxis=dict(
+                            visible=True, range=[0, 105],
+                            tickfont=dict(size=9, color="#94a3b8"),
+                            gridcolor="rgba(0,0,0,0.06)",
+                            linecolor="rgba(0,0,0,0.06)",
+                        ),
+                        angularaxis=dict(
+                            tickfont=dict(size=11, color="#374151"),
+                            gridcolor="rgba(0,0,0,0.06)",
+                            linecolor="rgba(0,0,0,0.06)",
+                        ),
+                    ),
+                    showlegend=True,
+                    legend=dict(font=dict(color="#374151"), bgcolor="rgba(0,0,0,0)", borderwidth=0),
+                    height=500,
+                    margin=dict(t=40, r=60, l=60, b=40),
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#374151"),
+                    hoverlabel=HOVERLABEL_STYLE,
+                )
+                render_plotly(_radar_fig)
+
+    st.divider()
+
+
     canonical_company = normalize_company(company)
     segments_quarterly_all = load_quarterly_segments(
         data_processor.data_path, get_file_mtime(data_processor.data_path)
