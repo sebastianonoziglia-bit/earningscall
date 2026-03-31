@@ -6064,10 +6064,14 @@ st.markdown(
 # ── CTA navigation — glass morphism cards with st.page_link ──
 st.markdown("""<style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700&display=swap');
+/* ── CTA wrapper — center the row with padding ── */
+div[data-testid="stColumns"]:has(div[data-testid="stPageLink"]) {
+  max-width:960px!important;margin:0 auto!important;padding:0 32px!important;
+}
 /* ── Glass CTA cards ── */
 div[data-testid="stPageLink"] { height:100%; }
 div[data-testid="stPageLink"] a {
-  display:flex!important;align-items:center!important;gap:10px!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
   padding:28px 24px!important;border-radius:16px!important;height:100%!important;
   background:rgba(74,174,255,0.06)!important;
   border:1px solid rgba(74,174,255,0.18)!important;
@@ -6102,28 +6106,36 @@ div[data-testid="stPageLink"] a:hover::before {
 .stColumn:nth-child(2) div[data-testid="stPageLink"] a { animation:ctaPop 7s ease-out infinite 2.3s; }
 .stColumn:nth-child(3) div[data-testid="stPageLink"] a { animation:ctaPop 7s ease-out infinite 4.6s; }
 div[data-testid="stPageLink"] a:hover { animation:none!important; }
-/* Text */
-div[data-testid="stPageLink"] a span {
-  color:#4aaeff!important;font-size:1.05rem!important;font-weight:700!important;
+/* Text — WHITE for visibility */
+div[data-testid="stPageLink"] a span,
+div[data-testid="stPageLink"] a p,
+div[data-testid="stPageLink"] a {
+  color:#ffffff!important;font-size:1.05rem!important;font-weight:700!important;
   font-family:'DM Sans',sans-serif!important;letter-spacing:.02em!important;
+}
+/* Hide emoji icon that Streamlit adds */
+div[data-testid="stPageLink"] a svg,
+div[data-testid="stPageLink"] a img,
+div[data-testid="stPageLink"] a [data-testid="stIconEmoji"] {
+  display:none!important;
 }
 /* Arrow indicator */
 div[data-testid="stPageLink"] a::after {
-  content:'→';position:absolute;right:20px;top:50%;transform:translateY(-50%);
-  color:rgba(74,174,255,0.3);font-size:1.3rem;transition:all 0.3s;pointer-events:none;
+  content:'\2192';position:absolute;right:20px;top:50%;transform:translateY(-50%);
+  color:rgba(255,255,255,0.25);font-size:1.3rem;transition:all 0.3s;pointer-events:none;
 }
 div[data-testid="stPageLink"] a:hover::after {
-  color:#4aaeff;right:16px;
+  color:rgba(255,255,255,0.8);right:16px;
 }
 </style>""", unsafe_allow_html=True)
-# Order: Earnings (left), Genie (middle), Overview (right)
+# Order: Earnings (left), Genie (middle), Overview (right) — no emojis
 _cta_c1, _cta_c2, _cta_c3 = st.columns(3, gap="medium")
 with _cta_c1:
-    st.page_link("pages/01_Earnings.py", label="Earnings  —  Company deep dives", icon="📊")
+    st.page_link("pages/01_Earnings.py", label="Earnings  —  Company deep dives")
 with _cta_c2:
-    st.page_link("pages/04_Genie.py", label="Genie  —  Ask the data anything", icon="🧞")
+    st.page_link("pages/04_Genie.py", label="Genie  —  Ask the data anything")
 with _cta_c3:
-    st.page_link("pages/00_Overview.py", label="Overview  —  Macro trends & signals", icon="🔭")
+    st.page_link("pages/00_Overview.py", label="Overview  —  Macro trends & signals")
 
 source_label = str(workbook_path) if workbook_path else "not found"
 st.markdown(
