@@ -3351,37 +3351,39 @@ for _si, _sq in enumerate(_visible_suggestions):
             # to avoid jarring full-page reload
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ── Sentiment Timeline + Probability Cone ─────────────────────────────────
-_genie_co = st.session_state.get("genie_context_company", "")
-_genie_yrs = sorted(
-    [int(y) for y in data_processor.get_available_years(_genie_co)]
-    if _genie_co else [],
-    reverse=True,
-)
-if _genie_co and _genie_yrs:
-    try:
-        from utils.sentiment_scorer import render_sentiment_timeline
-        render_sentiment_timeline(
-            _genie_co,
-            _genie_yrs,
-            render_fn=lambda fig: st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}),
-            theme="light",
-        )
-    except Exception as _genie_sent_err:
-        st.caption(f"Sentiment timeline unavailable: {_genie_sent_err}")
+# ── Sentiment + Probability Cone (behind toggle to keep page fast) ────────
+_show_genie_viz = st.toggle("Sentiment & Prediction Cone", value=False, key="genie_adv_viz")
+if _show_genie_viz:
+    _genie_co = st.session_state.get("genie_context_company", "")
+    _genie_yrs = sorted(
+        [int(y) for y in data_processor.get_available_years(_genie_co)]
+        if _genie_co else [],
+        reverse=True,
+    )
+    if _genie_co and _genie_yrs:
+        try:
+            from utils.sentiment_scorer import render_sentiment_timeline
+            render_sentiment_timeline(
+                _genie_co,
+                _genie_yrs,
+                render_fn=lambda fig: st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False}),
+                theme="light",
+            )
+        except Exception as _genie_sent_err:
+            st.caption(f"Sentiment timeline unavailable: {_genie_sent_err}")
 
-    try:
-        from utils.probability_cone import render_probability_cone_section
-        _genie_poly_feed = dashboard_state.get("polymarket_feed", []) if "dashboard_state" in dir() else []
-        _genie_all_co = data_processor.get_companies()
-        render_probability_cone_section(
-            data_processor,
-            _genie_all_co,
-            polymarket_feed=_genie_poly_feed,
-            theme="light",
-        )
-    except Exception as _genie_cone_err:
-        st.caption(f"Probability cone unavailable: {_genie_cone_err}")
+        try:
+            from utils.probability_cone import render_probability_cone_section
+            _genie_poly_feed = dashboard_state.get("polymarket_feed", []) if "dashboard_state" in dir() else []
+            _genie_all_co = data_processor.get_companies()
+            render_probability_cone_section(
+                data_processor,
+                _genie_all_co,
+                polymarket_feed=_genie_poly_feed,
+                theme="light",
+            )
+        except Exception as _genie_cone_err:
+            st.caption(f"Probability cone unavailable: {_genie_cone_err}")
 
 
 # ── Forward Signals Panel ─────────────────────────────────────────────────

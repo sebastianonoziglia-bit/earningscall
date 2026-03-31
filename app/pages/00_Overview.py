@@ -11784,12 +11784,14 @@ def _hm_render_plotly(fig, xaxis_is_year=False, light_theme=False, key=None, **k
     st.plotly_chart(fig, use_container_width=True, config=_HM_PLOTLY_CONFIG, key=key, **kwargs)
 
 
-# ── Correlation Matrix ──────────────────────────────────────────────────────
-try:
-    from utils.correlation_matrix import render_correlation_section
-    render_correlation_section(data_processor)
-except Exception as _corr_err:
-    st.caption(f"Correlation matrix unavailable: {_corr_err}")
+# ── Correlation Matrix (lazy — behind toggle to avoid slowing page load) ───
+_show_corr = st.toggle("Show Correlation Matrix", value=False, key="show_corr_matrix")
+if _show_corr:
+    try:
+        from utils.correlation_matrix import render_correlation_section
+        render_correlation_section(data_processor)
+    except Exception as _corr_err:
+        st.caption(f"Correlation matrix unavailable: {_corr_err}")
 
 
 # ── Heatmap Comparison UI ───────────────────────────────────────────────────
