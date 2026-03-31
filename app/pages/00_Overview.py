@@ -6490,41 +6490,80 @@ def _render_transcript_topic_growth_chart(
     selected_quarter: str,
     plotly_config: dict,
 ) -> bool:
+    """Multi-mode Topic Signal Map: Topics / Signals / Combined with interactive pills and drill-down."""
+    import json as _json
+
     _ep = ""
     try:
         from utils.workbook_source import resolve_financial_data_xlsx
         _ep = resolve_financial_data_xlsx([]) or ""
     except Exception:
         pass
+
+    # ── Load scoring config ──
+    try:
+        from utils.scoring_config import (
+            SIGNAL_CATEGORIES as _TS_CATS,
+            SIGNAL_COLORS as _TS_COLORS,
+            SIGNAL_ICONS as _TS_ICONS,
+            TOPIC_KEYWORDS as _TS_TOPIC_KW,
+        )
+    except ImportError:
+        _TS_CATS = ["Outlook", "Risks", "Opportunities", "Investment", "Product Shifts",
+                     "User Behavior", "Monetization", "Strategic Direction", "Broadcaster Threats"]
+        _TS_COLORS = {}
+        _TS_ICONS = {}
+        _TS_TOPIC_KW = {}
+
+    # ── Load topic metrics (original pipeline — still used for Topics mode fallback) ──
     metrics_df = _load_transcript_topic_metrics(
         excel_path=str(_ep) if _ep else "",
         selected_year=int(selected_year) if selected_year else 0,
         selected_quarter=selected_quarter if selected_quarter else "",
     )
-    if metrics_df.empty:
+
+    # ── Load unified topic+signal metrics (for Signals/Combined modes + enriched tooltips) ──
+    unified = {"topic_view": pd.DataFrame(), "signal_view": pd.DataFrame(), "sentences": []}
+    try:
+        from utils.transcript_live import extract_unified_topic_signal_metrics
+        unified = extract_unified_topic_signal_metrics(
+            excel_path=str(_ep) if _ep else "",
+            year=int(selected_year) if selected_year else 0,
+            quarter=selected_quarter if selected_quarter else "",
+        )
+    except Exception:
+        pass
+
+    if metrics_df.empty and unified["topic_view"].empty:
         return False
 
-    # Normalize columns for filtering
-    metrics_df["_year_int"] = pd.to_numeric(metrics_df.get("year"), errors="coerce")
-    metrics_df["_quarter_norm"] = metrics_df.get("quarter", pd.Series(dtype=str)).apply(_normalize_quarter_label)
-
-    quadrant_colors = {
-        "Big and growing": "#1D4ED8",
-        "Small and growing": "#0EA5E9",
-        "Big and fading": "#F97316",
-        "Small and fading": "#94A3B8",
-    }
+    # Normalize columns for filtering (on old metrics_df)
+    if not metrics_df.empty:
+        metrics_df["_year_int"] = pd.to_numeric(metrics_df.get("year"), errors="coerce")
+        metrics_df["_quarter_norm"] = metrics_df.get("quarter", pd.Series(dtype=str)).apply(_normalize_quarter_label)
 
     st.markdown("<div id='section-topic-signal'></div>", unsafe_allow_html=True)
 
-    # ── Inline filter bar at title level (these drive the data below) ──
-    _ts_col_title, _ts_col_year, _ts_col_qtr, _ts_col_co = st.columns([3, 1, 1, 2])
-    with _ts_col_title:
+    # ── Header row: title + view mode + filters ──
+    _ts_h1, _ts_h2, _ts_h3 = st.columns([3, 4, 3])
+    with _ts_h1:
         st.markdown("### Topic Signal Map")
+    with _ts_h2:
+        _view_mode = st.radio(
+            "View Mode",
+            ["Topics", "Signals", "Combined"],
+            horizontal=True,
+            key="topic_map_view_mode",
+            label_visibility="collapsed",
+        )
+
+    # ── Filter row: year, quarter, company ──
+    _ts_col_year, _ts_col_qtr, _ts_col_co = st.columns([1, 1, 2])
     with _ts_col_year:
-        _ts_avail_years = sorted(metrics_df["_year_int"].dropna().unique().tolist(), reverse=True)
-        if not _ts_avail_years:
-            _ts_avail_years = [selected_year]
+        if not metrics_df.empty:
+            _ts_avail_years = sorted(metrics_df["_year_int"].dropna().unique().tolist(), reverse=True)
+        else:
+            _ts_avail_years = [selected_year] if selected_year else [2025]
         _ts_default_year_idx = 0
         if selected_year in _ts_avail_years:
             _ts_default_year_idx = _ts_avail_years.index(selected_year)
@@ -6537,90 +6576,56 @@ def _render_transcript_topic_growth_chart(
             _ts_qtr_default = _ts_qtr_opts.index(_ts_quarter_norm)
         _ts_quarter = st.selectbox("Quarter", _ts_qtr_opts, key="ts_quarter_filter", label_visibility="collapsed", index=_ts_qtr_default)
     with _ts_col_co:
-        _ts_all_companies_list = sorted(metrics_df["companies_list"].dropna().str.split(",").explode().str.strip().unique().tolist()) if "companies_list" in metrics_df.columns else []
+        _ts_all_companies_list = []
+        if not metrics_df.empty and "companies_list" in metrics_df.columns:
+            _ts_all_companies_list = sorted(
+                metrics_df["companies_list"].dropna().str.split(",").explode().str.strip().unique().tolist()
+            )
         _ts_company_opts = ["All companies"] + _ts_all_companies_list
         _ts_company = st.selectbox("Company", _ts_company_opts, key="ts_company_filter", label_visibility="collapsed", index=0)
 
-    # ── Apply inline filters to build scoped_df ──
-    scoped_df = metrics_df[metrics_df["_year_int"] == int(_ts_year)].copy()
-    if _ts_quarter != "All":
-        scoped_df = scoped_df[scoped_df["_quarter_norm"] == _ts_quarter].copy()
-    if scoped_df.empty:
-        st.info("No topic data for this period.")
-        return False
-    # Company filter: re-aggregate if a specific company is selected
-    if _ts_company != "All companies" and "companies_list" in scoped_df.columns:
-        scoped_df = scoped_df[scoped_df["companies_list"].fillna("").str.contains(_ts_company, case=False, na=False)].copy()
-    if scoped_df.empty:
-        st.info("No topic data for this company/period combination.")
-        return False
-    scoped_df = scoped_df.sort_values("topic").copy()
-
     selected_period = f"{int(_ts_year)}-{_ts_quarter}" if _ts_quarter != "All" else f"{int(_ts_year)}"
 
-    scoped_df["importance_pct"] = scoped_df["importance_pct"].fillna(0.0).clip(lower=0.0, upper=100.0)
-    scoped_df["importance_plot"] = scoped_df["importance_pct"].clip(lower=0.1)
-    scoped_df["growth_pct"] = scoped_df["growth_pct"].fillna(0.0).clip(lower=-100.0, upper=200.0)
-    scoped_df["mention_count"] = scoped_df["mention_count"].fillna(0.0).clip(lower=0.0)
-    scoped_df["companies_mentioned"] = scoped_df["companies_mentioned"].fillna(0.0)
-    scoped_df["total_companies"] = scoped_df["total_companies"].fillna(0.0)
-    label_cutoff = float(scoped_df["mention_count"].quantile(0.55)) if not scoped_df.empty else 0.0
-    scoped_df["topic_label"] = np.where(scoped_df["mention_count"] >= max(label_cutoff, 1.0), scoped_df["topic"], "")
+    # ── Interactive signal pill filters ──
+    _active_pills = st.session_state.get("ts_active_pills", [])
 
-    mid_x = max(float(scoped_df["importance_plot"].median()), 1.0)
-    mid_y = 0.0
+    _pill_cols = st.columns(len(_TS_CATS) + 1)
+    for idx, _cat in enumerate(_TS_CATS):
+        with _pill_cols[idx]:
+            _cfg = _TS_COLORS.get(_cat, {"tag": "#374151", "bg": "#f3f4f6"})
+            _icon = _TS_ICONS.get(_cat, "")
+            _is_active = _cat in _active_pills
+            if st.button(
+                f"{_icon} {_cat}",
+                key=f"ts_pill_{_cat}",
+                use_container_width=True,
+                type="primary" if _is_active else "secondary",
+            ):
+                if _is_active:
+                    _active_pills = [p for p in _active_pills if p != _cat]
+                else:
+                    _active_pills = _active_pills + [_cat]
+                st.session_state["ts_active_pills"] = _active_pills
+                st.rerun()
+    with _pill_cols[-1]:
+        if _active_pills:
+            if st.button("Clear", key="ts_pill_clear", use_container_width=True):
+                st.session_state["ts_active_pills"] = []
+                st.rerun()
 
-    def classify_quadrant(row):
-        high_x = row["importance_plot"] >= mid_x
-        high_y = row["growth_pct"] >= mid_y
-        if high_x and high_y:
-            return "Big and growing"
-        if (not high_x) and high_y:
-            return "Small and growing"
-        if high_x and (not high_y):
-            return "Big and fading"
-        return "Small and fading"
+    # ── Cluster toggle ──
+    _show_clusters = st.toggle("Show cluster overlays", value=True, key="ts_show_clusters")
 
-    scoped_df["quadrant"] = scoped_df.apply(classify_quadrant, axis=1)
-
-    # ── Category toggle pills ──
-    try:
-        from utils.scoring_config import SIGNAL_CATEGORIES as _TS_CATS, SIGNAL_COLORS as _TS_COLORS, SIGNAL_ICONS as _TS_ICONS
-    except ImportError:
-        _TS_CATS = ["Outlook", "Risks", "Opportunities", "Investment", "Product Shifts",
-                     "User Behavior", "Monetization", "Strategic Direction", "Broadcaster Threats"]
-        _TS_COLORS = {}
-        _TS_ICONS = {}
-    _cat_pill_html = "<div style='display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 14px;'>"
-    for _cat in _TS_CATS:
-        _cfg = _TS_COLORS.get(_cat, {"tag": "#374151", "bg": "#f3f4f6"})
-        _icon = _TS_ICONS.get(_cat, "")
-        _pill_bg = _cfg["tag"]
-        _cat_pill_html += (
-            f"<span style='background:{_pill_bg};color:white;border:none;"
-            f"border-radius:999px;padding:3px 10px;font-size:0.72rem;font-weight:600;"
-            f"white-space:nowrap;'>{_icon} {_cat}</span>"
-        )
-    _cat_pill_html += "</div>"
-    st.markdown(_cat_pill_html, unsafe_allow_html=True)
-
-    n_companies = int(scoped_df['total_companies'].max()) if not scoped_df['total_companies'].isna().all() else 0
-    st.caption(
-        f"Source: earningscall_transcripts/topic_metrics.csv · Period: {selected_period} · "
-        f"{n_companies} companies"
-    )
-    render_standard_overview_comment("Transcript Topic Growth vs Importance", selected_year)
-
-    # ── Cluster definitions for related topics ──
+    # ── Cluster definitions ──
     _TOPIC_CLUSTERS = {
-        "AI & Machine Learning": ["AI", "Generative AI", "Innovation", "Product & Platform Shifts"],
-        "Cloud & Infrastructure": ["Cloud & infrastructure", "Security & privacy"],
-        "Advertising": ["Advertising", "Retail Media", "Pricing & monetization", "Monetization Strategy"],
-        "Streaming & Content": ["Streaming & CTV", "Subscriber Growth", "Creator Economy", "Broadcaster Threats"],
-        "Cost & Efficiency": ["Cost Reduction", "Cost optimization", "Inflation", "Supply chain"],
-        "Regulation & Risk": ["Regulation & Privacy", "Regulation & legal", "Regulatory", "Geopolitical uncertainty", "Sustainability", "Risks"],
+        "AI & Machine Learning": ["AI & Machine Learning", "AI", "Generative AI", "Innovation", "Product & Platform Shifts"],
+        "Cloud & Infrastructure": ["Cloud & Infrastructure", "Cloud & infrastructure", "Security & privacy"],
+        "Advertising": ["Advertising", "Retail & E-Commerce", "Retail Media", "Pricing & monetization", "Monetization Strategy"],
+        "Streaming & Content": ["Streaming & Subscriptions", "Streaming & CTV", "Content & IP", "Subscriber Growth", "Creator Economy", "Broadcaster Threats"],
+        "Cost & Efficiency": ["Cost & Efficiency", "Cost Reduction", "Cost optimization", "Inflation", "Supply chain"],
+        "Regulation & Risk": ["Privacy & Regulation", "Regulation & Privacy", "Regulation & legal", "Regulatory", "Geopolitical uncertainty", "Sustainability", "Risks"],
         "Financial Strategy": ["Capital allocation", "Capital Allocation & Investment", "Debt & Leverage", "Shareholder Returns", "Financial Health", "Guidance", "Segment performance", "M&A Activity", "Outlook", "Strategic Direction"],
-        "Growth & Expansion": ["Market Expansion", "International", "Customer Metrics", "Consumer demand", "Competition", "Opportunities", "User Behavior"],
+        "Growth & Expansion": ["Market Expansion", "International", "Customer Metrics", "Consumer demand", "Competition", "Opportunities", "User Behavior", "Macro & Economy"],
     }
     _CLUSTER_COLORS = {
         "AI & Machine Learning": "#7C3AED",
@@ -6632,159 +6637,735 @@ def _render_transcript_topic_growth_chart(
         "Financial Strategy": "#059669",
         "Growth & Expansion": "#0EA5E9",
     }
-    # Map topic → cluster
     _topic_to_cluster = {}
     for cluster, topics in _TOPIC_CLUSTERS.items():
         for t in topics:
             _topic_to_cluster[t] = cluster
-    scoped_df["cluster"] = scoped_df["topic"].map(_topic_to_cluster).fillna("")
 
-    # ── Build figure ──
-    fig = go.Figure()
+    quadrant_colors = {
+        "Big and growing": "#1D4ED8",
+        "Small and growing": "#0EA5E9",
+        "Big and fading": "#F97316",
+        "Small and fading": "#94A3B8",
+    }
 
-    # 1) Individual topic dots (grey, small)
-    for _, row in scoped_df.iterrows():
-        cluster = row["cluster"]
-        q = row["quadrant"]
-        dot_color = _CLUSTER_COLORS.get(cluster, quadrant_colors.get(q, "#94A3B8"))
-        mention_sz = max(6, min(40, float(row["mention_count"]) * 0.6)) if pd.notna(row["mention_count"]) else 8
-        fig.add_trace(go.Scatter(
-            x=[row["importance_plot"]],
-            y=[row["growth_pct"]],
-            mode="markers+text",
-            marker=dict(
-                size=mention_sz,
-                color=dot_color,
-                opacity=0.75,
-                line=dict(color="white", width=1),
-            ),
-            text=[row["topic"]],
-            textposition="top center",
-            textfont=dict(size=10, color="#374151"),
-            customdata=[[row["topic"], row["importance_pct"], row["growth_pct"],
-                         row["mention_count"], row["companies_mentioned"], row["total_companies"], cluster]],
-            hovertemplate=(
-                "<b>%{customdata[0]}</b>"
-                "<br>Cluster: %{customdata[6]}"
-                "<br>Importance: %{customdata[1]:.1f}% of companies"
-                "<br>Growth vs prior quarter: %{customdata[2]:+.1f}%"
-                "<br>Mentions: %{customdata[3]:,.0f}"
-                "<br>Companies: %{customdata[4]:,.0f} / %{customdata[5]:,.0f}"
-                "<extra></extra>"
-            ),
-            showlegend=False,
-        ))
+    # ══════════════════════════════════════════════════════════════════════════
+    # MODE 1: TOPICS — bubble chart of 12 business domain topics
+    # ══════════════════════════════════════════════════════════════════════════
+    if _view_mode == "Topics":
+        if metrics_df.empty:
+            st.info("No topic data available for this period.")
+            return False
 
-    # 2) Cluster summary bubbles (larger, colored, outlined)
-    for cluster, topics in _TOPIC_CLUSTERS.items():
-        cluster_rows = scoped_df[scoped_df["cluster"] == cluster]
-        if cluster_rows.empty:
-            continue
-        cx = float(cluster_rows["importance_plot"].mean())
-        cy = float(cluster_rows["growth_pct"].mean())
-        c_mentions = float(cluster_rows["mention_count"].sum())
-        c_color = _CLUSTER_COLORS.get(cluster, "#94A3B8")
-        fig.add_trace(go.Scatter(
-            x=[cx], y=[cy],
-            mode="markers+text",
-            marker=dict(
-                size=max(30, min(70, c_mentions * 0.25)),
-                color=c_color,
-                opacity=0.18,
-                line=dict(color=c_color, width=2, dash="dot"),
-            ),
-            text=[f"<b>{cluster}</b>"],
-            textposition="middle center",
-            textfont=dict(size=11, color=c_color, family="DM Sans, Inter, sans-serif"),
-            hovertemplate=f"<b>{cluster}</b><br>Total mentions: {c_mentions:,.0f}<extra></extra>",
-            showlegend=False,
-        ))
+        # Apply filters
+        scoped_df = metrics_df[metrics_df["_year_int"] == int(_ts_year)].copy()
+        if _ts_quarter != "All":
+            scoped_df = scoped_df[scoped_df["_quarter_norm"] == _ts_quarter].copy()
+        if scoped_df.empty:
+            st.info("No topic data for this period.")
+            return False
+        if _ts_company != "All companies" and "companies_list" in scoped_df.columns:
+            scoped_df = scoped_df[scoped_df["companies_list"].fillna("").str.contains(_ts_company, case=False, na=False)].copy()
+        if scoped_df.empty:
+            st.info("No topic data for this company/period combination.")
+            return False
+        scoped_df = scoped_df.sort_values("topic").copy()
 
-    # 3) Quadrant dividers
-    fig.add_hline(y=0, line_dash="dot", line_color="rgba(0,0,0,0.18)", line_width=1)
-    fig.add_vline(x=mid_x, line_dash="dot", line_color="rgba(0,0,0,0.18)", line_width=1)
+        scoped_df["importance_pct"] = scoped_df["importance_pct"].fillna(0.0).clip(lower=0.0, upper=100.0)
+        scoped_df["importance_plot"] = scoped_df["importance_pct"].clip(lower=0.1)
+        scoped_df["growth_pct"] = scoped_df["growth_pct"].fillna(0.0).clip(lower=-100.0, upper=200.0)
+        scoped_df["mention_count"] = scoped_df["mention_count"].fillna(0.0).clip(lower=0.0)
+        scoped_df["companies_mentioned"] = scoped_df["companies_mentioned"].fillna(0.0)
+        scoped_df["total_companies"] = scoped_df["total_companies"].fillna(0.0)
+        scoped_df["cluster"] = scoped_df["topic"].map(_topic_to_cluster).fillna("")
 
-    # 4) Quadrant corner labels
-    x_range = scoped_df["importance_plot"]
-    y_range = scoped_df["growth_pct"]
-    x_min_log = max(0.05, float(x_range.min()) * 0.5) if not x_range.empty else 0.1
-    x_max_log = min(120, float(x_range.max()) * 1.5) if not x_range.empty else 100
-    y_min = max(-100, float(y_range.min()) - 15)
-    y_max = min(200, float(y_range.max()) + 25)
-    _corner_labels = [
-        (x_min_log * 1.2, y_max - 5, "Small & growing<br>in importance", "#0EA5E9"),
-        (x_max_log * 0.6, y_max - 5, "Big & growing<br>in importance", "#1D4ED8"),
-        (x_min_log * 1.2, y_min + 5, "Small & fading<br>importance", "#94A3B8"),
-        (x_max_log * 0.6, y_min + 5, "Big & fading<br>importance", "#F97316"),
-    ]
-    for lx, ly, ltext, lcolor in _corner_labels:
-        fig.add_annotation(
-            x=np.log10(lx), y=ly, text=ltext,
-            showarrow=False, font=dict(size=10, color=lcolor),
-            xref="x", yref="y", opacity=0.7,
-        )
+        mid_x = max(float(scoped_df["importance_plot"].median()), 1.0)
 
-    fig.update_layout(
-        height=620,
-        margin=dict(l=60, r=40, t=30, b=70),
-        paper_bgcolor="white",
-        plot_bgcolor="white",
-        font=dict(color="#374151", family="DM Sans, Inter, sans-serif"),
-        showlegend=False,
-    )
-    fig.update_xaxes(
-        type="log",
-        title=dict(text="Keyword importance (% of tracked companies mentioning topic)", font=dict(color="#6b7280", size=12)),
-        tickvals=[0.1, 0.5, 1, 2, 5, 10, 20, 50, 100],
-        ticktext=["0.1%", "0.5%", "1%", "2%", "5%", "10%", "20%", "50%", "100%"],
-        tickfont=dict(color="#374151", size=11),
-        gridcolor="rgba(0,0,0,0.05)",
-        zeroline=False,
-        range=[np.log10(max(0.05, x_min_log)), np.log10(x_max_log)],
-    )
-    fig.update_yaxes(
-        title=dict(text="Keyword growth vs prior quarter (%)", font=dict(color="#6b7280", size=12)),
-        range=[y_min, y_max],
-        ticksuffix="%",
-        tickfont=dict(color="#374151", size=11),
-        gridcolor="rgba(0,0,0,0.05)",
-        zeroline=False,
-    )
+        def classify_quadrant(row):
+            high_x = row["importance_plot"] >= mid_x
+            high_y = row["growth_pct"] >= 0
+            if high_x and high_y:
+                return "Big and growing"
+            if (not high_x) and high_y:
+                return "Small and growing"
+            if high_x and (not high_y):
+                return "Big and fading"
+            return "Small and fading"
 
-    _apply_light_theme(fig)
-    st.plotly_chart(fig, use_container_width=True, config=plotly_config, key="ov_pc34")
-    # ── Top signals as styled cards (replaces dataframe) ──
-    ranked = scoped_df.sort_values(["mention_count", "importance_pct"], ascending=[False, False]).head(12).copy()
-    if not ranked.empty:
-        st.caption("Top topic signals for this selected period")
-        _sig_cards_html = "<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;margin:8px 0;'>"
-        for _, _r in ranked.iterrows():
-            _topic = html.escape(str(_r.get("topic", "")))
-            _mentions = int(_r.get("mention_count", 0))
-            _imp = float(_r.get("importance_pct", 0))
-            _growth = float(_r.get("growth_pct", 0))
-            _cluster = str(_r.get("cluster", ""))
-            _c_color = _CLUSTER_COLORS.get(_cluster, "#6b7280")
-            _growth_color = "#15803d" if _growth > 0 else "#dc2626" if _growth < 0 else "#6b7280"
-            _growth_arrow = "↑" if _growth > 0 else "↓" if _growth < 0 else "→"
-            _sig_cards_html += (
-                f"<div style='background:white;border:1px solid #e5e7eb;border-left:3px solid {_c_color};"
-                f"border-radius:0 8px 8px 0;padding:10px 12px;'>"
-                f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;'>"
-                f"<span style='font-weight:700;font-size:0.88rem;color:#1f2937;'>{_topic}</span>"
-                f"<span style='font-size:0.65rem;background:{_c_color};color:white;padding:2px 7px;"
-                f"border-radius:10px;white-space:nowrap;'>{html.escape(_cluster) if _cluster else 'Other'}</span>"
-                f"</div>"
-                f"<div style='display:flex;gap:12px;font-size:0.75rem;color:#6b7280;'>"
-                f"<span>{_mentions} mentions</span>"
-                f"<span>{_imp:.0f}% reach</span>"
-                f"<span style='color:{_growth_color};font-weight:600;'>{_growth_arrow} {_growth:+.0f}%</span>"
-                f"</div></div>"
+        scoped_df["quadrant"] = scoped_df.apply(classify_quadrant, axis=1)
+
+        # Build enriched signal distribution from unified data
+        _topic_sig_dist = {}
+        if not unified["topic_view"].empty:
+            for _, urow in unified["topic_view"].iterrows():
+                try:
+                    _topic_sig_dist[urow["topic"]] = urow.get("signal_distribution", {})
+                except Exception:
+                    pass
+
+        n_companies = int(scoped_df["total_companies"].max()) if not scoped_df["total_companies"].isna().all() else 0
+        st.caption(f"Period: {selected_period} · {n_companies} companies · X = company reach, Y = growth, size = mentions")
+        render_standard_overview_comment("Transcript Topic Growth vs Importance", selected_year)
+
+        fig = go.Figure()
+
+        # ── Cluster overlays (background) ──
+        if _show_clusters:
+            for cluster, topics in _TOPIC_CLUSTERS.items():
+                cluster_rows = scoped_df[scoped_df["cluster"] == cluster]
+                if cluster_rows.empty or len(cluster_rows) < 1:
+                    continue
+                cx = float(cluster_rows["importance_plot"].mean())
+                cy = float(cluster_rows["growth_pct"].mean())
+                c_mentions = float(cluster_rows["mention_count"].sum())
+                c_color = _CLUSTER_COLORS.get(cluster, "#94A3B8")
+                fig.add_trace(go.Scatter(
+                    x=[cx], y=[cy],
+                    mode="markers+text",
+                    marker=dict(
+                        size=max(40, min(80, c_mentions * 0.3)),
+                        color=c_color,
+                        opacity=0.12,
+                        line=dict(color=c_color, width=1.5, dash="dot"),
+                    ),
+                    text=[f"<b>{cluster}</b>"],
+                    textposition="middle center",
+                    textfont=dict(size=10, color=c_color, family="DM Sans, Inter, sans-serif"),
+                    hovertemplate=f"<b>{cluster}</b><br>Topics: {len(cluster_rows)}<br>Total mentions: {c_mentions:,.0f}<extra></extra>",
+                    showlegend=False,
+                ))
+
+        # ── Individual topic dots ──
+        for _, row in scoped_df.iterrows():
+            cluster = row["cluster"]
+            q = row["quadrant"]
+            dot_color = _CLUSTER_COLORS.get(cluster, quadrant_colors.get(q, "#94A3B8"))
+            mention_sz = max(8, min(45, float(row["mention_count"]) * 0.6)) if pd.notna(row["mention_count"]) else 8
+
+            # Check if this topic should be dimmed by active signal pill filter
+            _pill_opacity = 0.75
+            if _active_pills:
+                _sd = _topic_sig_dist.get(row["topic"], {})
+                if isinstance(_sd, str):
+                    try:
+                        _sd = _json.loads(_sd)
+                    except Exception:
+                        _sd = {}
+                _total_s = sum(_sd.values()) if _sd else 0
+                _pill_match = sum(_sd.get(p, 0) for p in _active_pills) if _sd else 0
+                if _total_s > 0 and _pill_match / _total_s >= 0.15:
+                    _pill_opacity = 0.85
+                else:
+                    _pill_opacity = 0.12
+
+            # Build signal distribution tooltip line
+            _sig_tip = ""
+            _sd_raw = _topic_sig_dist.get(row["topic"], {})
+            if isinstance(_sd_raw, str):
+                try:
+                    _sd_raw = _json.loads(_sd_raw)
+                except Exception:
+                    _sd_raw = {}
+            if _sd_raw:
+                _total_s = sum(_sd_raw.values())
+                if _total_s > 0:
+                    _top3 = sorted(_sd_raw.items(), key=lambda kv: kv[1], reverse=True)[:3]
+                    _parts = [f"{k} ({v*100//_total_s}%)" for k, v in _top3]
+                    _sig_tip = "<br>Top signals: " + ", ".join(_parts)
+
+            fig.add_trace(go.Scatter(
+                x=[row["importance_plot"]],
+                y=[row["growth_pct"]],
+                mode="markers+text",
+                marker=dict(
+                    size=mention_sz,
+                    color=dot_color,
+                    opacity=_pill_opacity,
+                    line=dict(color="white", width=1),
+                ),
+                text=[row["topic"]],
+                textposition="top center",
+                textfont=dict(size=10, color="#374151"),
+                customdata=[[
+                    row["topic"], row["importance_pct"], row["growth_pct"],
+                    row["mention_count"], row["companies_mentioned"],
+                    row["total_companies"], cluster, _sig_tip,
+                ]],
+                hovertemplate=(
+                    "<b>%{customdata[0]}</b>"
+                    "<br>Cluster: %{customdata[6]}"
+                    "<br>Importance: %{customdata[1]:.1f}% of companies"
+                    "<br>Growth: %{customdata[2]:+.1f}%"
+                    "<br>Mentions: %{customdata[3]:,.0f}"
+                    "<br>Companies: %{customdata[4]:,.0f} / %{customdata[5]:,.0f}"
+                    "%{customdata[7]}"
+                    "<extra></extra>"
+                ),
+                showlegend=False,
+            ))
+
+        # ── Quadrant dividers ──
+        fig.add_hline(y=0, line_dash="dot", line_color="rgba(0,0,0,0.15)", line_width=1)
+        fig.add_vline(x=mid_x, line_dash="dot", line_color="rgba(0,0,0,0.15)", line_width=1)
+
+        # ── Quadrant labels ──
+        x_range = scoped_df["importance_plot"]
+        y_range = scoped_df["growth_pct"]
+        x_min_log = max(0.05, float(x_range.min()) * 0.5) if not x_range.empty else 0.1
+        x_max_log = min(120, float(x_range.max()) * 1.5) if not x_range.empty else 100
+        y_min = max(-100, float(y_range.min()) - 15)
+        y_max = min(200, float(y_range.max()) + 25)
+        for lx, ly, ltext, lcolor in [
+            (x_min_log * 1.2, y_max - 5, "Small & growing", "#0EA5E9"),
+            (x_max_log * 0.6, y_max - 5, "Big & growing", "#1D4ED8"),
+            (x_min_log * 1.2, y_min + 5, "Small & fading", "#94A3B8"),
+            (x_max_log * 0.6, y_min + 5, "Big & fading", "#F97316"),
+        ]:
+            fig.add_annotation(
+                x=np.log10(lx), y=ly, text=ltext,
+                showarrow=False, font=dict(size=10, color=lcolor),
+                xref="x", yref="y", opacity=0.6,
             )
-        _sig_cards_html += "</div>"
-        st.markdown(_sig_cards_html, unsafe_allow_html=True)
+
+        fig.update_layout(
+            height=620,
+            margin=dict(l=60, r=40, t=30, b=70),
+            paper_bgcolor="white", plot_bgcolor="white",
+            font=dict(color="#374151", family="DM Sans, Inter, sans-serif"),
+            showlegend=False,
+        )
+        fig.update_xaxes(
+            type="log",
+            title=dict(text="Company reach (% mentioning topic)", font=dict(color="#6b7280", size=12)),
+            tickvals=[0.1, 0.5, 1, 2, 5, 10, 20, 50, 100],
+            ticktext=["0.1%", "0.5%", "1%", "2%", "5%", "10%", "20%", "50%", "100%"],
+            tickfont=dict(color="#374151", size=11),
+            gridcolor="rgba(0,0,0,0.05)",
+            zeroline=False,
+            range=[np.log10(max(0.05, x_min_log)), np.log10(x_max_log)],
+        )
+        fig.update_yaxes(
+            title=dict(text="Growth vs prior period (%)", font=dict(color="#6b7280", size=12)),
+            range=[y_min, y_max], ticksuffix="%",
+            tickfont=dict(color="#374151", size=11),
+            gridcolor="rgba(0,0,0,0.05)", zeroline=False,
+        )
+        _apply_light_theme(fig)
+        st.plotly_chart(fig, use_container_width=True, config=plotly_config, key="ov_pc34_topics")
+
+        # ── Drill-down on topic click ──
+        _sel_topic = st.session_state.get("ts_drill_topic", "")
+        _drill_options = ["(none)"] + sorted(scoped_df["topic"].unique().tolist())
+        _drill_idx = _drill_options.index(_sel_topic) if _sel_topic in _drill_options else 0
+        _picked = st.selectbox("Drill into topic", _drill_options, index=_drill_idx, key="ts_drill_topic_sel", label_visibility="collapsed")
+        if _picked and _picked != "(none)":
+            st.session_state["ts_drill_topic"] = _picked
+            _render_drill_down_panel(_picked, unified, _TS_COLORS, _TS_ICONS, _CLUSTER_COLORS, _topic_to_cluster, mode="topic")
+
+        # ── Top signals cards ──
+        ranked = scoped_df.sort_values(["mention_count", "importance_pct"], ascending=[False, False]).head(12).copy()
+        if not ranked.empty:
+            st.caption("Top topics for this period")
+            _sig_cards_html = "<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;margin:8px 0;'>"
+            for _, _r in ranked.iterrows():
+                _topic = html.escape(str(_r.get("topic", "")))
+                _mentions = int(_r.get("mention_count", 0))
+                _imp = float(_r.get("importance_pct", 0))
+                _growth = float(_r.get("growth_pct", 0))
+                _cluster = str(_r.get("cluster", ""))
+                _c_color = _CLUSTER_COLORS.get(_cluster, "#6b7280")
+                _growth_color = "#15803d" if _growth > 0 else "#dc2626" if _growth < 0 else "#6b7280"
+                _growth_arrow = "↑" if _growth > 0 else "↓" if _growth < 0 else "→"
+                _sig_cards_html += (
+                    f"<div style='background:white;border:1px solid #e5e7eb;border-left:3px solid {_c_color};"
+                    f"border-radius:0 8px 8px 0;padding:10px 12px;'>"
+                    f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;'>"
+                    f"<span style='font-weight:700;font-size:0.88rem;color:#1f2937;'>{_topic}</span>"
+                    f"<span style='font-size:0.65rem;background:{_c_color};color:white;padding:2px 7px;"
+                    f"border-radius:10px;white-space:nowrap;'>{html.escape(_cluster) if _cluster else 'Other'}</span>"
+                    f"</div>"
+                    f"<div style='display:flex;gap:12px;font-size:0.75rem;color:#6b7280;'>"
+                    f"<span>{_mentions} mentions</span>"
+                    f"<span>{_imp:.0f}% reach</span>"
+                    f"<span style='color:{_growth_color};font-weight:600;'>{_growth_arrow} {_growth:+.0f}%</span>"
+                    f"</div></div>"
+                )
+            _sig_cards_html += "</div>"
+            st.markdown(_sig_cards_html, unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # MODE 2: SIGNALS — bubble chart of 9 signal intelligence categories
+    # ══════════════════════════════════════════════════════════════════════════
+    elif _view_mode == "Signals":
+        sig_df = unified.get("signal_view", pd.DataFrame())
+        if sig_df.empty:
+            st.info("No signal data available. Ensure transcript data is loaded.")
+            return False
+
+        sig_df = sig_df.copy()
+        sig_df["importance_pct"] = sig_df["importance_pct"].fillna(0.0).clip(lower=0.0, upper=100.0)
+        sig_df["importance_plot"] = sig_df["importance_pct"].clip(lower=0.1)
+        sig_df["growth_pct"] = sig_df["growth_pct"].fillna(0.0).clip(lower=-100.0, upper=200.0)
+        sig_df["mention_count"] = sig_df["mention_count"].fillna(0.0).clip(lower=0.0)
+        sig_df["companies_mentioned"] = sig_df["companies_mentioned"].fillna(0.0)
+        sig_df["total_companies"] = sig_df["total_companies"].fillna(0.0)
+
+        n_companies = int(sig_df["total_companies"].max()) if not sig_df["total_companies"].isna().all() else 0
+        st.caption(f"Period: {selected_period} · {n_companies} companies · Each bubble = signal intelligence category")
+        render_standard_overview_comment("Signal Intelligence Map", selected_year)
+
+        fig = go.Figure()
+
+        for _, row in sig_df.iterrows():
+            cat = row.get("signal_category", "")
+            _cfg = _TS_COLORS.get(cat, {"tag": "#374151", "border": "#6b7280"})
+            dot_color = _cfg.get("tag", "#374151")
+            mention_sz = max(20, min(60, float(row["mention_count"]) * 0.15)) if pd.notna(row["mention_count"]) else 20
+            _icon = _TS_ICONS.get(cat, "")
+
+            # Pill filter opacity
+            _pill_opacity = 0.8
+            if _active_pills and cat not in _active_pills:
+                _pill_opacity = 0.12
+
+            # Topic distribution tooltip
+            _td_raw = row.get("topic_distribution", {})
+            if isinstance(_td_raw, str):
+                try:
+                    _td_raw = _json.loads(_td_raw)
+                except Exception:
+                    _td_raw = {}
+            _topic_tip = ""
+            if _td_raw:
+                _total_t = sum(_td_raw.values())
+                if _total_t > 0:
+                    _top3 = sorted(_td_raw.items(), key=lambda kv: kv[1], reverse=True)[:3]
+                    _parts = [f"{k} ({v*100//_total_t}%)" for k, v in _top3]
+                    _topic_tip = "<br>Top topics: " + ", ".join(_parts)
+
+            fig.add_trace(go.Scatter(
+                x=[row["importance_plot"]],
+                y=[row["growth_pct"]],
+                mode="markers+text",
+                marker=dict(
+                    size=mention_sz,
+                    color=dot_color,
+                    opacity=_pill_opacity,
+                    line=dict(color="white", width=1.5),
+                ),
+                text=[f"{_icon} {cat}"],
+                textposition="top center",
+                textfont=dict(size=11, color=dot_color, family="DM Sans, Inter, sans-serif"),
+                customdata=[[
+                    cat, row["importance_pct"], row["growth_pct"],
+                    row["mention_count"], row["companies_mentioned"],
+                    row["total_companies"], _topic_tip,
+                ]],
+                hovertemplate=(
+                    "<b>%{customdata[0]}</b>"
+                    "<br>Company reach: %{customdata[1]:.1f}%"
+                    "<br>Growth: %{customdata[2]:+.1f}%"
+                    "<br>Mentions: %{customdata[3]:,.0f}"
+                    "<br>Companies: %{customdata[4]:,.0f} / %{customdata[5]:,.0f}"
+                    "%{customdata[6]}"
+                    "<extra></extra>"
+                ),
+                showlegend=False,
+            ))
+
+        # Quadrant dividers
+        mid_x_s = max(float(sig_df["importance_plot"].median()), 1.0)
+        fig.add_hline(y=0, line_dash="dot", line_color="rgba(0,0,0,0.15)", line_width=1)
+        fig.add_vline(x=mid_x_s, line_dash="dot", line_color="rgba(0,0,0,0.15)", line_width=1)
+
+        x_range_s = sig_df["importance_plot"]
+        y_range_s = sig_df["growth_pct"]
+        x_min_s = max(0.05, float(x_range_s.min()) * 0.5) if not x_range_s.empty else 0.1
+        x_max_s = min(120, float(x_range_s.max()) * 1.5) if not x_range_s.empty else 100
+        y_min_s = max(-100, float(y_range_s.min()) - 15)
+        y_max_s = min(200, float(y_range_s.max()) + 25)
+
+        fig.update_layout(
+            height=620,
+            margin=dict(l=60, r=40, t=30, b=70),
+            paper_bgcolor="white", plot_bgcolor="white",
+            font=dict(color="#374151", family="DM Sans, Inter, sans-serif"),
+            showlegend=False,
+        )
+        fig.update_xaxes(
+            type="log",
+            title=dict(text="Company reach (% mentioning signal type)", font=dict(color="#6b7280", size=12)),
+            tickvals=[0.1, 0.5, 1, 2, 5, 10, 20, 50, 100],
+            ticktext=["0.1%", "0.5%", "1%", "2%", "5%", "10%", "20%", "50%", "100%"],
+            tickfont=dict(color="#374151", size=11),
+            gridcolor="rgba(0,0,0,0.05)", zeroline=False,
+            range=[np.log10(max(0.05, x_min_s)), np.log10(x_max_s)],
+        )
+        fig.update_yaxes(
+            title=dict(text="Growth vs prior period (%)", font=dict(color="#6b7280", size=12)),
+            range=[y_min_s, y_max_s], ticksuffix="%",
+            tickfont=dict(color="#374151", size=11),
+            gridcolor="rgba(0,0,0,0.05)", zeroline=False,
+        )
+        _apply_light_theme(fig)
+        st.plotly_chart(fig, use_container_width=True, config=plotly_config, key="ov_pc34_signals")
+
+        # Drill-down selector for signals
+        _sel_sig = st.session_state.get("ts_drill_signal", "")
+        _sig_options = ["(none)"] + sorted(sig_df["signal_category"].unique().tolist())
+        _sig_idx = _sig_options.index(_sel_sig) if _sel_sig in _sig_options else 0
+        _picked_sig = st.selectbox("Drill into signal", _sig_options, index=_sig_idx, key="ts_drill_signal_sel", label_visibility="collapsed")
+        if _picked_sig and _picked_sig != "(none)":
+            st.session_state["ts_drill_signal"] = _picked_sig
+            _render_drill_down_panel(_picked_sig, unified, _TS_COLORS, _TS_ICONS, _CLUSTER_COLORS, _topic_to_cluster, mode="signal")
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # MODE 3: COMBINED — topic bubbles colored by dominant signal type
+    # ══════════════════════════════════════════════════════════════════════════
+    elif _view_mode == "Combined":
+        combo_df = unified.get("topic_view", pd.DataFrame())
+        if combo_df.empty:
+            # Fall back to metrics_df if unified didn't work
+            if not metrics_df.empty:
+                st.info("Unified data not available — showing Topics mode instead.")
+            else:
+                st.info("No data available for Combined mode.")
+            return False
+
+        combo_df = combo_df.copy()
+        combo_df["importance_pct"] = combo_df["importance_pct"].fillna(0.0).clip(lower=0.0, upper=100.0)
+        combo_df["importance_plot"] = combo_df["importance_pct"].clip(lower=0.1)
+        combo_df["growth_pct"] = combo_df["growth_pct"].fillna(0.0).clip(lower=-100.0, upper=200.0)
+        combo_df["mention_count"] = combo_df["mention_count"].fillna(0.0).clip(lower=0.0)
+        combo_df["companies_mentioned"] = combo_df["companies_mentioned"].fillna(0.0)
+        combo_df["total_companies"] = combo_df["total_companies"].fillna(0.0)
+        combo_df["cluster"] = combo_df["topic"].map(_topic_to_cluster).fillna("")
+
+        n_companies = int(combo_df["total_companies"].max()) if not combo_df["total_companies"].isna().all() else 0
+        st.caption(f"Period: {selected_period} · {n_companies} companies · Color = dominant signal type per topic")
+        render_standard_overview_comment("Combined Topic-Signal Map", selected_year)
+
+        fig = go.Figure()
+
+        # Cluster overlays
+        if _show_clusters:
+            for cluster, topics in _TOPIC_CLUSTERS.items():
+                cluster_rows = combo_df[combo_df["cluster"] == cluster]
+                if cluster_rows.empty:
+                    continue
+                cx = float(cluster_rows["importance_plot"].mean())
+                cy = float(cluster_rows["growth_pct"].mean())
+                c_mentions = float(cluster_rows["mention_count"].sum())
+                c_color = _CLUSTER_COLORS.get(cluster, "#94A3B8")
+                fig.add_trace(go.Scatter(
+                    x=[cx], y=[cy],
+                    mode="markers+text",
+                    marker=dict(
+                        size=max(40, min(80, c_mentions * 0.3)),
+                        color=c_color,
+                        opacity=0.08,
+                        line=dict(color=c_color, width=1.5, dash="dot"),
+                    ),
+                    text=[f"<b>{cluster}</b>"],
+                    textposition="middle center",
+                    textfont=dict(size=9, color=c_color, family="DM Sans, Inter, sans-serif"),
+                    hoverinfo="skip",
+                    showlegend=False,
+                ))
+
+        for _, row in combo_df.iterrows():
+            topic = row.get("topic", "")
+            _sd_raw = row.get("signal_distribution", {})
+            if isinstance(_sd_raw, str):
+                try:
+                    _sd_raw = _json.loads(_sd_raw)
+                except Exception:
+                    _sd_raw = {}
+
+            # Determine dominant signal → color
+            dominant_sig = ""
+            dominant_pct = 0
+            _total_s = sum(_sd_raw.values()) if _sd_raw else 0
+            if _sd_raw and _total_s > 0:
+                dominant_sig = max(_sd_raw, key=_sd_raw.get)
+                dominant_pct = round(_sd_raw[dominant_sig] / _total_s * 100)
+            _cfg = _TS_COLORS.get(dominant_sig, {"tag": "#6b7280"})
+            dot_color = _cfg.get("tag", "#6b7280")
+
+            mention_sz = max(10, min(50, float(row["mention_count"]) * 0.5)) if pd.notna(row["mention_count"]) else 10
+
+            # Pill filter
+            _pill_opacity = 0.8
+            if _active_pills:
+                _pill_match = sum(_sd_raw.get(p, 0) for p in _active_pills)
+                if _total_s > 0 and _pill_match / _total_s >= 0.15:
+                    _pill_opacity = 0.85
+                else:
+                    _pill_opacity = 0.12
+
+            # Build tooltip
+            _sig_tip = ""
+            if _sd_raw and _total_s > 0:
+                _top3 = sorted(_sd_raw.items(), key=lambda kv: kv[1], reverse=True)[:3]
+                _parts = [f"{k} ({v*100//_total_s}%)" for k, v in _top3]
+                _sig_tip = "<br>Signals: " + ", ".join(_parts)
+
+            _icon = _TS_ICONS.get(dominant_sig, "")
+            cluster = row.get("cluster", "")
+
+            fig.add_trace(go.Scatter(
+                x=[row["importance_plot"]],
+                y=[row["growth_pct"]],
+                mode="markers+text",
+                marker=dict(
+                    size=mention_sz,
+                    color=dot_color,
+                    opacity=_pill_opacity,
+                    line=dict(color="white", width=1.5),
+                ),
+                text=[f"{_icon} {topic}"],
+                textposition="top center",
+                textfont=dict(size=10, color="#374151"),
+                customdata=[[
+                    topic, row["importance_pct"], row["growth_pct"],
+                    row["mention_count"], row["companies_mentioned"],
+                    row["total_companies"],
+                    f"Dominant: {dominant_sig} ({dominant_pct}%)" if dominant_sig else "No signal",
+                    _sig_tip,
+                ]],
+                hovertemplate=(
+                    "<b>%{customdata[0]}</b>"
+                    "<br>%{customdata[6]}"
+                    "<br>Reach: %{customdata[1]:.1f}%"
+                    "<br>Growth: %{customdata[2]:+.1f}%"
+                    "<br>Mentions: %{customdata[3]:,.0f}"
+                    "<br>Companies: %{customdata[4]:,.0f} / %{customdata[5]:,.0f}"
+                    "%{customdata[7]}"
+                    "<extra></extra>"
+                ),
+                showlegend=False,
+            ))
+
+        # Quadrant lines
+        mid_x_c = max(float(combo_df["importance_plot"].median()), 1.0)
+        fig.add_hline(y=0, line_dash="dot", line_color="rgba(0,0,0,0.15)", line_width=1)
+        fig.add_vline(x=mid_x_c, line_dash="dot", line_color="rgba(0,0,0,0.15)", line_width=1)
+
+        x_range_c = combo_df["importance_plot"]
+        y_range_c = combo_df["growth_pct"]
+        x_min_c = max(0.05, float(x_range_c.min()) * 0.5) if not x_range_c.empty else 0.1
+        x_max_c = min(120, float(x_range_c.max()) * 1.5) if not x_range_c.empty else 100
+        y_min_c = max(-100, float(y_range_c.min()) - 15)
+        y_max_c = min(200, float(y_range_c.max()) + 25)
+
+        # Signal color legend for Combined mode
+        _legend_html = "<div style='display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;'>"
+        _used_sigs = set()
+        for _, row in combo_df.iterrows():
+            _sd = row.get("signal_distribution", {})
+            if isinstance(_sd, str):
+                try:
+                    _sd = _json.loads(_sd)
+                except Exception:
+                    _sd = {}
+            if _sd:
+                _used_sigs.add(max(_sd, key=_sd.get))
+        for _cat in _TS_CATS:
+            if _cat in _used_sigs:
+                _cfg = _TS_COLORS.get(_cat, {"tag": "#374151"})
+                _icon = _TS_ICONS.get(_cat, "")
+                _legend_html += (
+                    f"<span style='display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;color:#374151;'>"
+                    f"<span style='width:10px;height:10px;border-radius:50%;background:{_cfg['tag']};display:inline-block;'></span>"
+                    f"{_icon} {_cat}</span>"
+                )
+        _legend_html += "</div>"
+        st.markdown(_legend_html, unsafe_allow_html=True)
+
+        fig.update_layout(
+            height=620,
+            margin=dict(l=60, r=40, t=30, b=70),
+            paper_bgcolor="white", plot_bgcolor="white",
+            font=dict(color="#374151", family="DM Sans, Inter, sans-serif"),
+            showlegend=False,
+        )
+        fig.update_xaxes(
+            type="log",
+            title=dict(text="Company reach (% mentioning topic)", font=dict(color="#6b7280", size=12)),
+            tickvals=[0.1, 0.5, 1, 2, 5, 10, 20, 50, 100],
+            ticktext=["0.1%", "0.5%", "1%", "2%", "5%", "10%", "20%", "50%", "100%"],
+            tickfont=dict(color="#374151", size=11),
+            gridcolor="rgba(0,0,0,0.05)", zeroline=False,
+            range=[np.log10(max(0.05, x_min_c)), np.log10(x_max_c)],
+        )
+        fig.update_yaxes(
+            title=dict(text="Growth vs prior period (%)", font=dict(color="#6b7280", size=12)),
+            range=[y_min_c, y_max_c], ticksuffix="%",
+            tickfont=dict(color="#374151", size=11),
+            gridcolor="rgba(0,0,0,0.05)", zeroline=False,
+        )
+        _apply_light_theme(fig)
+        st.plotly_chart(fig, use_container_width=True, config=plotly_config, key="ov_pc34_combined")
+
+        # Drill-down selector for combined mode (by topic)
+        _sel_topic_c = st.session_state.get("ts_drill_combined", "")
+        _combo_options = ["(none)"] + sorted(combo_df["topic"].unique().tolist())
+        _combo_idx = _combo_options.index(_sel_topic_c) if _sel_topic_c in _combo_options else 0
+        _picked_c = st.selectbox("Drill into topic", _combo_options, index=_combo_idx, key="ts_drill_combined_sel", label_visibility="collapsed")
+        if _picked_c and _picked_c != "(none)":
+            st.session_state["ts_drill_combined"] = _picked_c
+            _render_drill_down_panel(_picked_c, unified, _TS_COLORS, _TS_ICONS, _CLUSTER_COLORS, _topic_to_cluster, mode="topic")
+
     render_standard_overview_post_comment("Transcript Topic Growth vs Importance", selected_year)
     return True
+
+
+def _render_drill_down_panel(
+    name: str,
+    unified: dict,
+    signal_colors: dict,
+    signal_icons: dict,
+    cluster_colors: dict,
+    topic_to_cluster: dict,
+    mode: str = "topic",
+) -> None:
+    """Render drill-down panel below chart for a clicked topic or signal."""
+    import json as _json
+
+    sentences = unified.get("sentences", [])
+    if not sentences:
+        st.caption("No sentence-level data available for drill-down.")
+        return
+
+    if mode == "topic":
+        # Filter sentences matching this topic
+        matching = [s for s in sentences if name in s.get("topics", [])]
+        if not matching:
+            st.caption(f"No sentences found for topic: {name}")
+            return
+
+        # Signal distribution
+        sig_dist: dict[str, int] = {}
+        for s in matching:
+            cat = s.get("signal_category", "")
+            if cat:
+                sig_dist[cat] = sig_dist.get(cat, 0) + 1
+
+        cluster = topic_to_cluster.get(name, "")
+        c_color = cluster_colors.get(cluster, "#6b7280")
+
+        # Panel HTML
+        _panel = f"<div style='background:#f9fafb;border:1px solid #e5e7eb;border-left:3px solid {c_color};border-radius:0 10px 10px 0;padding:16px 20px;margin:8px 0;'>"
+        _panel += f"<div style='font-weight:700;font-size:1.05rem;color:#1f2937;margin-bottom:8px;'>{html.escape(name)}</div>"
+        if cluster:
+            _panel += f"<span style='font-size:0.7rem;background:{c_color};color:white;padding:2px 8px;border-radius:10px;'>{html.escape(cluster)}</span>"
+        _panel += f"<div style='font-size:0.8rem;color:#6b7280;margin:8px 0 4px;'>{len(matching)} sentences from {len(set(s['company'] for s in matching))} companies</div>"
+
+        # Signal distribution bars
+        if sig_dist:
+            _total = sum(sig_dist.values())
+            _panel += "<div style='margin:10px 0;'>"
+            _panel += "<div style='font-size:0.75rem;font-weight:600;color:#374151;margin-bottom:6px;'>Signal Distribution:</div>"
+            for cat, count in sorted(sig_dist.items(), key=lambda kv: kv[1], reverse=True):
+                pct = round(count / _total * 100)
+                _cfg = signal_colors.get(cat, {"tag": "#6b7280"})
+                _icon = signal_icons.get(cat, "")
+                _panel += (
+                    f"<div style='display:flex;align-items:center;gap:8px;margin-bottom:3px;'>"
+                    f"<span style='width:100px;font-size:0.72rem;color:#374151;white-space:nowrap;'>{_icon} {html.escape(cat)}</span>"
+                    f"<div style='flex:1;background:#e5e7eb;border-radius:4px;height:14px;overflow:hidden;'>"
+                    f"<div style='width:{pct}%;background:{_cfg.get('tag', '#6b7280')};height:100%;border-radius:4px;'></div></div>"
+                    f"<span style='font-size:0.7rem;color:#6b7280;width:36px;text-align:right;'>{pct}%</span>"
+                    f"</div>"
+                )
+            _panel += "</div>"
+
+        # Top quotes
+        _sorted = sorted(matching, key=lambda s: s.get("best_score", 0), reverse=True)[:5]
+        if _sorted:
+            _panel += "<div style='margin-top:10px;font-size:0.75rem;font-weight:600;color:#374151;'>Top Quotes:</div>"
+            for s in _sorted:
+                _q = html.escape(s["sentence"][:180])
+                _co = html.escape(s.get("company", ""))
+                _spk = html.escape(s.get("speaker", ""))
+                _role = html.escape(s.get("role", ""))
+                _sig = s.get("signal_category", "")
+                _sig_badge = ""
+                if _sig:
+                    _cfg = signal_colors.get(_sig, {"tag": "#6b7280"})
+                    _sig_badge = f"<span style='font-size:0.6rem;background:{_cfg.get('tag','#6b7280')};color:white;padding:1px 5px;border-radius:6px;margin-left:6px;'>{html.escape(_sig)}</span>"
+                _panel += (
+                    f"<div style='background:white;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px;margin:4px 0;'>"
+                    f"<div style='font-size:0.78rem;color:#374151;line-height:1.4;'>&#8220;{_q}&#8221;</div>"
+                    f"<div style='font-size:0.68rem;color:#9ca3af;margin-top:4px;'>— {_co} · {_spk} ({_role}){_sig_badge}</div>"
+                    f"</div>"
+                )
+        _panel += "</div>"
+        st.markdown(_panel, unsafe_allow_html=True)
+
+    elif mode == "signal":
+        # Filter sentences matching this signal category
+        matching = [s for s in sentences if s.get("signal_category") == name]
+        if not matching:
+            st.caption(f"No sentences found for signal: {name}")
+            return
+
+        # Topic distribution
+        topic_dist: dict[str, int] = {}
+        for s in matching:
+            for t in s.get("topics", []):
+                topic_dist[t] = topic_dist.get(t, 0) + 1
+
+        _cfg = signal_colors.get(name, {"tag": "#6b7280"})
+        _icon = signal_icons.get(name, "")
+        _tag_color = _cfg.get("tag", "#6b7280")
+
+        _panel = f"<div style='background:#f9fafb;border:1px solid #e5e7eb;border-left:3px solid {_tag_color};border-radius:0 10px 10px 0;padding:16px 20px;margin:8px 0;'>"
+        _panel += f"<div style='font-weight:700;font-size:1.05rem;color:#1f2937;margin-bottom:8px;'>{_icon} {html.escape(name)}</div>"
+        _panel += f"<div style='font-size:0.8rem;color:#6b7280;margin-bottom:4px;'>{len(matching)} sentences from {len(set(s['company'] for s in matching))} companies</div>"
+
+        # Topic distribution bars
+        if topic_dist:
+            _total = sum(topic_dist.values())
+            _panel += "<div style='margin:10px 0;'>"
+            _panel += "<div style='font-size:0.75rem;font-weight:600;color:#374151;margin-bottom:6px;'>Topic Distribution:</div>"
+            for topic, count in sorted(topic_dist.items(), key=lambda kv: kv[1], reverse=True)[:8]:
+                pct = round(count / _total * 100)
+                cluster = topic_to_cluster.get(topic, "")
+                t_color = cluster_colors.get(cluster, "#6b7280")
+                _panel += (
+                    f"<div style='display:flex;align-items:center;gap:8px;margin-bottom:3px;'>"
+                    f"<span style='width:120px;font-size:0.72rem;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>{html.escape(topic)}</span>"
+                    f"<div style='flex:1;background:#e5e7eb;border-radius:4px;height:14px;overflow:hidden;'>"
+                    f"<div style='width:{pct}%;background:{t_color};height:100%;border-radius:4px;'></div></div>"
+                    f"<span style='font-size:0.7rem;color:#6b7280;width:36px;text-align:right;'>{pct}%</span>"
+                    f"</div>"
+                )
+            _panel += "</div>"
+
+        # Top quotes
+        _sorted = sorted(matching, key=lambda s: s.get("best_score", 0), reverse=True)[:5]
+        if _sorted:
+            _panel += "<div style='margin-top:10px;font-size:0.75rem;font-weight:600;color:#374151;'>Top Quotes:</div>"
+            for s in _sorted:
+                _q = html.escape(s["sentence"][:180])
+                _co = html.escape(s.get("company", ""))
+                _spk = html.escape(s.get("speaker", ""))
+                _role = html.escape(s.get("role", ""))
+                _topics_list = s.get("topics", [])
+                _topic_badges = ""
+                for _t in _topics_list[:2]:
+                    _cl = topic_to_cluster.get(_t, "")
+                    _tc = cluster_colors.get(_cl, "#6b7280")
+                    _topic_badges += f"<span style='font-size:0.6rem;background:{_tc};color:white;padding:1px 5px;border-radius:6px;margin-left:4px;'>{html.escape(_t)}</span>"
+                _panel += (
+                    f"<div style='background:white;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px;margin:4px 0;'>"
+                    f"<div style='font-size:0.78rem;color:#374151;line-height:1.4;'>&#8220;{_q}&#8221;</div>"
+                    f"<div style='font-size:0.68rem;color:#9ca3af;margin-top:4px;'>— {_co} · {_spk} ({_role}){_topic_badges}</div>"
+                    f"</div>"
+                )
+        _panel += "</div>"
+        st.markdown(_panel, unsafe_allow_html=True)
 
 
 def _render_excel_overview_layers(

@@ -4477,85 +4477,168 @@ def main():
 
         _poly_bets = fetch_company_bets(_poly_company)
         if _poly_bets:
-            st.markdown(
-                f"<div style='margin:1.5rem 0 0.5rem 0;display:flex;align-items:baseline;gap:10px;'>"
-                f"<span style='font-weight:700;font-size:1rem;color:#111827;'>Market Intelligence</span>"
-                f"<span style='color:#7c3aed;font-size:0.78rem;font-weight:600;'>"
-                f"Polymarket · {len(_poly_bets)} active bet{'s' if len(_poly_bets) != 1 else ''}</span>"
-                f"</div>",
-                unsafe_allow_html=True,
+            # ── Category grouping ──
+            _POLY_BET_CATEGORIES = {
+                "Financial Markets": ["market cap", "stock", "close above", "price",
+                                      "valuation", "trillion", "most valuable", "shares"],
+                "AI & Technology": ["ai model", "ai ", "gpt", "chatgpt", "gemini",
+                                    "artificial intelligence", "copilot", "llm", "neural"],
+                "Media & Streaming": ["streaming", "content", "studio", "box office",
+                                      "hulu", "hbo", "peacock", "spotify", "twitch", "netflix",
+                                      "disney", "youtube"],
+                "Business & Strategy": ["acquire", "ceo", "merger", "partnership",
+                                        "antitrust", "lawsuit", "regulation", "layoff", "hire"],
+            }
+
+            def _categorize_poly_bet(question: str) -> str:
+                q = question.lower()
+                for cat, kws in _POLY_BET_CATEGORIES.items():
+                    if any(kw in q for kw in kws):
+                        return cat
+                return "Other"
+
+            from collections import defaultdict as _defaultdict
+            _bets_by_cat = _defaultdict(list)
+            for _bet in _poly_bets:
+                _cat = _categorize_poly_bet(str(_bet.get("question", "")))
+                _bets_by_cat[_cat].append(_bet)
+
+            _cat_order = [c for c in _POLY_BET_CATEGORIES if c in _bets_by_cat]
+            if "Other" in _bets_by_cat:
+                _cat_order.append("Other")
+
+            _CAT_ICONS = {
+                "Financial Markets": "📊",
+                "AI & Technology": "🤖",
+                "Media & Streaming": "🎬",
+                "Business & Strategy": "♟️",
+                "Other": "📌",
+            }
+
+            # ── Build iframe HTML ──
+            _CARDS_PER_CAT = 6
+            _poly_html = """<!DOCTYPE html><html><head>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans','Inter',system-ui,sans-serif;background:transparent;padding:0 4px 8px 4px;}
+.poly-header{display:flex;align-items:baseline;gap:10px;margin:0 0 12px 0;}
+.poly-header .title{font-weight:700;font-size:1rem;color:#111827;}
+.poly-header .count{color:#7c3aed;font-size:0.78rem;font-weight:600;}
+.cat-header{font-weight:700;font-size:0.85rem;color:#374151;margin:14px 0 8px 0;
+    padding-bottom:4px;border-bottom:1px solid #e5e7eb;}
+.cat-header:first-of-type{margin-top:4px;}
+.card-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;}
+.poly-card{display:block;text-decoration:none;background:#f9fafb;border:1px solid #e5e7eb;
+    border-left:3px solid #7c3aed;border-radius:6px;padding:10px 12px;
+    transition:transform 0.15s,box-shadow 0.15s;}
+.poly-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(124,58,237,0.12);}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:7px;}
+.question{margin:0;font-size:0.83rem;color:#111827;line-height:1.5;font-weight:500;flex:1;}
+.badge{font-weight:700;font-size:0.72rem;padding:2px 8px;border-radius:999px;white-space:nowrap;}
+.badge-green{background:#dcfce7;color:#16a34a;}
+.badge-amber{background:#fef3c7;color:#d97706;}
+.badge-red{background:#fee2e2;color:#dc2626;}
+.badge-none{color:#9ca3af;font-size:0.72rem;}
+.progress-track{background:#e5e7eb;border-radius:999px;height:4px;margin-bottom:6px;}
+.progress-fill{height:4px;border-radius:999px;transition:width 0.3s;}
+.meta{font-size:0.7rem;color:#6b7280;}
+.meta .sep{color:#d1d5db;margin:0 3px;}
+.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;
+    background:#16a34a;margin-right:4px;animation:liveDot 2s ease-in-out infinite;}
+.show-more-btn{display:inline-block;margin:6px 0 8px 0;font-size:0.78rem;
+    color:#7c3aed;cursor:pointer;font-weight:600;border:none;background:none;padding:0;}
+.show-more-btn:hover{text-decoration:underline;}
+@keyframes liveDot{0%,100%{opacity:1;}50%{opacity:0.35;}}
+</style></head><body>
+"""
+            _n_bets = len(_poly_bets)
+            _poly_html += (
+                f"<div class='poly-header'>"
+                f"<span class='title'>Market Intelligence</span>"
+                f"<span class='count'>Polymarket · {_n_bets} active bet{'s' if _n_bets != 1 else ''}</span>"
+                f"</div>"
             )
 
-            def _yes_badge(p):
-                if p is None:
-                    return "<span style='color:#9ca3af;font-size:0.72rem;'>—</span>"
-                col = "#16a34a" if p >= 65 else ("#d97706" if p >= 45 else "#dc2626")
-                bg = "#dcfce7" if p >= 65 else ("#fef3c7" if p >= 45 else "#fee2e2")
-                return (
-                    f"<span style='background:{bg};color:{col};font-weight:700;"
-                    f"font-size:0.72rem;padding:2px 8px;border-radius:999px;"
-                    f"white-space:nowrap;'>{p:.0f}% YES</span>"
-                )
+            _total_visible_rows = 0
+            for _cat in _cat_order:
+                _cat_bets = _bets_by_cat[_cat]
+                _icon = _CAT_ICONS.get(_cat, "📌")
+                _cat_slug = _cat.lower().replace(" ", "_").replace("&", "")
+                _poly_html += f"<div class='cat-header'>{_icon} {html.escape(_cat)} ({len(_cat_bets)})</div>"
+                _poly_html += "<div class='card-grid'>"
 
-            st.markdown("""<style>
-            @keyframes polyPulse { 0%,100%{box-shadow:0 0 0 0 rgba(124,58,237,0);border-left-color:#7c3aed;} 50%{box-shadow:-2px 0 8px 0 rgba(124,58,237,0.15);border-left-color:#a78bfa;} }
-            @keyframes liveDot { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
-            @keyframes barPulse { 0%,100%{opacity:1;} 50%{opacity:0.75;} }
-            .poly-bet-card { animation: polyPulse 3s ease-in-out infinite; transition: transform 0.2s, box-shadow 0.2s; }
-            .poly-bet-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(124,58,237,0.12) !important; }
-            .poly-live-dot { display:inline-block;width:6px;height:6px;border-radius:50%;background:#16a34a;margin-right:4px;animation:liveDot 2s ease-in-out infinite; }
-            .poly-bar-fill { animation: barPulse 4s ease-in-out infinite; }
-            </style>""", unsafe_allow_html=True)
+                for _bi, _bet in enumerate(_cat_bets):
+                    if _bi == _CARDS_PER_CAT:
+                        _poly_html += f"</div><div class='card-grid' id='extra-{_cat_slug}' style='display:none;'>"
 
-            # Show up to 20 bets in scrollable 2-column layout
-            _max_show = min(len(_poly_bets), 20)
-            _poly_cols = st.columns(2, gap="medium")
-            for _pi, _bet in enumerate(_poly_bets[:_max_show]):
-                with _poly_cols[_pi % 2]:
-                    _bq = str(_bet.get("question", ""))
+                    _bq = html.escape(str(_bet.get("question", "")))
                     _yes = _bet.get("yes_price")
-                    _no = _bet.get("no_price")
-                    _vol = str(_bet.get("volume_fmt", ""))
-                    _liq = str(_bet.get("liquidity_fmt", ""))
-                    _end = str(_bet.get("end_date", ""))
-                    _url = str(_bet.get("url", "https://polymarket.com"))
-                    _yes_html = _yes_badge(_yes)
-                    _no_val = f"NO {_no:.0f}%" if _no is not None else ""
+                    _vol = html.escape(str(_bet.get("volume_fmt", "")))
+                    _liq = html.escape(str(_bet.get("liquidity_fmt", "")))
+                    _end = html.escape(str(_bet.get("end_date", "")))
+                    _url = html.escape(str(_bet.get("url", "https://polymarket.com")))
+
+                    if _yes is not None:
+                        _bcls = "badge-green" if _yes >= 65 else ("badge-amber" if _yes >= 45 else "badge-red")
+                        _badge = f"<span class='badge {_bcls}'>{_yes:.0f}% YES</span>"
+                        _bar_w = int(_yes)
+                        _bar_c = "#16a34a" if _yes >= 65 else ("#d97706" if _yes >= 45 else "#dc2626")
+                    else:
+                        _badge = "<span class='badge-none'>—</span>"
+                        _bar_w = 50
+                        _bar_c = "#6b7280"
+
                     _meta_parts = []
                     if _vol:
-                        _meta_parts.append(f"<span style='color:#6b7280;'>{html.escape(_vol)} vol</span>")
+                        _meta_parts.append(f"{_vol} vol")
                     if _liq:
-                        _meta_parts.append(f"<span style='color:#9ca3af;'>{html.escape(_liq)} liq</span>")
+                        _meta_parts.append(f"{_liq} liq")
                     if _end:
-                        _meta_parts.append(f"<span style='color:#9ca3af;'>ends {html.escape(_end)}</span>")
-                    _meta_html = "<span style='color:#d1d5db;margin:0 3px;'>·</span>".join(_meta_parts)
-                    # Probability bar
-                    _bar_pct = int(_yes or 50)
-                    _bar_col = "#16a34a" if _bar_pct >= 65 else ("#d97706" if _bar_pct >= 45 else "#dc2626")
-                    st.markdown(
-                        f"<a href='{_url}' target='_blank' rel='noopener' style='text-decoration:none;'>"
-                        f"<div class='poly-bet-card' style='background:#f9fafb;border:1px solid #e5e7eb;"
-                        f"border-left:3px solid #7c3aed;border-radius:6px;"
-                        f"padding:10px 12px;margin-bottom:8px;'>"
-                        f"<div style='display:flex;align-items:flex-start;justify-content:space-between;"
-                        f"gap:8px;margin-bottom:7px;'>"
-                        f"<p style='margin:0;font-size:0.83rem;color:#111827;"
-                        f"line-height:1.5;font-weight:500;flex:1;'><span class='poly-live-dot'></span>{html.escape(_bq)}</p>"
-                        f"{_yes_html}"
-                        f"</div>"
-                        f"<div style='background:#e5e7eb;border-radius:999px;height:4px;margin-bottom:6px;'>"
-                        f"<div class='poly-bar-fill' style='background:{_bar_col};width:{_bar_pct}%;height:4px;border-radius:999px;'></div>"
-                        f"</div>"
-                        f"<div style='display:flex;align-items:center;gap:4px;font-size:0.7rem;'>"
-                        f"{_meta_html}</div>"
-                        f"</div></a>",
-                        unsafe_allow_html=True,
+                        _meta_parts.append(f"ends {_end}")
+                    _meta = "<span class='sep'>·</span>".join(_meta_parts)
+
+                    _poly_html += (
+                        f"<a href='{_url}' target='_blank' rel='noopener' class='poly-card'>"
+                        f"<div class='card-top'>"
+                        f"<span class='question'><span class='live-dot'></span>{_bq}</span>"
+                        f"{_badge}</div>"
+                        f"<div class='progress-track'>"
+                        f"<div class='progress-fill' style='width:{_bar_w}%;background:{_bar_c};'></div></div>"
+                        f"<div class='meta'>{_meta}</div>"
+                        f"</a>"
                     )
+                _poly_html += "</div>"  # close card-grid
+
+                if len(_cat_bets) > _CARDS_PER_CAT:
+                    _extra = len(_cat_bets) - _CARDS_PER_CAT
+                    _poly_html += (
+                        f"<button class='show-more-btn' "
+                        f"onclick=\"var e=document.getElementById('extra-{_cat_slug}');"
+                        f"if(e.style.display==='none'){{e.style.display='grid';this.textContent='Show less ‹';}}"
+                        f"else{{e.style.display='none';this.textContent='Show {_extra} more ›';}}\">"
+                        f"Show {_extra} more ›</button>"
+                    )
+                _total_visible_rows += min(len(_cat_bets), _CARDS_PER_CAT)
+
+            _poly_html += """
+<script>
+// Fix grid columns on extra sections
+document.querySelectorAll('[id^="extra-"]').forEach(function(el) {
+    el.style.gridTemplateColumns = '1fr 1fr';
+    el.style.gap = '8px';
+});
+</script>
+</body></html>"""
+
+            _est_rows = (_total_visible_rows + 1) // 2
+            _est_height = 70 + len(_cat_order) * 40 + _est_rows * 115
+            _est_height = max(300, min(_est_height, 1400))
+            components.html(_poly_html, height=_est_height, scrolling=True)
 
             _poly_footer_parts = []
-            if len(_poly_bets) > _max_show:
+            if len(_poly_bets) > 20:
                 _poly_footer_parts.append(
-                    f"Showing {_max_show} of {len(_poly_bets)} bets"
+                    f"Showing top {min(len(_poly_bets), 50)} of {len(_poly_bets)} bets"
                 )
             _poly_footer_parts.append(
                 "[View full Polymarket data on Stocks page](/Stocks#polymarket-explorer)"
@@ -5187,17 +5270,14 @@ def main():
                 unsafe_allow_html=True,
             )
 
-            _sr_col1, _sr_col2 = st.columns([3, 2])
-            with _sr_col1:
-                _sr_years_sel = st.multiselect(
-                    "Compare years",
-                    options=sorted([int(y) for y in years], reverse=True),
-                    default=[sorted([int(y) for y in years], reverse=True)[0]],
-                    max_selections=4,
-                    key="sr_years",
-                )
-            with _sr_col2:
-                _sr_pct_mode = st.checkbox("Show as % of total", value=True, key="sr_pct_mode")
+            _sr_years_sel = st.multiselect(
+                "Compare years",
+                options=sorted([int(y) for y in years], reverse=True),
+                default=[sorted([int(y) for y in years], reverse=True)[0]],
+                max_selections=4,
+                key="sr_years",
+            )
+            _sr_pct_mode = True  # Always show as % of total in radar view
 
             if _sr_years_sel:
                 # Collect segment data for each year
@@ -5231,11 +5311,6 @@ def main():
                             else:
                                 _vals.append(_rv)
 
-                        # Percentile-rank within this year for better radar shape
-                        if not _sr_pct_mode and _vals:
-                            _max_v = max(_vals) if max(_vals) > 0 else 1
-                            _vals = [v / _max_v * 100 for v in _vals]
-
                         _vals_closed = _vals + [_vals[0]]
                         _theta_closed = _sr_all_labels + [_sr_all_labels[0]]
                         _raw_closed = _raw_vals + [_raw_vals[0]]
@@ -5261,7 +5336,7 @@ def main():
                             theta=_theta_closed,
                             name=str(_yr),
                             fill="toself",
-                            fillcolor=_hex_to_rgba_sr(_yc, 0.08),
+                            fillcolor=_hex_to_rgba_sr(_yc, 0.15),
                             line=dict(color=_yc, width=2.5),
                             marker=dict(size=5, color=_yc),
                             hovertemplate="%{text}<extra></extra>",
@@ -5273,8 +5348,10 @@ def main():
                             bgcolor="rgba(0,0,0,0)",
                             radialaxis=dict(
                                 visible=True,
-                                range=[0, 105] if _sr_pct_mode else [0, 110],
-                                ticksuffix="%" if _sr_pct_mode else "",
+                                range=[0, 105],
+                                tickvals=[0, 25, 50, 75, 100],
+                                ticktext=["0", "25", "50", "75", "100"],
+                                ticksuffix="%",
                                 tickfont=dict(size=9, color="#94a3b8"),
                                 gridcolor="rgba(0,0,0,0.06)",
                                 linecolor="rgba(0,0,0,0.06)",
@@ -5294,7 +5371,7 @@ def main():
                         font=dict(color="#374151"),
                         hoverlabel=HOVERLABEL_STYLE,
                     )
-                    render_plotly(_sr_fig)
+                    render_plotly(_sr_fig, key="radar_segment_mix")
                 else:
                     st.info("No segment data available for the selected years.")
             else:
@@ -5407,13 +5484,13 @@ def main():
                         _hover_texts.append(_hover_texts[0])
 
                         _co_color = COMPANY_COLORS.get(_rco, _radar_palette[_ci % 4])
-                        def _hex_to_rgba(hx, alpha=0.08):
+                        def _hex_to_rgba(hx, alpha=0.25):
                             hx = hx.lstrip("#")
                             return f"rgba({int(hx[0:2],16)},{int(hx[2:4],16)},{int(hx[4:6],16)},{alpha})"
                         if "rgb" in _co_color:
-                            _fill_color = _co_color.replace(")", ",0.08)").replace("rgb", "rgba")
+                            _fill_color = _co_color.replace(")", ",0.25)").replace("rgb", "rgba")
                         else:
-                            _fill_color = _hex_to_rgba(_co_color, 0.08)
+                            _fill_color = _hex_to_rgba(_co_color, 0.25)
                         _radar_fig.add_trace(go.Scatterpolar(
                             r=_vals_closed,
                             theta=_theta_closed,
@@ -5422,6 +5499,7 @@ def main():
                             fillcolor=_fill_color,
                             line=dict(color=_co_color, width=2.5),
                             marker=dict(size=5, color=_co_color),
+                            hoveron="fills+points",
                             hovertemplate="%{text}<extra></extra>",
                             text=_hover_texts,
                         ))
@@ -5430,7 +5508,10 @@ def main():
                         polar=dict(
                             bgcolor="rgba(0,0,0,0)",
                             radialaxis=dict(
-                                visible=True, range=[0, 105],
+                                visible=True,
+                                range=[0, 105],
+                                tickvals=[0, 25, 50, 75, 100],
+                                ticktext=["0", "25", "50", "75", "100"],
                                 tickfont=dict(size=9, color="#94a3b8"),
                                 gridcolor="rgba(0,0,0,0.06)",
                                 linecolor="rgba(0,0,0,0.06)",
@@ -5450,7 +5531,7 @@ def main():
                         font=dict(color="#374151"),
                         hoverlabel=HOVERLABEL_STYLE,
                     )
-                    render_plotly(_radar_fig)
+                    render_plotly(_radar_fig, key="radar_financial_dna")
 
 
 

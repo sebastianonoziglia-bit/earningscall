@@ -5,7 +5,12 @@ WORKDIR /app
 # Copy requirements first for Docker layer caching
 COPY app/requirements.txt app/requirements.txt
 
-# Install Python deps (no compiled C extensions needed)
+# Install build tools for packages with C extensions (scipy, vaderSentiment)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc g++ && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python deps
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r app/requirements.txt
 

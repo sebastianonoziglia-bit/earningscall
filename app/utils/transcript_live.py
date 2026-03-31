@@ -528,6 +528,232 @@ def extract_topic_metrics(
     return result
 
 
+# ── Unified topic + signal extraction ──────────────────────────────────────
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def extract_unified_topic_signal_metrics(
+    excel_path: str,
+    year: int,
+    quarter: str = "",
+) -> dict:
+    """
+    For each sentence in transcripts: assign BOTH topic tags (System A)
+    AND signal category tags (System B).
+
+    Returns dict with three keys:
+      "topic_view": DataFrame — one row per topic, columns include signal_distribution (JSON str)
+      "signal_view": DataFrame — one row per signal category, columns include topic_distribution (JSON str)
+      "sentences": list[dict] — raw sentence-level data for drill-down
+    """
+    import json as _json
+
+    empty = {
+        "topic_view": pd.DataFrame(),
+        "signal_view": pd.DataFrame(),
+        "sentences": [],
+    }
+    if not excel_path:
+        return empty
+    try:
+        df = pd.read_excel(excel_path, sheet_name="Transcripts")
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        if not {"company", "year", "transcript_text"}.issubset(set(df.columns)):
+            return empty
+    except Exception:
+        return empty
+
+    df["_y"] = pd.to_numeric(df["year"], errors="coerce")
+    df = df.dropna(subset=["_y"])
+    df["_y"] = df["_y"].astype(int)
+
+    # Filter to requested year
+    mask = df["_y"] == int(year)
+    if quarter:
+        m = re.search(r"([1-4])", str(quarter))
+        if m and "quarter" in df.columns:
+            q_str = f"Q{m.group(1)}"
+            q_mask = df["quarter"].astype(str).str.upper().str.strip() == q_str
+            if (mask & q_mask).any():
+                mask = mask & q_mask
+    period_df = df[mask]
+    if period_df.empty:
+        return empty
+
+    total_companies = period_df["company"].nunique()
+
+    # Also load prior period for growth calculation
+    prior_year = int(year) - 1
+    prior_mask = df["_y"] == prior_year
+    if quarter:
+        m = re.search(r"([1-4])", str(quarter))
+        if m and "quarter" in df.columns:
+            q_str = f"Q{m.group(1)}"
+            pq_mask = df["quarter"].astype(str).str.upper().str.strip() == q_str
+            if (prior_mask & pq_mask).any():
+                prior_mask = prior_mask & pq_mask
+    prior_df = df[prior_mask]
+
+    _kw_map = {
+        "Outlook":             OUTLOOK_KEYWORDS,
+        "Risks":               RISK_KEYWORDS,
+        "Opportunities":       OPPORTUNITY_KEYWORDS,
+        "Investment":          INVESTMENT_KEYWORDS,
+        "Product Shifts":      PRODUCT_SHIFT_KEYWORDS,
+        "User Behavior":       USER_BEHAVIOR_KEYWORDS,
+        "Monetization":        MONETIZATION_KEYWORDS,
+        "Strategic Direction":  STRATEGIC_DIRECTION_KEYWORDS,
+        "Broadcaster Threats":  BROADCASTER_THREAT_KEYWORDS,
+    }
+
+    # ── Pass 1: Sentence-level extraction ──
+    all_sentences: list[dict] = []
+
+    for _, row in period_df.iterrows():
+        company = str(row.get("company", "")).strip()
+        text = str(row.get("transcript_text", "") or "")[:30000]
+        blocks = _parse_speaker_blocks(text)
+        _total_sents = sum(len(b.get("sentences", [])) for b in blocks)
+        _sent_idx = 0
+
+        for block in blocks:
+            for sentence in block.get("sentences", []):
+                s = sentence.strip()
+                _sent_idx += 1
+                if len(s) < 40 or len(s) > 400:
+                    continue
+
+                # Topic matching
+                topics = score_quote_topics(s)
+
+                # Signal matching — find best signal category
+                best_cat = ""
+                best_score = 0.0
+                all_cat_scores: dict[str, float] = {}
+                for category, keywords in _kw_map.items():
+                    score = _score_sentence_advanced(
+                        s, keywords, block.get("role", ""), _sent_idx, _total_sents
+                    )
+                    if score > 0:
+                        all_cat_scores[category] = score
+                        if score > best_score:
+                            best_score = score
+                            best_cat = category
+
+                if topics or best_cat:
+                    all_sentences.append({
+                        "sentence": s,
+                        "company": company,
+                        "speaker": block.get("speaker", ""),
+                        "role": block.get("role", ""),
+                        "topics": topics,
+                        "signal_category": best_cat,
+                        "signal_scores": all_cat_scores,
+                        "best_score": best_score,
+                    })
+
+    # ── Pass 2: Aggregate topic_view ──
+    # For each topic: mentions, companies, signal distribution
+    topic_data: dict[str, dict] = {}
+    for topic in TOPIC_KEYWORDS:
+        sents_for_topic = [s for s in all_sentences if topic in s["topics"]]
+        if not sents_for_topic:
+            continue
+        mention_count = len(sents_for_topic)
+        companies = set(s["company"] for s in sents_for_topic)
+        importance_pct = (len(companies) / total_companies * 100) if total_companies > 0 else 0
+
+        # Signal distribution within this topic
+        sig_dist: dict[str, int] = {}
+        for s in sents_for_topic:
+            if s["signal_category"]:
+                sig_dist[s["signal_category"]] = sig_dist.get(s["signal_category"], 0) + 1
+
+        topic_data[topic] = {
+            "topic": topic,
+            "mention_count": mention_count,
+            "companies_mentioned": len(companies),
+            "total_companies": total_companies,
+            "importance_pct": round(importance_pct, 2),
+            "signal_distribution": sig_dist,
+            "signal_distribution_json": _json.dumps(sig_dist),
+            "companies_list": ", ".join(sorted(companies)),
+        }
+
+    # ── Compute topic growth from prior period ──
+    prior_topic_counts: dict[str, int] = {}
+    if not prior_df.empty:
+        for _, row in prior_df.iterrows():
+            text = str(row.get("transcript_text", "") or "").lower()[:30000]
+            for topic, keywords in TOPIC_KEYWORDS.items():
+                hits = sum(1 for kw in keywords if kw in text)
+                prior_topic_counts[topic] = prior_topic_counts.get(topic, 0) + hits
+
+    for topic in topic_data:
+        curr = topic_data[topic]["mention_count"]
+        prior = prior_topic_counts.get(topic, 0)
+        if prior > 0:
+            topic_data[topic]["growth_pct"] = round((curr - prior) / prior * 100, 1)
+        elif curr > 0:
+            topic_data[topic]["growth_pct"] = 100.0
+        else:
+            topic_data[topic]["growth_pct"] = 0.0
+
+    topic_view = pd.DataFrame(list(topic_data.values())) if topic_data else pd.DataFrame()
+
+    # ── Pass 3: Aggregate signal_view ──
+    signal_data: dict[str, dict] = {}
+    for cat in SIGNAL_CATEGORIES:
+        sents_for_cat = [s for s in all_sentences if s["signal_category"] == cat]
+        if not sents_for_cat:
+            continue
+        mention_count = len(sents_for_cat)
+        companies = set(s["company"] for s in sents_for_cat)
+        importance_pct = (len(companies) / total_companies * 100) if total_companies > 0 else 0
+
+        # Topic distribution within this signal
+        topic_dist: dict[str, int] = {}
+        for s in sents_for_cat:
+            for t in s["topics"]:
+                topic_dist[t] = topic_dist.get(t, 0) + 1
+
+        signal_data[cat] = {
+            "signal_category": cat,
+            "mention_count": mention_count,
+            "companies_mentioned": len(companies),
+            "total_companies": total_companies,
+            "importance_pct": round(importance_pct, 2),
+            "topic_distribution": topic_dist,
+            "topic_distribution_json": _json.dumps(topic_dist),
+        }
+
+    # Signal growth from prior period
+    prior_signal_counts: dict[str, int] = {}
+    if not prior_df.empty:
+        for _, row in prior_df.iterrows():
+            text = str(row.get("transcript_text", "") or "").lower()[:30000]
+            for cat, keywords in _kw_map.items():
+                hits = sum(1 for kw in keywords if kw.lower() in text)
+                prior_signal_counts[cat] = prior_signal_counts.get(cat, 0) + hits
+
+    for cat in signal_data:
+        curr = signal_data[cat]["mention_count"]
+        prior = prior_signal_counts.get(cat, 0)
+        if prior > 0:
+            signal_data[cat]["growth_pct"] = round((curr - prior) / prior * 100, 1)
+        elif curr > 0:
+            signal_data[cat]["growth_pct"] = 100.0
+        else:
+            signal_data[cat]["growth_pct"] = 0.0
+
+    signal_view = pd.DataFrame(list(signal_data.values())) if signal_data else pd.DataFrame()
+
+    return {
+        "topic_view": topic_view,
+        "signal_view": signal_view,
+        "sentences": all_sentences,
+    }
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def extract_outlook_risks_opportunities(
     excel_path: str,
