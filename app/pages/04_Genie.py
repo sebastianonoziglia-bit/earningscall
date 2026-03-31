@@ -111,6 +111,8 @@ def _render_genie_hover_chart(fig, height=520):
         '  function hide(){dim.style.display="none";gl.style.display="none";}',
         '  gd.addEventListener("mousemove",function(e){var r=gd.getBoundingClientRect();pos(e.clientX-r.left);});',
         '  gd.addEventListener("mouseleave",hide);',
+        '  gd.on("plotly_hover",function(){dim.style.opacity="0.3";});',
+        '  gd.on("plotly_unhover",function(){dim.style.opacity="1";});',
         '});',
         '</script></body></html>',
     ])

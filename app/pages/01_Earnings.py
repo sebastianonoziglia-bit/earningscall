@@ -6535,11 +6535,11 @@ function cgMetric(tab,mid,btn){
 }
 </script>
 </body></html>"""
-)
-components.html(_cg_html, height=_cg_height, scrolling=False)
+    )
+    components.html(_cg_html, height=_cg_height, scrolling=False)
 
 
-# Transcript Intelligence removed — now in Overview Narrative & Sentiment
+    # Transcript Intelligence removed — now in Overview Narrative & Sentiment
 
 
 if __name__ == '__main__' or True:

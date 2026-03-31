@@ -134,6 +134,8 @@ def _render_hover_highlight_chart(fig, height=520, theme="dark"):
         '  gd.addEventListener("mouseup",function(){dragging=false;});',
         '  gd.addEventListener("mousemove",function(e){var r=gd.getBoundingClientRect();pos(e.clientX-r.left,e.clientY-r.top);});',
         '  gd.addEventListener("mouseleave",hide);',
+        '  gd.on("plotly_hover",function(){dim.style.opacity="0.3";});',
+        '  gd.on("plotly_unhover",function(){dim.style.opacity="1";});',
         '});',
         '</script></body></html>',
     ])
