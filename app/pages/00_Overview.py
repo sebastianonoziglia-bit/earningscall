@@ -24,7 +24,7 @@ from subscriber_data_processor import SubscriberDataProcessor
 from utils.state_management import get_data_processor, initialize_session_state
 from utils.animation_helper import update_chart_layout, create_consistent_frame, get_dynamic_tick_values, create_animation_buttons
 from utils.styles import get_page_style
-from utils.components import load_company_logos, render_ai_assistant
+from utils.components import load_company_logos
 from utils.header import display_header
 from utils.data_loader import CONTINENT_MAPPINGS, AD_MACRO_CATEGORIES
 from utils.theme import get_theme_mode
@@ -7657,7 +7657,7 @@ with st.sidebar:
         else:
             st.caption("No active insights for this period. Try selecting a different quarter.")
 
-render_ai_assistant(location="sidebar", current_page="Overview")
+## AI assistant removed — no API configured
 
 st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
 

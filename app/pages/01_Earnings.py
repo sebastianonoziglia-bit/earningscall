@@ -23,7 +23,7 @@ from utils.state_management import get_data_processor
 from utils.styles import get_page_style
 from utils.header import display_header
 from utils.data_availability import get_available_quarters
-from utils.components import render_ai_assistant
+## render_ai_assistant removed — no AI API configured
 from utils.workbook_market_data import (
     build_company_ticker_map_from_market_data,
     load_combined_stock_market_data,
@@ -3317,7 +3317,7 @@ def main():
     st.session_state["earnings_selected_year"] = int(year)
     st.session_state["selected_year"] = int(year)
     st.session_state["selected_quarter"] = str(selected_quarter)
-    render_ai_assistant(location="sidebar", current_page="Earnings")
+    ## AI assistant removed — no API configured
 
     annual_metrics = data_processor.get_metrics(company, year) or {}
     quarterly_metrics, _ = _get_quarterly_metrics_snapshot(
@@ -4457,8 +4457,6 @@ def main():
                         )
         except Exception:
             pass
-        # TODO: This section could also auto-generate a 3-bullet company outlook summary
-    # using call_ai() from ai_service.py with the top 3 forward signals as input.
 
     # ── Market Intelligence — Polymarket prediction bets ──────────────────
     _show_polymarket = st.toggle("Market Intelligence (Polymarket)", value=False, key="show_polymarket",
@@ -4603,59 +4601,7 @@ def main():
             company_insights_filtered["category"] = company_insights_filtered["category"].fillna("")
 
     if company_insights_filtered.empty:
-        _co_insight_generated = False
-        _ant_available_ci = False
-        try:
-            from utils.anthropic_service import is_api_available as _ci_ant_check, _cached_call_claude as _ci_call
-            _ant_available_ci = _ci_ant_check()
-        except Exception:
-            pass
-        if _ant_available_ci:
-            try:
-                _ci_transcript = _load_transcript_for_company(
-                    str(data_processor.data_path), canonical_company, int(year),
-                    selected_quarter if selected_quarter and selected_quarter != "Annual" else "",
-                )
-                if _ci_transcript:
-                    _ci_system = (
-                        "You are a senior media & technology financial analyst. "
-                        "Write exactly 3 insight bullets about this company's performance. "
-                        "Format: one sentence per bullet, separated by | character. "
-                        "Cover: revenue performance, key business development, forward outlook. "
-                        "Be specific with numbers. No bullet symbols, no headers, no markdown."
-                    )
-                    _ci_period = f"Q{_parse_quarter_int(selected_quarter)} {year}" if _parse_quarter_int(selected_quarter) else str(year)
-                    _ci_result = _ci_call(
-                        _ci_system,
-                        f"Company: {canonical_company}\nPeriod: {_ci_period}\n"
-                        f"Transcript (first 3000 chars):\n{_ci_transcript[:3000]}\n\nWrite 3 insight bullets separated by |",
-                        max_tokens=350,
-                    )
-                    if _ci_result:
-                        _ci_parts = [p.strip().lstrip("•-·").strip() for p in _ci_result.split("|") if p.strip()]
-                        if _ci_parts:
-                            company_color = (
-                                COMPANY_COLORS.get(company)
-                                or COMPANY_COLORS.get(canonical_company)
-                                or "#111827"
-                            )
-                            _items_html = "".join(f"<li>{html.escape(p)}</li>" for p in _ci_parts[:3])
-                            _card = (
-                                f"<div class='company-insight-card insight-card' style='border-left:4px solid {company_color};'>"
-                                f"<div class='company-insight-title'>✨ AI Analysis</div>"
-                                f"<ul class='company-insight-list'>{_items_html}</ul>"
-                                f"</div>"
-                            )
-                            st.markdown("#### Company insights")
-                            st.markdown(
-                                f"<div class='insights-carousel-wrap' data-carousel='company'>"
-                                f"<div class='insights-carousel' id='insights-carousel-company'>{_card}</div>"
-                                f"</div>",
-                                unsafe_allow_html=True,
-                            )
-                            _co_insight_generated = True
-            except Exception:
-                pass
+        st.info("Company insights are not available for this company/year.")
     else:
         st.markdown("#### Company insights")
         st.caption(f"Source: {insight_source_label}")
@@ -5246,14 +5192,6 @@ def main():
     except Exception:
         pass
 
-    # Check if Anthropic API is available
-    _ant_available = False
-    try:
-        from utils.anthropic_service import is_api_available as _ant_check
-        _ant_available = _ant_check()
-    except Exception:
-        pass
-
     for raw_segment_name in _all_ordered:
         segment_name = str(raw_segment_name).strip()
         if not segment_name:
@@ -5321,31 +5259,10 @@ def main():
         except Exception:
             pass
 
-        # PRIORITY 1 — Claude API insight (if available)
         _insight_text = ""
         _source_badge = ""
 
-        if _ant_available:
-            try:
-                from utils.anthropic_service import generate_segment_insight
-                _insight_text = generate_segment_insight(
-                    company=canonical_company,
-                    segment=segment_name,
-                    revenue_m=_seg_rev,
-                    yoy_pct=_seg_yoy,
-                    year=int(desired_insight_year),
-                    quarter=selected_quarter if selected_quarter and selected_quarter != "Annual" else "",
-                    transcript_sentence=_seg_sentence,
-                )
-                if _insight_text:
-                    _source_badge = (
-                        "<div style='font-size:0.65rem;opacity:0.7;margin-bottom:4px;"
-                        "letter-spacing:0.06em;text-transform:uppercase;'>✨ AI generated</div>"
-                    )
-            except Exception:
-                _insight_text = ""
-
-        # PRIORITY 2 — Tier 1 template (revenue + transcript sentence)
+        # PRIORITY 1 — Tier 1 template (revenue + transcript sentence)
         if not _insight_text:
             try:
                 _insight_text = _build_auto_segment_insight(
