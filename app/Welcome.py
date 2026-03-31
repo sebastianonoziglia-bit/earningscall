@@ -6126,7 +6126,7 @@ div[data-testid="stPageLink"] a [data-testid="stIconEmoji"] {
 }
 /* Arrow indicator */
 div[data-testid="stPageLink"] a::after {
-  content:'\2192';position:absolute;right:20px;top:50%;transform:translateY(-50%);
+  content:'\\2192';position:absolute;right:20px;top:50%;transform:translateY(-50%);
   color:rgba(255,255,255,0.25);font-size:1.3rem;transition:all 0.3s;pointer-events:none;
 }
 div[data-testid="stPageLink"] a:hover::after {

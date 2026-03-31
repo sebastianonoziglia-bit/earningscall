@@ -3917,7 +3917,7 @@ def main():
         key="metrics_year_range",
     )
 
-    metric_toggle_row = st.columns([2, 1])
+    metric_toggle_row = st.columns([2, 1, 1])
     with metric_toggle_row[0]:
         metrics_freq = st.radio(
             "Frequency",
@@ -3925,8 +3925,8 @@ def main():
             horizontal=True,
             key="metrics_frequency",
         )
-    with metric_toggle_row[1]:
-        show_metric_yoy = st.checkbox("Show YoY %", value=True, key="metrics_show_yoy")
+    with metric_toggle_row[2]:
+        show_metric_yoy = st.toggle("YoY %", value=True, key="metrics_show_yoy")
 
     metrics_df = data_processor.df_metrics
     metrics_quarter_col = None
@@ -4093,9 +4093,6 @@ def main():
         unsafe_allow_html=True,
     )
 
-    _flow_tab_names = ["Sankey Flow", "Waterfall Bridge"]
-    _flow_tabs = st.tabs(_flow_tab_names)
-
     _flow_col1, _flow_col2 = st.columns([2, 3])
     with _flow_col1:
         _flow_company = st.selectbox(
@@ -4109,6 +4106,9 @@ def main():
             index=0,
             key="flow_year",
         )
+
+    _flow_tab_names = ["Sankey Flow", "Waterfall Bridge"]
+    _flow_tabs = st.tabs(_flow_tab_names)
 
     _flow_metrics = data_processor.get_metrics(_flow_company, int(_flow_year))
     _flow_segments = data_processor.get_segments(_flow_company, int(_flow_year))
@@ -4152,21 +4152,15 @@ def main():
             st.caption(f"Sentiment timeline unavailable: {_sent_err}")
 
 
-    # ── Insights — independent year/quarter filter ─────────────────────────
+    # ── Insights (uses page-level year / quarter filters) ──────────────────
     st.markdown(
         "<div style='margin:2rem 0 0.6rem 0;'>"
         "<span style='font-weight:800;font-size:1.15rem;color:#111827;'>Insights</span>"
         "</div>",
         unsafe_allow_html=True,
     )
-    _ins_col_yr, _ins_col_qtr, _ins_col_pad = st.columns([1, 1, 4])
-    _ins_years_opts = sorted([int(y) for y in years], reverse=True)
-    with _ins_col_yr:
-        _ins_year = st.selectbox("Year", _ins_years_opts, index=0,
-                                  key=f"ins_yr_{company}")
-    with _ins_col_qtr:
-        _ins_qtr = st.selectbox("Quarter", ["Annual", "Q1", "Q2", "Q3", "Q4"],
-                                 index=0, key=f"ins_qtr_{company}")
+    _ins_year = int(year)
+    _ins_qtr = str(selected_quarter) if selected_quarter else "Annual"
     _ins_q_str = "" if _ins_qtr == "Annual" else _ins_qtr
     _period = f"Q{_ins_qtr.lstrip('Q')} {_ins_year}" if _ins_q_str else str(_ins_year)
 
@@ -5196,7 +5190,7 @@ def main():
                 _sr_all_labels = []
                 _sr_year_data = {}
                 for _yr in sorted(_sr_years_sel):
-                    _segs = data_processor.get_segments(company, int(_yr))
+                    _segs = data_processor.get_segments(canonical_company, int(_yr))
                     if _segs and _segs.get("labels"):
                         _slabels = _segs["labels"]
                         _svalues = _segs["values"]
