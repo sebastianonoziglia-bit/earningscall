@@ -113,6 +113,22 @@ COMPANY_KEYWORDS: dict[str, list[str]] = {
     "TikTok": ["tiktok", "bytedance"],
     "Uber": ["uber"],
     "Airbnb": ["airbnb"],
+    "MFE-MediaForEurope": [
+        "mediaset", "mfe ", "mfe-mediaforeurope", "mediaforeurope",
+        "media for europe", "canale 5", "italia 1", "rete 4", "telecino",
+    ],
+    "ProSiebenSat.1": [
+        "prosiebensat", "prosieben", "sat.1", "pro7", "prosiebensat.1",
+    ],
+    "RTL Group": [
+        "rtl group", " rtl ", "m6 group", "rtl+", "fremantle",
+    ],
+    "TF1": [
+        " tf1", "tf1 group", "bouygues telecom",
+    ],
+    "Atresmedia": [
+        "atresmedia", "antena 3", "la sexta",
+    ],
 }
 
 # Map company name → key in the logos dict returned by load_company_logos()
@@ -133,6 +149,11 @@ COMPANY_LOGO_KEY: dict[str, str] = {
     "Tencent": "Tencent",
     "Nvidia": "Nvidia",
     "YouTube": "YouTube",
+    "MFE-MediaForEurope": "MFE-MediaForEurope",
+    "ProSiebenSat.1": "ProSiebenSat.1",
+    "RTL Group": "RTL Group",
+    "TF1": "TF1",
+    "Atresmedia": "Atresmedia",
 }
 
 
@@ -382,6 +403,59 @@ POLYMARKET_CATEGORIES = [
     "Entertainment",
 ]
 
+# ── Category → tracked companies mapping (for browsing filters) ──────────────
+_CATEGORY_COMPANIES: dict[str, list[str]] = {
+    "AI": [
+        "Alphabet", "Meta Platforms", "Microsoft", "OpenAI",
+        "Amazon", "Apple", "Nvidia",
+    ],
+    "Tech": [
+        "Apple", "Microsoft", "Alphabet", "Amazon", "Samsung", "Nvidia",
+        "Meta Platforms", "OpenAI", "Snap", "Pinterest", "Twitter / X",
+        "TikTok", "The Trade Desk", "Uber", "Airbnb",
+    ],
+    "Entertainment": [
+        "Netflix", "Disney", "Spotify", "Warner Bros. Discovery",
+        "Paramount Global", "Comcast", "TikTok", "MFE-MediaForEurope",
+        "ProSiebenSat.1", "RTL Group", "TF1", "Atresmedia",
+    ],
+    "Business": [],  # keyword-only
+    "Crypto": [],
+    "Politics": [],
+    "Sports": [],
+    "Culture": [],
+    "Science": [],
+    "Finance": [],
+}
+
+# ── Extended category keyword lists ──────────────────────────────────────────
+_CATEGORY_EXTRA_KEYWORDS: dict[str, list[str]] = {
+    "AI": [
+        "artificial intelligence", "machine learning", "llm", "gpt",
+        "generative ai", "neural network", "deep learning", "chatbot",
+        "ai model", "ai safety", "agi", "transformer",
+    ],
+    "Tech": [
+        "technology", "software", "semiconductor", "chip", "data center",
+        "cloud computing", "saas", "cybersecurity", "quantum",
+        "smartphone", "wearable", "autonomous",
+    ],
+    "Entertainment": [
+        "oscar", "grammy", "emmy", "movie", "film", "box office",
+        "streaming", "album", "tv show", "media company", "podcast",
+        "content creator", "celebrity",
+    ],
+    "Finance": [
+        "stock price", "market cap", "ipo", "trillion", "most valuable",
+        "close above", "valuation", "s&p 500", "nasdaq", "dow jones",
+        "earnings", "revenue", "profit",
+    ],
+    "Crypto": [
+        "bitcoin", "ethereum", "btc", "eth", "crypto", "blockchain",
+        "defi", "nft", "solana", "dogecoin", "altcoin", "stablecoin",
+    ],
+}
+
 
 # ── Entertainment / market-cap / tech category keywords ──────────────────────
 _ENTERTAINMENT_KEYWORDS = [
@@ -401,17 +475,25 @@ def _is_entertainment_or_market_bet(question: str) -> bool:
     return any(kw in q for kw in _ENTERTAINMENT_KEYWORDS)
 
 
+def fetch_deep_pool() -> list[dict[str, Any]]:
+    """Public access to the deep pool (10k markets). Cached 1h."""
+    return _fetch_deep_pool()
+
+
 @st.cache_data(ttl=600, show_spinner=False)
 def get_all_company_bets_labelled(markets: list[dict[str, Any]] | None = None, limit: int = 1000) -> list[dict[str, Any]]:
     """
-    Filter `markets` (or fetch top if None) to those matching a tracked
+    Filter `markets` (or deep pool if None) to those matching a tracked
     company OR entertainment/tech/market-cap bets.
     Returns list with extra `matched_company` key, sorted by volume desc.
     Deduplicates by market_id AND by event slug (so sub-markets of the same
     event only appear once — the highest-volume one).
     """
     if markets is None:
-        markets = fetch_polymarket_top(limit)
+        try:
+            markets = _fetch_deep_pool()
+        except Exception:
+            markets = fetch_polymarket_top(limit)
     result = []
     seen_ids: set[str] = set()
     seen_slugs: set[str] = set()
@@ -434,3 +516,60 @@ def get_all_company_bets_labelled(markets: list[dict[str, Any]] | None = None, l
                 seen_slugs.add(slug)
             result.append({**m, "matched_company": "Entertainment"})
     return sorted(result, key=lambda x: x.get("volume_total") or 0, reverse=True)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def get_bets_by_category(category: str, limit: int = 500) -> list[dict[str, Any]]:
+    """
+    Get bets for a browsing category using company mappings + keyword search.
+    Returns bets with `matched_company` field, sorted by volume desc.
+    """
+    try:
+        pool = _fetch_deep_pool()
+    except Exception:
+        pool = fetch_polymarket_top(1000)
+
+    company_names = _CATEGORY_COMPANIES.get(category, [])
+    extra_kws = _CATEGORY_EXTRA_KEYWORDS.get(category, [])
+    cat_lower = category.lower()
+
+    result: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    seen_slugs: set[str] = set()
+
+    # Pass 1: company-matched bets for this category
+    if company_names:
+        for m in pool:
+            mid = m.get("market_id", "")
+            if mid in seen_ids:
+                continue
+            slug = m.get("slug", "")
+            if slug and slug in seen_slugs:
+                continue
+            company = match_company(m["question"])
+            if company and company in company_names:
+                seen_ids.add(mid)
+                if slug:
+                    seen_slugs.add(slug)
+                result.append({**m, "matched_company": company})
+
+    # Pass 2: keyword search for the category name + extended keywords
+    all_kws = [cat_lower] + [kw.lower() for kw in extra_kws]
+    for m in pool:
+        mid = m.get("market_id", "")
+        if mid in seen_ids:
+            continue
+        slug = m.get("slug", "")
+        if slug and slug in seen_slugs:
+            continue
+        q = m["question"].lower()
+        tags_lower = " ".join(t.lower() for t in m.get("tags", []))
+        if any(kw in q or kw in tags_lower for kw in all_kws):
+            seen_ids.add(mid)
+            if slug:
+                seen_slugs.add(slug)
+            company = match_company(m["question"])
+            result.append({**m, "matched_company": company or ""})
+
+    result.sort(key=lambda x: x.get("volume_total") or 0, reverse=True)
+    return result[:limit]

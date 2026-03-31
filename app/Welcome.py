@@ -2697,11 +2697,9 @@ def _render_polymarket_strip(logos_dict: dict) -> None:
     Design mirrors the stock ticker strip — same dark glass card aesthetic.
     """
     try:
-        raw_markets = fetch_polymarket_top(1000)
+        bets = get_all_company_bets_labelled()
     except Exception:
-        raw_markets = []
-
-    bets = get_all_company_bets_labelled(raw_markets)
+        bets = []
     if not bets:
         st.caption("⏳ Polymarket data unavailable — API may be blocked by your network.")
         return
@@ -3527,7 +3525,7 @@ try:
     .fi-card::after {{
       content:''; position:absolute; inset:0; border-radius:20px;
       background:radial-gradient(ellipse at 30% 20%, var(--brand) 0%, transparent 70%);
-      opacity:0.13; pointer-events:none; z-index:0;
+      opacity:0.25; pointer-events:none; z-index:0;
     }}
     .fi-card > * {{ position:relative; z-index:2; }}
     .fi-progress {{ position:absolute;top:0;left:0;width:100%;height:3px;background:rgba(255,255,255,0.06);border-radius:20px 20px 0 0;z-index:3; }}

@@ -4472,6 +4472,12 @@ def main():
                 "Alphabet Inc": "Alphabet",
                 "Warner Bros Discovery": "Warner Bros. Discovery",
                 "Paramount": "Paramount Global",
+                "MFE": "MFE-MediaForEurope",
+                "Mediaset": "MFE-MediaForEurope",
+                "MediaForEurope": "MFE-MediaForEurope",
+                "ProSieben": "ProSiebenSat.1",
+                "RTL": "RTL Group",
+                "Atresmedia": "Atresmedia",
             }
             _poly_company = _alias_map.get(canonical_company, canonical_company)
 

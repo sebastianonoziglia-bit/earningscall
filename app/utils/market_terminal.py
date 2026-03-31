@@ -1093,9 +1093,12 @@ def build_terminal_html(
     .health-bar-fill{{height:100%;border-radius:3px;transition:width 0.6s ease;}}
 
     /* ── Crypto table ────────────────────────────── */
-    .cr-section{{grid-column:1/-1;}}
+    .cr-section{{max-height:480px;overflow-y:auto;}}
+    .cr-section::-webkit-scrollbar{{width:4px;}}
+    .cr-section::-webkit-scrollbar-thumb{{background:{border};border-radius:4px;}}
     .cr-header{{display:flex;gap:6px;padding:4px 0;border-bottom:1px solid {border};
-      font-size:10px;font-weight:600;color:{text2};text-transform:uppercase;letter-spacing:0.08em;}}
+      font-size:10px;font-weight:600;color:{text2};text-transform:uppercase;letter-spacing:0.08em;
+      position:sticky;top:0;background:{grid_bg};z-index:1;}}
     .cr-row{{display:flex;align-items:center;gap:6px;padding:3px 0;
       border-bottom:1px solid {"rgba(229,231,235,0.4)" if light_theme else "rgba(30,45,61,0.2)"};
       font-size:11px;transition:background 0.15s;}}
@@ -1110,21 +1113,25 @@ def build_terminal_html(
     .cr-row.up .cr-pct{{color:{up};}}
     .cr-row.down .cr-pct{{color:{dn};}}
 
-    /* ── Economic Calendar ────────────────────────── */
+    /* ── Economic Calendar (compact handbook) ────── */
     .cal-section{{background:{grid_bg};border:1px solid {border};border-radius:8px;
-      padding:10px 12px;margin:10px 0;}}
-    .cal-row{{display:flex;align-items:center;gap:8px;padding:5px 0;
-      border-bottom:1px solid {"rgba(229,231,235,0.5)" if light_theme else "rgba(30,45,61,0.3)"};font-size:11px;}}
+      padding:8px 10px;margin:0 0 10px 0;max-height:220px;overflow-y:auto;
+      font-size:10px;}}
+    .cal-section::-webkit-scrollbar{{width:3px;}}
+    .cal-section::-webkit-scrollbar-thumb{{background:{border};border-radius:3px;}}
+    .cal-section .mt-cat-label{{font-size:9px;margin-bottom:5px;padding-bottom:4px;}}
+    .cal-row{{display:flex;align-items:center;gap:6px;padding:3px 0;
+      border-bottom:1px solid {"rgba(229,231,235,0.4)" if light_theme else "rgba(30,45,61,0.2)"};font-size:10px;}}
     .cal-row:last-child{{border-bottom:none;}}
-    .cal-impact{{width:8px;height:8px;border-radius:50%;flex-shrink:0;}}
-    .cal-impact.high{{background:#ef4444;box-shadow:0 0 4px rgba(239,68,68,0.4);}}
+    .cal-impact{{width:6px;height:6px;border-radius:50%;flex-shrink:0;}}
+    .cal-impact.high{{background:#ef4444;box-shadow:0 0 3px rgba(239,68,68,0.4);}}
     .cal-impact.med{{background:#f97316;}}
     .cal-impact.low{{background:{text2};}}
-    .cal-date{{width:120px;color:{text2};font-size:10px;flex-shrink:0;}}
-    .cal-country{{width:30px;font-weight:600;color:{accent};text-transform:uppercase;flex-shrink:0;}}
-    .cal-title{{flex:1;color:{text};}}
-    .cal-vals{{display:flex;gap:8px;flex-shrink:0;}}
-    .cal-fc,.cal-pv{{font-size:10px;color:{text2};}}
+    .cal-date{{width:110px;color:{text2};font-size:9px;flex-shrink:0;}}
+    .cal-country{{width:26px;font-weight:600;color:{accent};text-transform:uppercase;flex-shrink:0;font-size:9px;}}
+    .cal-title{{flex:1;color:{text};font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
+    .cal-vals{{display:flex;gap:6px;flex-shrink:0;}}
+    .cal-fc,.cal-pv{{font-size:9px;color:{text2};}}
     .cal-fc{{font-weight:500;}}
 
     /* ── Polymarket strip ─────────────────────────── */

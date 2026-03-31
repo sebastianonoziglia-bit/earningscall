@@ -1059,10 +1059,12 @@ def render_market_terminal():
                 adtech_fg=_mt_atfg,
                 polymarket_feed=_mt_poly or None,
             )
-            _n_rows = len(_mt_data) + (min(100, len(_mt_crypto)) if _mt_crypto else 0)
-            _cal_rows = min(15, len(_mt_calendar)) if _mt_calendar else 0
+            _n_rows = len(_mt_data)
+            # Calendar is compact (max 220px), crypto scrollable (max 480px)
+            _cal_h = min(220, (min(25, len(_mt_calendar)) * 22 + 40)) if _mt_calendar else 0
+            _crypto_h = min(480, (min(100, len(_mt_crypto)) * 20 + 40)) if _mt_crypto else 0
             _poly_extra = 60 if _mt_poly else 0
-            _mt_height = max(1000, 420 + _n_rows * 22 + (80 if _mt_fg else 0) + _cal_rows * 28 + _poly_extra)
+            _mt_height = max(800, 400 + _n_rows * 22 + (80 if _mt_fg else 0) + _cal_h + _crypto_h + _poly_extra)
             st.components.v1.html(_mt_html, height=_mt_height, scrolling=True)
         else:
             st.info("Market terminal data unavailable — yfinance may be blocked by your network.")
@@ -1081,7 +1083,8 @@ def render_polymarket_explorer():
     import html as _h
 
     st.markdown(
-        "<a id='polymarket-explorer'></a>",
+        "<a id='polymarket-explorer'></a>"
+        "<style>#polymarket-explorer{margin-top:-2rem;}</style>",
         unsafe_allow_html=True,
     )
 
@@ -1090,6 +1093,8 @@ def render_polymarket_explorer():
             fetch_polymarket_top,
             search_polymarket,
             get_all_company_bets_labelled,
+            get_bets_by_category,
+            fetch_deep_pool,
             POLYMARKET_CATEGORIES,
             COMPANY_KEYWORDS,
             match_company,
@@ -1116,6 +1121,11 @@ def render_polymarket_explorer():
             "Twitter / X": "#1d9bf0", "TikTok": "#ff0050", "Spotify": "#1ed760",
             "Uber": "#000000", "Airbnb": "#ff5a5f", "Snap": "#fffc00",
             "Pinterest": "#e60023", "Samsung": "#1428a0", "Tencent": "#0052d9",
+            "MFE-MediaForEurope": "#00479d", "ProSiebenSat.1": "#e6000f",
+            "RTL Group": "#e3001b", "TF1": "#ec6608", "Atresmedia": "#00a4e4",
+            "Warner Bros. Discovery": "#0033a0", "Paramount Global": "#0064ff",
+            "Comcast": "#ff6600", "Roku": "#6c3c97", "The Trade Desk": "#00b8d9",
+            "Entertainment": "#a855f7",
         }
 
         # ── Search bar ──
@@ -1123,7 +1133,7 @@ def render_polymarket_explorer():
         with search_col:
             _poly_query = st.text_input(
                 "Search all markets",
-                placeholder="Search 40,000+ markets... (e.g. 'iPhone', 'Bitcoin $100K', 'Oscar')",
+                placeholder="Search markets... (e.g. 'iPhone', 'Netflix', 'Bitcoin $100K')",
                 key="poly_search_input",
             )
         with cat_col:
@@ -1137,28 +1147,20 @@ def render_polymarket_explorer():
         _is_search = bool(_poly_query and len(_poly_query.strip()) >= 2)
         if _is_search:
             with st.spinner(f"Searching Polymarket for '{_poly_query}'..."):
-                _poly_results = search_polymarket(_poly_query, limit=100)
+                _poly_results = search_polymarket(_poly_query, limit=200)
             if not _poly_results:
                 st.info(f"No markets found for \"{_poly_query}\"")
                 _poly_results = []
         else:
             if _poly_cat == "All":
-                _poly_results = fetch_polymarket_top(limit=200)
+                # Show all tracked company bets from the deep pool (10k markets)
+                _poly_results = get_all_company_bets_labelled()
             else:
-                _poly_results = search_polymarket(_poly_cat, limit=150)
-                _top = fetch_polymarket_top(limit=500)
-                _cat_kw = _poly_cat.lower()
-                _seen = {m["market_id"] for m in _poly_results}
-                for m in _top:
-                    if m["market_id"] not in _seen:
-                        tags_lower = [t.lower() for t in m.get("tags", [])]
-                        if _cat_kw in m["question"].lower() or _cat_kw in tags_lower:
-                            _poly_results.append(m)
-                            _seen.add(m["market_id"])
-                _poly_results.sort(key=lambda x: x.get("volume_total") or 0, reverse=True)
+                # Category-based: company mappings + keyword search
+                _poly_results = get_bets_by_category(_poly_cat, limit=500)
 
         if not _poly_results:
-            _poly_results = fetch_polymarket_top(limit=100)
+            _poly_results = get_all_company_bets_labelled()
 
         # ── Group bets by company ──
         _company_groups: dict[str, list] = {}
@@ -1233,10 +1235,12 @@ body{font-family:'DM Sans','Inter',system-ui,sans-serif;background:transparent;p
                 f"matching \"{_h.escape(_poly_query)}\"</span></div>"
             )
         else:
+            _cat_label = f" in {_h.escape(_poly_cat)}" if _poly_cat != "All" else ""
             _html += (
                 f"<div class='explorer-header'>"
                 f"<span class='title'>Polymarket Explorer</span>"
-                f"<span class='count'>{_total:,}+ prediction markets</span></div>"
+                f"<span class='count'>{_total:,} tracked market{'s' if _total != 1 else ''}"
+                f"{_cat_label}</span></div>"
             )
 
         def _build_card_html(bet: dict, accent_color: str, is_trending: bool = False) -> str:
@@ -1332,9 +1336,9 @@ body{font-family:'DM Sans','Inter',system-ui,sans-serif;background:transparent;p
 
         # ── General / Trending markets ──
         if _general:
-            # Mark top-volume general bets as trending
             _general_sorted = sorted(_general, key=lambda x: x.get("volume_total") or 0, reverse=True)
-            _trending_ids = {b.get("market_id") for b in _general_sorted[:6]} if len(_general_sorted) > 6 else set()
+            # Volume-based trending: bets with $500K+ total volume get 🔥
+            _TRENDING_VOLUME_THRESHOLD = 500_000
             _html += (
                 f"<div class='group-header'>"
                 f"<span class='name'>Trending Markets</span>"
@@ -1354,7 +1358,7 @@ body{font-family:'DM Sans','Inter',system-ui,sans-serif;background:transparent;p
                         if _ck.lower() in _tag.lower():
                             _ga = _cv
                             break
-                _is_hot = _gb.get("market_id") in _trending_ids
+                _is_hot = (_gb.get("volume_total") or 0) >= _TRENDING_VOLUME_THRESHOLD
                 _html += _build_card_html(_gb, _ga, is_trending=_is_hot)
             _html += "</div>"
             _total_cards += min(len(_general), 30)
