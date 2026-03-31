@@ -572,7 +572,11 @@ def extract_outlook_risks_opportunities(
                 rows = rows.copy()
                 rows["_q_sort"] = rows["quarter"].apply(_q_sort_key2)
                 rows = rows.sort_values("_q_sort")
-        text = str(rows.iloc[0].get("transcript_text", "") or "")[:30000]
+        _selected_row = rows.iloc[0]
+        text = str(_selected_row.get("transcript_text", "") or "")[:30000]
+        _transcript_quarter = ""
+        if "quarter" in rows.columns:
+            _transcript_quarter = str(_selected_row.get("quarter", "") or "").strip()
     except Exception:
         return {cat: [] for cat in SIGNAL_CATEGORIES}
 
@@ -619,6 +623,7 @@ def extract_outlook_risks_opportunities(
                     "quote": s,
                     "score": score,
                     "category": category,
+                    "quarter": _transcript_quarter,
                 })
 
     # Category exclusivity — keep sentence in top 2 categories only

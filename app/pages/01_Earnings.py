@@ -3311,11 +3311,15 @@ def main():
 
     quarterly_kpis_df = _load_quarterly_kpis(data_processor.data_path, get_file_mtime(data_processor.data_path))
     available_q = _get_available_quarters_for_earnings(year, company, quarterly_kpis_df)
-    quarter_options = ["Annual"]  # Quarterly selector removed — all sections use annual data
+    quarter_options = ["Annual"] + [f"Q{q}" for q in available_q]
+    # Default to latest available quarter (not Annual)
     _preselect_q = st.session_state.pop("earnings_preselect_quarter", None)
-    _default_q_idx = 0
     if _preselect_q and _preselect_q in quarter_options:
         _default_q_idx = quarter_options.index(_preselect_q)
+    elif available_q:
+        _default_q_idx = len(quarter_options) - 1  # last quarter = latest
+    else:
+        _default_q_idx = 0  # Annual fallback
     with quarter_col:
         selected_quarter = st.selectbox(
             "Quarter",
@@ -4231,10 +4235,11 @@ def main():
                 f"<span style='color:{_dot_color};'>{'●' * _filled}</span>"
                 f"<span style='color:#d1d5db;'>{'●' * (5 - _filled)}</span>"
             )
-            # Quarter badge
+            # Quarter badge — always visible, prominent
             _qtr_badge = (
-                f"<span style='background:#dbeafe;color:#1d4ed8;font-size:0.6rem;"
-                f"padding:1px 5px;border-radius:8px;font-weight:700;margin-left:4px;'>"
+                f"<span style='background:#dbeafe;color:#1d4ed8;font-size:0.68rem;"
+                f"padding:2px 7px;border-radius:8px;font-weight:700;margin-left:6px;"
+                f"white-space:nowrap;'>"
                 f"{html.escape(_sq)}</span>"
                 if _sq else ""
             )
