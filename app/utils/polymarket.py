@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,7 +23,7 @@ import streamlit as st
 
 # ── API ────────────────────────────────────────────────────────────────────────
 _GAMMA_BASE = "https://gamma-api.polymarket.com"
-_REQUEST_TIMEOUT = 12
+_REQUEST_TIMEOUT = 15
 
 # ── Disk cache (survives process restarts) ────────────────────────────────────
 _CACHE_DIR = Path("/tmp/polymarket_cache")
@@ -242,7 +243,7 @@ def _parse_market(m: dict[str, Any]) -> dict[str, Any]:
 def _gamma_paginated(limit: int = 1000, **extra_params) -> list[dict[str, Any]]:
     """Fetch paginated markets from Gamma API with arbitrary params."""
     all_markets: list[dict[str, Any]] = []
-    page_size = 100
+    page_size = min(500, limit)  # Gamma API supports up to 500 per page
     offset = 0
     while len(all_markets) < limit:
         try:
@@ -307,15 +308,15 @@ def fetch_polymarket_top(limit: int = 1000) -> list[dict[str, Any]]:
 @st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_deep_pool() -> list[dict[str, Any]]:
     """
-    Fetch a deep pool of markets (up to 10,000) for company-level filtering.
+    Fetch a deep pool of markets (up to 20,000) for company-level filtering.
     Disk-cached 1 hour. On HuggingFace this runs once per deploy cycle.
-    Takes ~60-90s on first call, instant afterwards.
+    With 500/page, 20K = 40 API calls (~30-60s first call, instant afterwards).
     """
-    cache_key = "polymarket_deep_pool_10k"
+    cache_key = "polymarket_deep_pool_20k"
     cached = _disk_get(cache_key)
     if cached:
         return cached
-    markets = _gamma_paginated(limit=10000)
+    markets = _gamma_paginated(limit=20000)
     if markets:
         _disk_put(cache_key, markets)
     return markets
@@ -467,6 +468,20 @@ _ENTERTAINMENT_KEYWORDS = [
     "stock price", "ipo", "acquisition", "antitrust",
     "ai ", "artificial intelligence", "chatgpt", "openai",
     "search engine", "social media", "advertising", "ad revenue",
+    # Acquisitions, mergers, business deals
+    "acquire", "merger", "buyout", "takeover", "deal worth",
+    "walmart", "buy tiktok", "divest", "spin off", "spin-off",
+    # Specific shows & content
+    "squid game", "stranger things", "wednesday", "bridgerton",
+    "mandalorian", "house of the dragon", "the bear", "succession",
+    "most watched", "most streamed", "top series", "viewership",
+    "nielsen", "ratings", "season ", "premiere",
+    # Sports rights & media
+    "nfl rights", "nba rights", "sports streaming", "live sports",
+    "super bowl", "world cup", "olympics",
+    # Tech industry events
+    "layoff", "headcount", "ceo ", "cfo ", "board of directors",
+    "sec filing", "regulatory", "ftc ", "doj ",
 ]
 
 
@@ -573,3 +588,34 @@ def get_bets_by_category(category: str, limit: int = 500) -> list[dict[str, Any]
 
     result.sort(key=lambda x: x.get("volume_total") or 0, reverse=True)
     return result[:limit]
+
+
+# ── Background cache warmer ──────────────────────────────────────────────────
+_WARM_LOCK = threading.Lock()
+_WARM_STARTED = False
+
+
+def warm_polymarket_cache() -> None:
+    """
+    Pre-fetch the deep pool in a background thread so it's ready
+    when the user first visits a page with Polymarket data.
+    Call this once at app startup (e.g. in Welcome.py).
+    """
+    global _WARM_STARTED
+    with _WARM_LOCK:
+        if _WARM_STARTED:
+            return
+        _WARM_STARTED = True
+
+    def _warm():
+        try:
+            # Check disk cache first — if fresh, no API call needed
+            cached = _disk_get("polymarket_deep_pool_20k")
+            if cached:
+                return
+            _gamma_paginated(limit=20000)
+        except Exception:
+            pass
+
+    t = threading.Thread(target=_warm, daemon=True)
+    t.start()

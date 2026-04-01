@@ -240,7 +240,9 @@ if not st.session_state.get("pipeline_refreshed", False):
 from utils.global_fonts import apply_global_fonts
 from utils.header import display_header
 from utils.logos import load_company_logos
-from utils.polymarket import fetch_polymarket_top, get_all_company_bets_labelled, COMPANY_LOGO_KEY
+from utils.polymarket import fetch_polymarket_top, get_all_company_bets_labelled, COMPANY_LOGO_KEY, warm_polymarket_cache
+# Kick off background Polymarket deep pool fetch (non-blocking)
+warm_polymarket_cache()
 from utils.state_management import get_data_processor
 from utils.theme import get_theme_mode
 from utils.transcript_startup_sync import sync_local_transcripts_to_workbook
