@@ -130,6 +130,7 @@ COMPANY_KEYWORDS: dict[str, list[str]] = {
     "Atresmedia": [
         "atresmedia", "antena 3", "la sexta",
     ],
+    "Walmart": ["walmart", "walmart+", "sam walton"],
 }
 
 # Map company name → key in the logos dict returned by load_company_logos()
@@ -155,6 +156,7 @@ COMPANY_LOGO_KEY: dict[str, str] = {
     "RTL Group": "RTL Group",
     "TF1": "TF1",
     "Atresmedia": "Atresmedia",
+    "Walmart": "Walmart",
 }
 
 
@@ -326,7 +328,7 @@ def _fetch_deep_pool() -> list[dict[str, Any]]:
 def fetch_company_bets(company_name: str) -> list[dict[str, Any]]:
     """
     Return all active bets mentioning `company_name` or its platforms.
-    Searches a deep pool of 10,000 markets (disk-cached 1h) for broad coverage.
+    Searches a deep pool of 20,000 markets (disk-cached 1h) for broad coverage.
     """
     cache_key = f"company_bets_{company_name}"
     cached = _disk_get(cache_key)
@@ -361,7 +363,7 @@ def fetch_company_bets(company_name: str) -> list[dict[str, Any]]:
 def search_polymarket(query: str, limit: int = 100) -> list[dict[str, Any]]:
     """
     Free-text search across all active Polymarket markets.
-    Searches the deep pool (10k markets) client-side.
+    Searches the deep pool (20k markets) client-side.
     """
     if not query or len(query.strip()) < 2:
         return []
@@ -475,7 +477,8 @@ _ENTERTAINMENT_KEYWORDS = [
     "squid game", "stranger things", "wednesday", "bridgerton",
     "mandalorian", "house of the dragon", "the bear", "succession",
     "most watched", "most streamed", "top series", "viewership",
-    "nielsen", "ratings", "season ", "premiere",
+    "nielsen", "ratings", "season ", "premiere", "series ",
+    "limited series", "original series", "anime", "reality show",
     # Sports rights & media
     "nfl rights", "nba rights", "sports streaming", "live sports",
     "super bowl", "world cup", "olympics",
@@ -491,7 +494,7 @@ def _is_entertainment_or_market_bet(question: str) -> bool:
 
 
 def fetch_deep_pool() -> list[dict[str, Any]]:
-    """Public access to the deep pool (10k markets). Cached 1h."""
+    """Public access to the deep pool (20K markets). Cached 1h."""
     return _fetch_deep_pool()
 
 

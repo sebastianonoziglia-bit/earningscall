@@ -15,5 +15,5 @@ textColor = "#e6edf3"
 primaryColor = "#ff5b1f"
 font = "sans serif"
 
-# ui.hideSidebarNav was removed in Streamlit 1.30+ — sidebar nav is now
-# hidden via st.set_page_config() or navigation API instead.
+[ui]
+hideSidebarNav = true

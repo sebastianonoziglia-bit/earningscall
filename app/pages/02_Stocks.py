@@ -1087,8 +1087,8 @@ def render_polymarket_explorer():
         "<a id='polymarket-explorer'></a>"
         "<style>"
         "/* Kill gap between terminal iframe and explorer */"
-        "[data-testid='stHtml'] + [data-testid='stMarkdown'] { margin-top: -3rem !important; }"
-        "#polymarket-explorer { margin-top: -1rem; }"
+        "[data-testid='stHtml'] + [data-testid='stMarkdown'] { margin-top: -4rem !important; padding-top: 0 !important; }"
+        "#polymarket-explorer { margin-top: -1.5rem; padding-top: 0; }"
         "</style>",
         unsafe_allow_html=True,
     )
@@ -1128,6 +1128,7 @@ def render_polymarket_explorer():
             "Pinterest": "#e60023", "Samsung": "#1428a0", "Tencent": "#0052d9",
             "MFE-MediaForEurope": "#00479d", "ProSiebenSat.1": "#e6000f",
             "RTL Group": "#e3001b", "TF1": "#ec6608", "Atresmedia": "#00a4e4",
+            "Walmart": "#0071ce",
             "Warner Bros. Discovery": "#0033a0", "Paramount Global": "#0064ff",
             "Comcast": "#ff6600", "Roku": "#6c3c97", "The Trade Desk": "#00b8d9",
             "Entertainment": "#a855f7",

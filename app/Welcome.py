@@ -105,7 +105,7 @@ st.set_page_config(
     page_title="Global Media Intelligence",
     page_icon="🌐",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 # Set CSS variables and transparent child divs early.
 st.markdown(
