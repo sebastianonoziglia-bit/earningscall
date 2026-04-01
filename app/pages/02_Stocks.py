@@ -1064,8 +1064,8 @@ def render_market_terminal():
             _cal_h = min(220, (min(25, len(_mt_calendar)) * 22 + 40)) if _mt_calendar else 0
             _crypto_h = min(480, (min(100, len(_mt_crypto)) * 20 + 40)) if _mt_crypto else 0
             _poly_extra = 60 if _mt_poly else 0
-            _mt_height = max(800, 400 + _n_rows * 22 + (80 if _mt_fg else 0) + _cal_h + _crypto_h + _poly_extra)
-            st.components.v1.html(_mt_html, height=_mt_height, scrolling=True)
+            _mt_height = max(800, 380 + _n_rows * 22 + (80 if _mt_fg else 0) + _cal_h + _crypto_h + _poly_extra)
+            st.components.v1.html(_mt_html, height=_mt_height, scrolling=False)
         else:
             st.info("Market terminal data unavailable — yfinance may be blocked by your network.")
     except ImportError:
@@ -1082,9 +1082,14 @@ def render_polymarket_explorer():
     """Full Polymarket explorer with Bloomberg-style cards, category colors, and grid layout."""
     import html as _h
 
+    # Collapse the Streamlit gap between Market Terminal iframe and Explorer
     st.markdown(
         "<a id='polymarket-explorer'></a>"
-        "<style>#polymarket-explorer{margin-top:-2rem;}</style>",
+        "<style>"
+        "/* Kill gap between terminal iframe and explorer */"
+        "[data-testid='stHtml'] + [data-testid='stMarkdown'] { margin-top: -3rem !important; }"
+        "#polymarket-explorer { margin-top: -1rem; }"
+        "</style>",
         unsafe_allow_html=True,
     )
 

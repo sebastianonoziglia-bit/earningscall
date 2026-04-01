@@ -1013,7 +1013,7 @@ def build_terminal_html(
     @keyframes tickerScroll{{0%{{transform:translateX(0)}}100%{{transform:translateX(-50%)}}}}
 
     /* ── Top bar ─────────────────────────────────── */
-    .mt-wrap{{padding:0 16px 16px;}}
+    .mt-wrap{{padding:0 16px 4px;}}
     .mt-topbar{{display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:10px 0;
       border-bottom:1px solid {border};}}
     .mt-logo{{font-size:15px;font-weight:700;letter-spacing:0.08em;color:{accent};text-transform:uppercase;}}
