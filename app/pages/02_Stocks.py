@@ -1022,6 +1022,7 @@ def render_market_terminal():
             fetch_economic_calendar,
             compute_market_regime,
             compute_adtech_fear_greed,
+            compute_broadcaster_fear_greed,
             build_terminal_html,
         )
         with st.spinner("Loading live market data..."):
@@ -1031,6 +1032,7 @@ def render_market_terminal():
             _mt_calendar = fetch_economic_calendar()
             _mt_regime = compute_market_regime(_mt_data, _mt_fg) if _mt_data else None
             _mt_atfg = compute_adtech_fear_greed(_mt_data, _mt_fg) if _mt_data else None
+            _mt_bcfg = compute_broadcaster_fear_greed(_mt_data, _mt_fg) if _mt_data else None
 
         # Fetch Polymarket feed for the terminal strip
         _mt_poly = []
@@ -1057,6 +1059,7 @@ def render_market_terminal():
                 economic_calendar=_mt_calendar,
                 market_regime=_mt_regime,
                 adtech_fg=_mt_atfg,
+                broadcaster_fg=_mt_bcfg,
                 polymarket_feed=_mt_poly or None,
             )
             # Height: account for CSS grid layout (panels side by side, ~3 cols)

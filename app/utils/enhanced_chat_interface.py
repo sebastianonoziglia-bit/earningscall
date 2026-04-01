@@ -78,6 +78,19 @@ def _build_chat_pdf(history: list[dict]) -> bytes:
         raw = msg.get("content", "")
         text = clean_thought_markers(raw) if role == "assistant" else raw
         text = text.replace("**", "").replace("__", "")
+        # Sanitise characters unsupported by Helvetica (Latin-1 only)
+        _replacements = {
+            "\u2014": "-", "\u2013": "-", "\u2018": "'", "\u2019": "'",
+            "\u201c": '"', "\u201d": '"', "\u2026": "...", "\u2022": "*",
+            "\u2011": "-", "\u00a0": " ", "\u200b": "", "\u2009": " ",
+            "\u25cf": "*", "\u25cb": "o", "\u25a0": "#", "\u25a1": "o",
+            "\u2192": "->", "\u2190": "<-", "\u2191": "^", "\u2193": "v",
+            "\u2605": "*", "\u2606": "*", "\u2713": "v", "\u2717": "x",
+        }
+        for _uc, _asc in _replacements.items():
+            text = text.replace(_uc, _asc)
+        # Strip any remaining non-Latin-1 characters
+        text = text.encode("latin-1", errors="replace").decode("latin-1")
         is_user = role == "user"
 
         pdf.set_font("Helvetica", "B", 8)

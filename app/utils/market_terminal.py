@@ -276,9 +276,9 @@ def fetch_bulk_market_data() -> list[dict]:
                 pass
     # Sort by category order then name
     cat_order = {
-        "index": 0, "adtech": 1, "tech": 2, "forex": 3,
+        "index": 0, "adtech": 1, "tech": 2, "broadcaster": 3,
         "crypto": 4, "sector": 5, "bond": 6, "commodity": 7,
-        "broadcaster": 8,
+        "forex": 8,
     }
     results.sort(key=lambda r: (cat_order.get(r["category"], 99), r["name"]))
     return results
@@ -585,6 +585,63 @@ def compute_adtech_fear_greed(market_data: list[dict], fear_greed: dict | None =
     }}
 
 
+def compute_broadcaster_fear_greed(market_data: list[dict], fear_greed: dict | None = None) -> dict:
+    """
+    Composite broadcaster/streaming sector sentiment:
+    - Broadcaster stock avg performance (40%)
+    - VIX inverse signal (20%)
+    - General F&G (20%)
+    - Comm Services ETF XLC (20%)
+    """
+    bc_pcts = [r["change_pct"] for r in market_data if r["category"] == "broadcaster"]
+    xlc_pct = None
+    vix_val = None
+    for r in market_data:
+        if r["name"] == "VIX":
+            vix_val = r["price"]
+        if "Comm" in r["name"] and r["category"] == "sector":
+            xlc_pct = r["change_pct"]
+
+    # Broadcaster component: avg daily change mapped to 0-100
+    if bc_pcts:
+        avg_pct = sum(bc_pcts) / len(bc_pcts)
+        bc_score = max(0, min(100, 50 + avg_pct * 10))
+    else:
+        bc_score = 50
+
+    # VIX component
+    vix_score = max(0, min(100, 100 - (vix_val - 12) * 2.5)) if vix_val is not None else 50
+
+    # General F&G
+    fg_score = fear_greed["value"] if fear_greed else 50
+
+    # XLC component
+    xlc_score = max(0, min(100, 50 + xlc_pct * 10)) if xlc_pct is not None else 50
+
+    composite = int(bc_score * 0.4 + vix_score * 0.2 + fg_score * 0.2 + xlc_score * 0.2)
+    composite = max(0, min(100, composite))
+
+    if composite <= 20:
+        label = "Extreme Fear"
+    elif composite <= 35:
+        label = "Fear"
+    elif composite <= 50:
+        label = "Caution"
+    elif composite <= 65:
+        label = "Neutral"
+    elif composite <= 80:
+        label = "Greed"
+    else:
+        label = "Extreme Greed"
+
+    return {"value": composite, "label": label, "components": {
+        "broadcaster_avg": round(bc_score, 1),
+        "vix": round(vix_score, 1),
+        "fear_greed": fg_score,
+        "xlc": round(xlc_score, 1),
+    }}
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # FORMATTING HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -645,6 +702,7 @@ def build_terminal_html(
     economic_calendar: list[dict] | None = None,
     market_regime: dict | None = None,
     adtech_fg: dict | None = None,
+    broadcaster_fg: dict | None = None,
     polymarket_feed: list[dict] | None = None,
 ) -> str:
     """Build a complete market terminal HTML panel for embedding via st.components.v1.html."""
@@ -796,18 +854,43 @@ def build_terminal_html(
             f"</div>"
         )
 
+    # ── Broadcaster Fear & Greed ─────────────────────────────────────────
+    bcfg_html = ""
+    if broadcaster_fg:
+        val = broadcaster_fg["value"]
+        col = _fg_color(val)
+        comps = broadcaster_fg.get("components", {})
+        bcfg_html = (
+            f"<div class='fg-widget bcfg'>"
+            f"<div class='fg-header'>"
+            f"<div class='fg-label'>Broadcaster Fear & Greed</div>"
+            f"<span class='fg-badge'>COMPOSITE</span>"
+            f"</div>"
+            f"<div class='fg-gauge'>"
+            f"<div class='fg-bar'><div class='fg-fill' style='width:{val}%;background:{col};'></div></div>"
+            f"<div class='fg-value' style='color:{col};'>{val} — {broadcaster_fg['label']}</div>"
+            f"</div>"
+            f"<div class='atfg-components'>"
+            f"<span>Broadcaster Avg: {comps.get('broadcaster_avg','—')}</span>"
+            f"<span>VIX Signal: {comps.get('vix','—')}</span>"
+            f"<span>Market F&G: {comps.get('fear_greed','—')}</span>"
+            f"<span>XLC: {comps.get('xlc','—')}</span>"
+            f"</div>"
+            f"</div>"
+        )
+
     # ── Filter tabs (JS-driven, client-side filtering) ────────────────────
     tab_list = [
         ("all", "ALL"),
         ("index", "INDEXES"),
         ("adtech", "AD-TECH"),
         ("tech", "TECH"),
+        ("broadcaster", "BROADCASTERS"),
         ("crypto", "CRYPTO"),
-        ("forex", "FOREX"),
         ("sector", "SECTORS"),
         ("bond", "BONDS"),
         ("commodity", "COMMODITIES"),
-        ("broadcaster", "BROADCASTERS"),
+        ("forex", "FOREX"),
     ]
     tabs_html = "<div class='filter-tabs'>"
     for tid, tlabel in tab_list:
@@ -829,7 +912,7 @@ def build_terminal_html(
         return f"{v:.0f}"
 
     sections_html = []
-    cat_order = ["index", "adtech", "tech", "forex", "sector", "bond", "commodity", "broadcaster"]
+    cat_order = ["index", "adtech", "tech", "broadcaster", "sector", "bond", "commodity", "forex"]
     for cat_key in cat_order:
         items = groups.get(cat_key, [])
         if not items:
@@ -1280,7 +1363,7 @@ def build_terminal_html(
         f"</div>"
         f"{feature_row_html}"
         f"<div class='indicators-row'>"
-        f"{regime_html}{fg_html}{atfg_html}"
+        f"{regime_html}{fg_html}{atfg_html}{bcfg_html}"
         f"</div>"
         f"{tabs_html}"
         f"{calendar_html}"

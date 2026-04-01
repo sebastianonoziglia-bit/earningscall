@@ -4458,201 +4458,6 @@ def main():
     except Exception:
         pass
 
-    # ── Market Intelligence — Polymarket prediction bets ──────────────────
-    try:
-        from utils.polymarket import fetch_company_bets, COMPANY_KEYWORDS
-
-        # Resolve company name for Polymarket (handle normalization differences)
-        _poly_company = canonical_company
-        # Also check common aliases used in Polymarket module
-        if canonical_company not in COMPANY_KEYWORDS:
-            _alias_map = {
-                "Meta": "Meta Platforms",
-                "Meta Platforms Inc": "Meta Platforms",
-                "Alphabet Inc": "Alphabet",
-                "Warner Bros Discovery": "Warner Bros. Discovery",
-                "Paramount": "Paramount Global",
-                "MFE": "MFE-MediaForEurope",
-                "Mediaset": "MFE-MediaForEurope",
-                "MediaForEurope": "MFE-MediaForEurope",
-                "ProSieben": "ProSiebenSat.1",
-                "RTL": "RTL Group",
-                "Atresmedia": "Atresmedia",
-            }
-            _poly_company = _alias_map.get(canonical_company, canonical_company)
-
-        _poly_bets = fetch_company_bets(_poly_company)
-        if _poly_bets:
-            # ── Category grouping ──
-            _POLY_BET_CATEGORIES = {
-                "Financial Markets": ["market cap", "stock", "close above", "price",
-                                      "valuation", "trillion", "most valuable", "shares"],
-                "AI & Technology": ["ai model", "ai ", "gpt", "chatgpt", "gemini",
-                                    "artificial intelligence", "copilot", "llm", "neural"],
-                "Media & Streaming": ["streaming", "content", "studio", "box office",
-                                      "hulu", "hbo", "peacock", "spotify", "twitch", "netflix",
-                                      "disney", "youtube"],
-                "Business & Strategy": ["acquire", "ceo", "merger", "partnership",
-                                        "antitrust", "lawsuit", "regulation", "layoff", "hire"],
-            }
-
-            def _categorize_poly_bet(question: str) -> str:
-                q = question.lower()
-                for cat, kws in _POLY_BET_CATEGORIES.items():
-                    if any(kw in q for kw in kws):
-                        return cat
-                return "Other"
-
-            from collections import defaultdict as _defaultdict
-            _bets_by_cat = _defaultdict(list)
-            for _bet in _poly_bets:
-                _cat = _categorize_poly_bet(str(_bet.get("question", "")))
-                _bets_by_cat[_cat].append(_bet)
-
-            _cat_order = [c for c in _POLY_BET_CATEGORIES if c in _bets_by_cat]
-            if "Other" in _bets_by_cat:
-                _cat_order.append("Other")
-
-            _CAT_ICONS = {
-                "Financial Markets": "📊",
-                "AI & Technology": "🤖",
-                "Media & Streaming": "🎬",
-                "Business & Strategy": "♟️",
-                "Other": "📌",
-            }
-
-            # ── Build iframe HTML ──
-            _CARDS_PER_CAT = 6
-            _poly_html = """<!DOCTYPE html><html><head>
-<style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans','Inter',system-ui,sans-serif;background:transparent;padding:0 4px 8px 4px;}
-.poly-header{display:flex;align-items:baseline;gap:10px;margin:0 0 12px 0;}
-.poly-header .title{font-weight:700;font-size:1rem;color:#111827;}
-.poly-header .count{color:#7c3aed;font-size:0.78rem;font-weight:600;}
-.cat-header{font-weight:700;font-size:0.85rem;color:#374151;margin:14px 0 8px 0;
-    padding-bottom:4px;border-bottom:1px solid #e5e7eb;}
-.cat-header:first-of-type{margin-top:4px;}
-.card-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;}
-.poly-card{display:block;text-decoration:none;background:#f9fafb;border:1px solid #e5e7eb;
-    border-left:3px solid #7c3aed;border-radius:6px;padding:10px 12px;
-    transition:transform 0.15s,box-shadow 0.15s;}
-.poly-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(124,58,237,0.12);}
-.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:7px;}
-.question{margin:0;font-size:0.83rem;color:#111827;line-height:1.5;font-weight:500;flex:1;}
-.badge{font-weight:700;font-size:0.72rem;padding:2px 8px;border-radius:999px;white-space:nowrap;}
-.badge-green{background:#dcfce7;color:#16a34a;}
-.badge-amber{background:#fef3c7;color:#d97706;}
-.badge-red{background:#fee2e2;color:#dc2626;}
-.badge-none{color:#9ca3af;font-size:0.72rem;}
-.progress-track{background:#e5e7eb;border-radius:999px;height:4px;margin-bottom:6px;}
-.progress-fill{height:4px;border-radius:999px;transition:width 0.3s;}
-.meta{font-size:0.7rem;color:#6b7280;}
-.meta .sep{color:#d1d5db;margin:0 3px;}
-.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;
-    background:#16a34a;margin-right:4px;animation:liveDot 2s ease-in-out infinite;}
-.show-more-btn{display:inline-block;margin:6px 0 8px 0;font-size:0.78rem;
-    color:#7c3aed;cursor:pointer;font-weight:600;border:none;background:none;padding:0;}
-.show-more-btn:hover{text-decoration:underline;}
-@keyframes liveDot{0%,100%{opacity:1;}50%{opacity:0.35;}}
-</style></head><body>
-"""
-            _n_bets = len(_poly_bets)
-            _poly_html += (
-                f"<div class='poly-header'>"
-                f"<span class='title'>Market Intelligence</span>"
-                f"<span class='count'>Polymarket · {_n_bets} active bet{'s' if _n_bets != 1 else ''}</span>"
-                f"</div>"
-            )
-
-            _total_visible_rows = 0
-            for _cat in _cat_order:
-                _cat_bets = _bets_by_cat[_cat]
-                _icon = _CAT_ICONS.get(_cat, "📌")
-                _cat_slug = _cat.lower().replace(" ", "_").replace("&", "")
-                _poly_html += f"<div class='cat-header'>{_icon} {html.escape(_cat)} ({len(_cat_bets)})</div>"
-                _poly_html += "<div class='card-grid'>"
-
-                for _bi, _bet in enumerate(_cat_bets):
-                    if _bi == _CARDS_PER_CAT:
-                        _poly_html += f"</div><div class='card-grid' id='extra-{_cat_slug}' style='display:none;'>"
-
-                    _bq = html.escape(str(_bet.get("question", "")))
-                    _yes = _bet.get("yes_price")
-                    _vol = html.escape(str(_bet.get("volume_fmt", "")))
-                    _liq = html.escape(str(_bet.get("liquidity_fmt", "")))
-                    _end = html.escape(str(_bet.get("end_date", "")))
-                    _url = html.escape(str(_bet.get("url", "https://polymarket.com")))
-
-                    if _yes is not None:
-                        _bcls = "badge-green" if _yes >= 65 else ("badge-amber" if _yes >= 45 else "badge-red")
-                        _badge = f"<span class='badge {_bcls}'>{_yes:.0f}% YES</span>"
-                        _bar_w = int(_yes)
-                        _bar_c = "#16a34a" if _yes >= 65 else ("#d97706" if _yes >= 45 else "#dc2626")
-                    else:
-                        _badge = "<span class='badge-none'>—</span>"
-                        _bar_w = 50
-                        _bar_c = "#6b7280"
-
-                    _meta_parts = []
-                    if _vol:
-                        _meta_parts.append(f"{_vol} vol")
-                    if _liq:
-                        _meta_parts.append(f"{_liq} liq")
-                    if _end:
-                        _meta_parts.append(f"ends {_end}")
-                    _meta = "<span class='sep'>·</span>".join(_meta_parts)
-
-                    _poly_html += (
-                        f"<a href='{_url}' target='_blank' rel='noopener' class='poly-card'>"
-                        f"<div class='card-top'>"
-                        f"<span class='question'><span class='live-dot'></span>{_bq}</span>"
-                        f"{_badge}</div>"
-                        f"<div class='progress-track'>"
-                        f"<div class='progress-fill' style='width:{_bar_w}%;background:{_bar_c};'></div></div>"
-                        f"<div class='meta'>{_meta}</div>"
-                        f"</a>"
-                    )
-                _poly_html += "</div>"  # close card-grid
-
-                if len(_cat_bets) > _CARDS_PER_CAT:
-                    _extra = len(_cat_bets) - _CARDS_PER_CAT
-                    _poly_html += (
-                        f"<button class='show-more-btn' "
-                        f"onclick=\"var e=document.getElementById('extra-{_cat_slug}');"
-                        f"if(e.style.display==='none'){{e.style.display='grid';this.textContent='Show less ‹';}}"
-                        f"else{{e.style.display='none';this.textContent='Show {_extra} more ›';}}\">"
-                        f"Show {_extra} more ›</button>"
-                    )
-                _total_visible_rows += min(len(_cat_bets), _CARDS_PER_CAT)
-
-            _poly_html += """
-<script>
-// Fix grid columns on extra sections
-document.querySelectorAll('[id^="extra-"]').forEach(function(el) {
-    el.style.gridTemplateColumns = '1fr 1fr';
-    el.style.gap = '8px';
-});
-</script>
-</body></html>"""
-
-            _est_rows = (_total_visible_rows + 1) // 2
-            _est_height = 70 + len(_cat_order) * 40 + _est_rows * 115
-            _est_height = max(300, min(_est_height, 1400))
-            components.html(_poly_html, height=_est_height, scrolling=True)
-
-            _poly_footer_parts = []
-            if len(_poly_bets) > 20:
-                _poly_footer_parts.append(
-                    f"Showing top {min(len(_poly_bets), 50)} of {len(_poly_bets)} bets"
-                )
-            _poly_footer_parts.append(
-                "[View full Polymarket data on Stocks page](/Stocks#polymarket-explorer)"
-            )
-            st.caption(" · ".join(_poly_footer_parts))
-    except Exception:
-        pass
-
     company_insights_df = load_company_insights_text(data_processor.data_path)
 
     company_insights_filtered = pd.DataFrame()
@@ -4836,6 +4641,196 @@ document.querySelectorAll('[id^="extra-"]').forEach(function(el) {
         """,
         height=0,
     )
+
+    # ── Market Intelligence — Polymarket prediction bets ──────────────────
+    try:
+        from utils.polymarket import fetch_company_bets, COMPANY_KEYWORDS
+
+        _poly_company = canonical_company
+        if canonical_company not in COMPANY_KEYWORDS:
+            _alias_map = {
+                "Meta": "Meta Platforms",
+                "Meta Platforms Inc": "Meta Platforms",
+                "Alphabet Inc": "Alphabet",
+                "Warner Bros Discovery": "Warner Bros. Discovery",
+                "Paramount": "Paramount Global",
+                "MFE": "MFE-MediaForEurope",
+                "Mediaset": "MFE-MediaForEurope",
+                "MediaForEurope": "MFE-MediaForEurope",
+                "ProSieben": "ProSiebenSat.1",
+                "RTL": "RTL Group",
+                "Atresmedia": "Atresmedia",
+            }
+            _poly_company = _alias_map.get(canonical_company, canonical_company)
+
+        _poly_bets = fetch_company_bets(_poly_company)
+        if _poly_bets:
+            _POLY_BET_CATEGORIES = {
+                "Financial Markets": ["market cap", "stock", "close above", "price",
+                                      "valuation", "trillion", "most valuable", "shares"],
+                "AI & Technology": ["ai model", "ai ", "gpt", "chatgpt", "gemini",
+                                    "artificial intelligence", "copilot", "llm", "neural"],
+                "Media & Streaming": ["streaming", "content", "studio", "box office",
+                                      "hulu", "hbo", "peacock", "spotify", "twitch", "netflix",
+                                      "disney", "youtube"],
+                "Business & Strategy": ["acquire", "ceo", "merger", "partnership",
+                                        "antitrust", "lawsuit", "regulation", "layoff", "hire"],
+            }
+
+            def _categorize_poly_bet(question: str) -> str:
+                q = question.lower()
+                for cat, kws in _POLY_BET_CATEGORIES.items():
+                    if any(kw in q for kw in kws):
+                        return cat
+                return "Other"
+
+            from collections import defaultdict as _defaultdict
+            _bets_by_cat = _defaultdict(list)
+            for _bet in _poly_bets:
+                _cat = _categorize_poly_bet(str(_bet.get("question", "")))
+                _bets_by_cat[_cat].append(_bet)
+
+            _cat_order = [c for c in _POLY_BET_CATEGORIES if c in _bets_by_cat]
+            if "Other" in _bets_by_cat:
+                _cat_order.append("Other")
+
+            _CAT_ICONS = {
+                "Financial Markets": "📊",
+                "AI & Technology": "🤖",
+                "Media & Streaming": "🎬",
+                "Business & Strategy": "♟️",
+                "Other": "📌",
+            }
+
+            _CARDS_PER_CAT = 6
+            _poly_html = """<!DOCTYPE html><html><head>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans','Inter',system-ui,sans-serif;background:transparent;padding:0 4px 8px 4px;}
+.poly-header{display:flex;align-items:baseline;gap:10px;margin:0 0 12px 0;}
+.poly-header .title{font-weight:700;font-size:1rem;color:#111827;}
+.poly-header .count{color:#7c3aed;font-size:0.78rem;font-weight:600;}
+.cat-header{font-weight:700;font-size:0.85rem;color:#374151;margin:14px 0 8px 0;
+    padding-bottom:4px;border-bottom:1px solid #e5e7eb;}
+.cat-header:first-of-type{margin-top:4px;}
+.card-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;}
+.poly-card{display:block;text-decoration:none;background:#f9fafb;border:1px solid #e5e7eb;
+    border-left:3px solid #7c3aed;border-radius:6px;padding:10px 12px;
+    transition:transform 0.15s,box-shadow 0.15s;}
+.poly-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(124,58,237,0.12);}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:7px;}
+.question{margin:0;font-size:0.83rem;color:#111827;line-height:1.5;font-weight:500;flex:1;}
+.badge{font-weight:700;font-size:0.72rem;padding:2px 8px;border-radius:999px;white-space:nowrap;}
+.badge-green{background:#dcfce7;color:#16a34a;}
+.badge-amber{background:#fef3c7;color:#d97706;}
+.badge-red{background:#fee2e2;color:#dc2626;}
+.badge-none{color:#9ca3af;font-size:0.72rem;}
+.progress-track{background:#e5e7eb;border-radius:999px;height:4px;margin-bottom:6px;}
+.progress-fill{height:4px;border-radius:999px;transition:width 0.3s;}
+.meta{font-size:0.7rem;color:#6b7280;}
+.meta .sep{color:#d1d5db;margin:0 3px;}
+.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;
+    background:#16a34a;margin-right:4px;animation:liveDot 2s ease-in-out infinite;}
+.show-more-btn{display:inline-block;margin:6px 0 8px 0;font-size:0.78rem;
+    color:#7c3aed;cursor:pointer;font-weight:600;border:none;background:none;padding:0;}
+.show-more-btn:hover{text-decoration:underline;}
+@keyframes liveDot{0%,100%{opacity:1;}50%{opacity:0.35;}}
+</style></head><body>
+"""
+            _n_bets = len(_poly_bets)
+            _poly_html += (
+                f"<div class='poly-header'>"
+                f"<span class='title'>Market Intelligence</span>"
+                f"<span class='count'>Polymarket · {_n_bets} active bet{'s' if _n_bets != 1 else ''}</span>"
+                f"</div>"
+            )
+
+            _total_visible_rows = 0
+            for _cat in _cat_order:
+                _cat_bets = _bets_by_cat[_cat]
+                _icon = _CAT_ICONS.get(_cat, "📌")
+                _cat_slug = _cat.lower().replace(" ", "_").replace("&", "")
+                _poly_html += f"<div class='cat-header'>{_icon} {html.escape(_cat)} ({len(_cat_bets)})</div>"
+                _poly_html += "<div class='card-grid'>"
+
+                for _bi, _bet in enumerate(_cat_bets):
+                    if _bi == _CARDS_PER_CAT:
+                        _poly_html += f"</div><div class='card-grid' id='extra-{_cat_slug}' style='display:none;'>"
+
+                    _bq = html.escape(str(_bet.get("question", "")))
+                    _yes = _bet.get("yes_price")
+                    _vol = html.escape(str(_bet.get("volume_fmt", "")))
+                    _liq = html.escape(str(_bet.get("liquidity_fmt", "")))
+                    _end = html.escape(str(_bet.get("end_date", "")))
+                    _url = html.escape(str(_bet.get("url", "https://polymarket.com")))
+
+                    if _yes is not None:
+                        _bcls = "badge-green" if _yes >= 65 else ("badge-amber" if _yes >= 45 else "badge-red")
+                        _badge = f"<span class='badge {_bcls}'>{_yes:.0f}% YES</span>"
+                        _bar_w = int(_yes)
+                        _bar_c = "#16a34a" if _yes >= 65 else ("#d97706" if _yes >= 45 else "#dc2626")
+                    else:
+                        _badge = "<span class='badge-none'>—</span>"
+                        _bar_w = 50
+                        _bar_c = "#6b7280"
+
+                    _meta_parts = []
+                    if _vol:
+                        _meta_parts.append(f"{_vol} vol")
+                    if _liq:
+                        _meta_parts.append(f"{_liq} liq")
+                    if _end:
+                        _meta_parts.append(f"ends {_end}")
+                    _meta = "<span class='sep'>·</span>".join(_meta_parts)
+
+                    _poly_html += (
+                        f"<a href='{_url}' target='_blank' rel='noopener' class='poly-card'>"
+                        f"<div class='card-top'>"
+                        f"<span class='question'><span class='live-dot'></span>{_bq}</span>"
+                        f"{_badge}</div>"
+                        f"<div class='progress-track'>"
+                        f"<div class='progress-fill' style='width:{_bar_w}%;background:{_bar_c};'></div></div>"
+                        f"<div class='meta'>{_meta}</div>"
+                        f"</a>"
+                    )
+                _poly_html += "</div>"
+
+                if len(_cat_bets) > _CARDS_PER_CAT:
+                    _extra = len(_cat_bets) - _CARDS_PER_CAT
+                    _poly_html += (
+                        f"<button class='show-more-btn' "
+                        f"onclick=\"var e=document.getElementById('extra-{_cat_slug}');"
+                        f"if(e.style.display==='none'){{e.style.display='grid';this.textContent='Show less ‹';}}"
+                        f"else{{e.style.display='none';this.textContent='Show {_extra} more ›';}}\">"
+                        f"Show {_extra} more ›</button>"
+                    )
+                _total_visible_rows += min(len(_cat_bets), _CARDS_PER_CAT)
+
+            _poly_html += """
+<script>
+document.querySelectorAll('[id^="extra-"]').forEach(function(el) {
+    el.style.gridTemplateColumns = '1fr 1fr';
+    el.style.gap = '8px';
+});
+</script>
+</body></html>"""
+
+            _est_rows = (_total_visible_rows + 1) // 2
+            _est_height = 70 + len(_cat_order) * 40 + _est_rows * 115
+            _est_height = max(300, min(_est_height, 1400))
+            components.html(_poly_html, height=_est_height, scrolling=True)
+
+            _poly_footer_parts = []
+            if len(_poly_bets) > 20:
+                _poly_footer_parts.append(
+                    f"Showing top {min(len(_poly_bets), 50)} of {len(_poly_bets)} bets"
+                )
+            _poly_footer_parts.append(
+                "[View full Polymarket data on Stocks page](/Stocks#polymarket-explorer)"
+            )
+            st.caption(" · ".join(_poly_footer_parts))
+    except Exception:
+        pass
 
 
     # Segment composition
