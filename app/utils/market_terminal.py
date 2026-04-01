@@ -147,22 +147,29 @@ MARKET_SYMBOLS: list[tuple[str, str, str]] = [
     ("OB",         "Outbrain",           "adtech"),
     ("APPS",       "Digital Turbine",    "adtech"),
     ("LMND",       "LiveRamp",           "adtech"),
-    # ── Large Cap Media / Tech ────────────────────────────────────────────
-    ("AAPL",       "Apple",              "stock"),
-    ("MSFT",       "Microsoft",          "stock"),
-    ("GOOGL",      "Alphabet",           "stock"),
-    ("AMZN",       "Amazon",             "stock"),
-    ("META",       "Meta",               "stock"),
-    ("NFLX",       "Netflix",            "stock"),
-    ("NVDA",       "NVIDIA",             "stock"),
-    ("DIS",        "Disney",             "stock"),
-    ("CMCSA",      "Comcast",            "stock"),
-    ("PARA",       "Paramount",          "stock"),
-    ("WBD",        "Warner Bros Disc",   "stock"),
-    ("SPOT",       "Spotify",            "stock"),
-    ("ROKU",       "Roku",               "stock"),
-    ("SNAP",       "Snap",               "stock"),
-    ("PINS",       "Pinterest",          "stock"),
+    # ── Tech / Platforms ─────────────────────────────────────────────────
+    ("AAPL",       "Apple",              "tech"),
+    ("MSFT",       "Microsoft",          "tech"),
+    ("GOOGL",      "Alphabet",           "tech"),
+    ("AMZN",       "Amazon",             "tech"),
+    ("META",       "Meta",               "tech"),
+    ("NVDA",       "NVIDIA",             "tech"),
+    ("SNAP",       "Snap",               "tech"),
+    ("PINS",       "Pinterest",          "tech"),
+    # ── Broadcasters & Streaming ─────────────────────────────────────────
+    ("NFLX",       "Netflix",            "broadcaster"),
+    ("DIS",        "Disney",             "broadcaster"),
+    ("CMCSA",      "Comcast",            "broadcaster"),
+    ("PARA",       "Paramount",          "broadcaster"),
+    ("WBD",        "Warner Bros Disc",   "broadcaster"),
+    ("SPOT",       "Spotify",            "broadcaster"),
+    ("ROKU",       "Roku",               "broadcaster"),
+    ("MFEA.MI",    "MFE-MediaForEurope", "broadcaster"),
+    ("PSM.DE",     "ProSiebenSat.1",     "broadcaster"),
+    ("TFI.PA",     "TF1",                "broadcaster"),
+    ("RRTL.DE",    "RTL Group",          "broadcaster"),
+    ("ITV.L",      "ITV",                "broadcaster"),
+    ("A3M.MC",     "Atresmedia",         "broadcaster"),
 ]
 
 
@@ -269,8 +276,9 @@ def fetch_bulk_market_data() -> list[dict]:
                 pass
     # Sort by category order then name
     cat_order = {
-        "index": 0, "bond": 1, "commodity": 2, "forex": 3,
-        "crypto": 4, "sector": 5, "adtech": 6, "stock": 7,
+        "index": 0, "adtech": 1, "tech": 2, "forex": 3,
+        "crypto": 4, "sector": 5, "bond": 6, "commodity": 7,
+        "broadcaster": 8,
     }
     results.sort(key=lambda r: (cat_order.get(r["category"], 99), r["name"]))
     return results
@@ -657,12 +665,14 @@ def build_terminal_html(
         "crypto": "Crypto",
         "sector": "S&P 500 Sectors",
         "adtech": "Ad-Tech & Digital Advertising",
-        "stock": "Media & Tech",
+        "tech": "Tech",
+        "broadcaster": "Broadcasters & Streaming",
     }
 
     category_icons = {
         "index": "🌍", "bond": "📊", "commodity": "🪙", "forex": "💱",
-        "crypto": "₿", "sector": "📈", "adtech": "📡", "stock": "🏢",
+        "crypto": "₿", "sector": "📈", "adtech": "📡",
+        "tech": "💻", "broadcaster": "📺",
     }
 
     now_str = datetime.now(timezone.utc).strftime("%H:%M UTC · %b %d, %Y")
@@ -790,13 +800,14 @@ def build_terminal_html(
     tab_list = [
         ("all", "ALL"),
         ("index", "INDEXES"),
+        ("adtech", "AD-TECH"),
+        ("tech", "TECH"),
         ("crypto", "CRYPTO"),
         ("forex", "FOREX"),
-        ("commodity", "COMMODITIES"),
-        ("bond", "BONDS"),
         ("sector", "SECTORS"),
-        ("adtech", "AD-TECH"),
-        ("stock", "STOCKS"),
+        ("bond", "BONDS"),
+        ("commodity", "COMMODITIES"),
+        ("broadcaster", "BROADCASTERS"),
     ]
     tabs_html = "<div class='filter-tabs'>"
     for tid, tlabel in tab_list:
@@ -818,7 +829,7 @@ def build_terminal_html(
         return f"{v:.0f}"
 
     sections_html = []
-    cat_order = ["index", "bond", "commodity", "forex", "sector", "adtech", "stock"]
+    cat_order = ["index", "adtech", "tech", "forex", "sector", "bond", "commodity", "broadcaster"]
     for cat_key in cat_order:
         items = groups.get(cat_key, [])
         if not items:
@@ -844,7 +855,7 @@ def build_terminal_html(
             # Volume + Market Cap badges — only for stocks/adtech/sectors (save space for names in other categories)
             vol_badge = ""
             mcap_badge = ""
-            _show_badges = cat_key in ("stocks", "adtech", "sectors")
+            _show_badges = cat_key in ("tech", "broadcaster", "adtech", "sector")
             if _show_badges:
                 _v = r.get("volume")
                 _m = r.get("market_cap")
@@ -853,8 +864,9 @@ def build_terminal_html(
                 if _m and float(_m) > 0:
                     mcap_badge = f"<span class='mt-mcap'>{_fmt_large(_m)}</span>"
 
+            _esc_name = r['name'].replace("'", "&#39;")
             rows_html += (
-                f"<div class='mt-row {cls}'>"
+                f"<div class='mt-row {cls}' data-name='{_esc_name}' data-price='{r['price']}' data-pct='{r['change_pct']}'>"
                 f"<span class='mt-name'>{r['name']}</span>"
                 f"{health_bar}"
                 f"{mcap_badge}"
@@ -865,7 +877,13 @@ def build_terminal_html(
             )
         sections_html.append(
             f"<div class='mt-section' data-category='{cat_key}'>"
-            f"<div class='mt-cat-label'>{icon} {label}</div>"
+            f"<div class='mt-cat-label'>"
+            f"<span class='cat-title'>{icon} {label}</span>"
+            f"<span class='sort-controls'>"
+            f"<span class='sort-btn' data-sort='name' title='Sort by Name'>A-Z <span class='sort-arrow'>⇅</span></span>"
+            f"<span class='sort-btn' data-sort='pct' title='Sort by Change'>Chg <span class='sort-arrow'>⇅</span></span>"
+            f"</span>"
+            f"</div>"
             f"{rows_html}"
             f"</div>"
         )
@@ -1072,8 +1090,14 @@ def build_terminal_html(
     .mt-section{{background:{grid_bg};border:1px solid {border};border-radius:8px;padding:10px 12px;min-width:0;
       transition:opacity 0.3s;}}
     .mt-section.hidden{{display:none;}}
-    .mt-cat-label{{font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;
+    .mt-cat-label{{display:flex;align-items:center;font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;
       color:{accent};margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid {border};}}
+    .cat-title{{flex:1;}}
+    .sort-controls{{display:flex;gap:6px;font-size:8px;color:{text2};letter-spacing:0;text-transform:none;}}
+    .sort-btn{{cursor:pointer;padding:1px 4px;border-radius:3px;transition:all 0.15s;user-select:none;font-weight:400;}}
+    .sort-btn:hover{{color:{text};background:{border};}}
+    .sort-btn.asc .sort-arrow,.sort-btn.desc .sort-arrow{{color:{accent};font-weight:700;}}
+    .sort-arrow{{font-size:7px;margin-left:1px;}}
     .mt-row{{display:flex;align-items:center;gap:6px;padding:4px 0;
       border-bottom:1px solid {"rgba(229,231,235,0.6)" if light_theme else "rgba(30,45,61,0.3)"};font-size:11px;
       transition:background 0.15s;}}
@@ -1188,6 +1212,59 @@ def build_terminal_html(
     </script>
     """
 
+    # ── Sort JS ────────────────────────────────────────────────────────────
+    sort_js = """
+    <script>
+    window.addEventListener('load', function(){
+      // Store original indices for reset
+      document.querySelectorAll('.mt-section').forEach(function(sec){
+        sec.querySelectorAll('.mt-row').forEach(function(row, i){
+          row.dataset.origIdx = i;
+        });
+      });
+      document.querySelectorAll('.sort-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var section = btn.closest('.mt-section');
+          var field = btn.getAttribute('data-sort');
+          var rows = Array.from(section.querySelectorAll('.mt-row'));
+          if(!rows.length) return;
+          var dir = 'asc';
+          if(btn.classList.contains('asc')) dir = 'desc';
+          else if(btn.classList.contains('desc')) dir = 'none';
+          section.querySelectorAll('.sort-btn').forEach(function(b){
+            b.classList.remove('asc','desc');
+            b.querySelector('.sort-arrow').textContent = '⇅';
+          });
+          if(dir === 'none'){
+            rows.sort(function(a,b){
+              return (parseInt(a.dataset.origIdx)||0) - (parseInt(b.dataset.origIdx)||0);
+            });
+          } else {
+            btn.classList.add(dir);
+            btn.querySelector('.sort-arrow').textContent = dir==='asc' ? '▲' : '▼';
+            rows.sort(function(a,b){
+              var va, vb;
+              if(field==='name'){
+                va = (a.dataset.name||'').toLowerCase();
+                vb = (b.dataset.name||'').toLowerCase();
+                return dir==='asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+              } else if(field==='price'){
+                va = parseFloat(a.dataset.price)||0;
+                vb = parseFloat(b.dataset.price)||0;
+              } else {
+                va = parseFloat(a.dataset.pct)||0;
+                vb = parseFloat(b.dataset.pct)||0;
+              }
+              return dir==='asc' ? va - vb : vb - va;
+            });
+          }
+          rows.forEach(function(r){ section.appendChild(r); });
+        });
+      });
+    });
+    </script>
+    """
+
     # ── Assemble ──────────────────────────────────────────────────────────
     n_instruments = len(market_data) + (crypto_limit if crypto_top else 0)
 
@@ -1211,4 +1288,5 @@ def build_terminal_html(
         f"{poly_strip_html}"
         f"</div>"
         f"{filter_js}"
+        f"{sort_js}"
     )

@@ -1059,12 +1059,19 @@ def render_market_terminal():
                 adtech_fg=_mt_atfg,
                 polymarket_feed=_mt_poly or None,
             )
-            _n_rows = len(_mt_data)
-            # Calendar is compact (max 220px), crypto scrollable (max 480px)
+            # Height: account for CSS grid layout (panels side by side, ~3 cols)
+            from collections import Counter as _Counter
+            _cat_counts = _Counter(r["category"] for r in _mt_data)
+            _panel_heights = sorted(_cat_counts.values(), reverse=True)
+            _grid_cols = 3
+            _grid_h = 0
+            for _i in range(0, len(_panel_heights), _grid_cols):
+                _grid_h += max(_panel_heights[_i:_i + _grid_cols]) * 22 + 50  # 50 for header + padding
+            # Calendar compact (max 220px), crypto scrollable (max 480px)
             _cal_h = min(220, (min(25, len(_mt_calendar)) * 22 + 40)) if _mt_calendar else 0
             _crypto_h = min(480, (min(100, len(_mt_crypto)) * 20 + 40)) if _mt_crypto else 0
             _poly_extra = 60 if _mt_poly else 0
-            _mt_height = max(800, 380 + _n_rows * 22 + (80 if _mt_fg else 0) + _cal_h + _crypto_h + _poly_extra)
+            _mt_height = max(800, 380 + _grid_h + (80 if _mt_fg else 0) + _cal_h + _crypto_h + _poly_extra)
             st.components.v1.html(_mt_html, height=_mt_height, scrolling=False)
         else:
             st.info("Market terminal data unavailable — yfinance may be blocked by your network.")
