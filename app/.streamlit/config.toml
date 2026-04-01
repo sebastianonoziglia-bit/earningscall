@@ -15,5 +15,5 @@ textColor = "#e6edf3"
 primaryColor = "#ff5b1f"
 font = "sans serif"
 
-[ui]
-hideSidebarNav = true
+# Sidebar nav is hidden via CSS in utils/theme.py and utils/styles.py
+# (ui.hideSidebarNav was removed in Streamlit 1.30+)
