@@ -87,6 +87,9 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
 def _clean(v: Any) -> Any:
     if v is None:
         return None
+    # pandas 3.x may yield pd.NA in object columns; catch that explicitly.
+    if v is pd.NA:
+        return None
     if isinstance(v, float) and math.isnan(v):
         return None
     try:
@@ -103,6 +106,26 @@ def _clean(v: Any) -> Any:
 
 def _records(df: pd.DataFrame) -> list[dict[str, Any]]:
     return [{k: _clean(v) for k, v in row.items()} for row in df.to_dict(orient="records")]
+
+
+def _str_col(df: pd.DataFrame, name: str, default: str = "") -> pd.Series:
+    """Return a cleaned string Series for `name`, aligned to df's index.
+
+    Robust against:
+      - missing column  → Series of `default`
+      - NaN / None / pd.NA values → `default`
+      - pandas 3.x where `.astype(str)` on NaN yields pd.NA that later becomes None
+      - literal string residue like "nan" / "None" / "<NA>"
+    """
+    if name in df.columns:
+        s = df[name]
+    else:
+        return pd.Series([default] * len(df), index=df.index, dtype="object")
+    # Replace any NA/NaN/None with default BEFORE astype, so no pd.NA survives.
+    s = s.where(s.notna(), default)
+    s = s.astype(str).str.strip()
+    s = s.replace({"nan": default, "NaN": default, "None": default, "<NA>": default, "": default})
+    return s.fillna(default)
 
 
 # ── Supabase upsert ────────────────────────────────────────────────────
@@ -140,24 +163,43 @@ def _read_sheet(workbook: str, sheet_name: str) -> pd.DataFrame:
 
 
 # ── per-table transformers ─────────────────────────────────────────────
-def sync_stock_daily(workbook: str) -> int:
-    df = _read_sheet(workbook, "Daily")
-    if df.empty:
-        return 0
-    out = pd.DataFrame()
-    out["date"] = pd.to_datetime(df.get("date"), errors="coerce").dt.strftime("%Y-%m-%d")
-    out["asset"] = df.get("asset").astype(str).str.strip() if "asset" in df.columns else None
-    out["tag"] = df.get("tag", "").astype(str).str.strip() if "tag" in df.columns else ""
+def _build_stock_frame(df: pd.DataFrame, *, time_col: str, time_format: str) -> pd.DataFrame:
+    """Shared stock dataframe builder for daily/minute/yearly syncs.
+
+    Returns a cleaned DataFrame with columns matching the stock_* tables.
+    `time_col` is either 'date' or 'ts'; `time_format` is the strftime pattern.
+    """
+    out = pd.DataFrame(index=df.index)
+    out[time_col] = pd.to_datetime(df.get("date"), errors="coerce").dt.strftime(time_format)
+    out["asset"] = _str_col(df, "asset")
+    # Volume column: sheet uses "vol" / "vol." normalized to "vol"
+    vol_col = "volume" if "volume" in df.columns else ("vol" if "vol" in df.columns else None)
     out["price"] = pd.to_numeric(df.get("close", df.get("price")), errors="coerce")
     out["open"] = pd.to_numeric(df.get("open"), errors="coerce")
     out["high"] = pd.to_numeric(df.get("high"), errors="coerce")
     out["low"] = pd.to_numeric(df.get("low"), errors="coerce")
-    out["volume"] = pd.to_numeric(df.get("volume"), errors="coerce")
+    out["volume"] = pd.to_numeric(df[vol_col], errors="coerce") if vol_col else None
     out["change_pct"] = pd.to_numeric(df.get("change_pct"), errors="coerce")
     out["market_cap"] = pd.to_numeric(df.get("market_cap"), errors="coerce")
-    out["currency"] = df.get("currency", "USD").astype(str) if "currency" in df.columns else "USD"
-    out = out.dropna(subset=["date", "asset"])
-    out = out.drop_duplicates(subset=["date", "asset", "tag"], keep="last")
+    out["currency"] = _str_col(df, "currency", default="USD")
+    # tag is NOT NULL in the schema (default ''). Fall back to asset if the
+    # sheet row has no tag. If both are missing the row will be dropped next
+    # by the asset-length filter below.
+    tag = _str_col(df, "tag", default="")
+    tag = tag.where(tag.str.len() > 0, out["asset"].fillna(""))
+    out["tag"] = tag.fillna("").astype(str)
+    out = out.dropna(subset=[time_col])
+    # Drop rows whose asset ended up empty after string cleaning
+    out = out[out["asset"].astype(str).str.len() > 0]
+    out = out.drop_duplicates(subset=[time_col, "asset", "tag"], keep="last")
+    return out
+
+
+def sync_stock_daily(workbook: str) -> int:
+    df = _read_sheet(workbook, "Daily")
+    if df.empty:
+        return 0
+    out = _build_stock_frame(df, time_col="date", time_format="%Y-%m-%d")
     return upsert("stock_daily", _records(out))
 
 
@@ -165,60 +207,41 @@ def sync_stock_minute(workbook: str) -> int:
     df = _read_sheet(workbook, "Minute")
     if df.empty:
         return 0
-    out = pd.DataFrame()
-    out["ts"] = pd.to_datetime(df.get("date"), errors="coerce").dt.strftime("%Y-%m-%dT%H:%M:%S")
-    out["asset"] = df.get("asset").astype(str).str.strip() if "asset" in df.columns else None
-    out["tag"] = df.get("tag", "").astype(str).str.strip() if "tag" in df.columns else ""
-    out["price"] = pd.to_numeric(df.get("close", df.get("price")), errors="coerce")
-    out["open"] = pd.to_numeric(df.get("open"), errors="coerce")
-    out["high"] = pd.to_numeric(df.get("high"), errors="coerce")
-    out["low"] = pd.to_numeric(df.get("low"), errors="coerce")
-    out["volume"] = pd.to_numeric(df.get("volume"), errors="coerce")
-    out["change_pct"] = pd.to_numeric(df.get("change_pct"), errors="coerce")
-    out["market_cap"] = pd.to_numeric(df.get("market_cap"), errors="coerce")
-    out["currency"] = df.get("currency", "USD").astype(str) if "currency" in df.columns else "USD"
-    out = out.dropna(subset=["ts", "asset"])
-    out = out.drop_duplicates(subset=["ts", "asset", "tag"], keep="last")
+    out = _build_stock_frame(df, time_col="ts", time_format="%Y-%m-%dT%H:%M:%S")
     return upsert("stock_minute", _records(out))
 
 
 def sync_stock_yearly(workbook: str) -> int:
-    df = _read_sheet(workbook, "Stocks & Crypto")
-    if df.empty:
-        df = _read_sheet(workbook, "Stocks and Crypto")
-    if df.empty:
-        return 0
-    out = pd.DataFrame()
-    out["date"] = pd.to_datetime(df.get("date"), errors="coerce").dt.strftime("%Y-%m-%d")
-    out["asset"] = df.get("asset").astype(str).str.strip() if "asset" in df.columns else None
-    out["tag"] = df.get("tag", "").astype(str).str.strip() if "tag" in df.columns else ""
-    out["price"] = pd.to_numeric(df.get("close", df.get("price")), errors="coerce")
-    out["open"] = pd.to_numeric(df.get("open"), errors="coerce")
-    out["high"] = pd.to_numeric(df.get("high"), errors="coerce")
-    out["low"] = pd.to_numeric(df.get("low"), errors="coerce")
-    out["volume"] = pd.to_numeric(df.get("volume"), errors="coerce")
-    out["change_pct"] = pd.to_numeric(df.get("change_pct"), errors="coerce")
-    out["market_cap"] = pd.to_numeric(df.get("market_cap"), errors="coerce")
-    out["currency"] = df.get("currency", "USD").astype(str) if "currency" in df.columns else "USD"
-    out = out.dropna(subset=["date", "asset"])
-    out = out.drop_duplicates(subset=["date", "asset", "tag"], keep="last")
-    return upsert("stock_yearly", _records(out))
+    # The workbook does not currently contain a "Stocks & Crypto" tab — the
+    # yearly archive was folded into Daily. Try a few name variants; if none
+    # exist, return 0 silently instead of logging noisy warnings.
+    for name in ("Stocks & Crypto", "Stocks and Crypto", "Stocks_Crypto"):
+        try:
+            df = pd.read_excel(workbook, sheet_name=name)
+        except Exception:
+            continue
+        if df is not None and not df.empty:
+            df = _normalize_columns(df)
+            out = _build_stock_frame(df, time_col="date", time_format="%Y-%m-%d")
+            return upsert("stock_yearly", _records(out))
+    return 0
 
 
 def sync_holders(workbook: str) -> int:
     df = _read_sheet(workbook, "Holders")
     if df.empty:
         return 0
-    out = pd.DataFrame()
+    out = pd.DataFrame(index=df.index)
     out["date_fetched"] = pd.to_datetime(df.get("date_fetched"), errors="coerce").dt.strftime("%Y-%m-%dT%H:%M:%S")
-    out["company"] = df.get("company").astype(str).str.strip() if "company" in df.columns else None
-    out["ticker"] = df.get("ticker").astype(str).str.strip() if "ticker" in df.columns else None
-    out["holder_name"] = df.get("holder_name").astype(str).str.strip() if "holder_name" in df.columns else None
+    out["company"] = _str_col(df, "company")
+    out["ticker"] = _str_col(df, "ticker")
+    out["holder_name"] = _str_col(df, "holder_name")
     out["shares"] = pd.to_numeric(df.get("shares"), errors="coerce")
     out["value_usd"] = pd.to_numeric(df.get("value_usd"), errors="coerce")
     out["pct_out"] = pd.to_numeric(df.get("pct_out"), errors="coerce")
-    out["holder_type"] = df.get("holder_type").astype(str) if "holder_type" in df.columns else None
-    out = out.dropna(subset=["company", "holder_name", "date_fetched"])
+    out["holder_type"] = _str_col(df, "holder_type")
+    out = out.dropna(subset=["date_fetched"])
+    out = out[(out["company"].str.len() > 0) & (out["holder_name"].str.len() > 0)]
     return upsert("holders", _records(out))
 
 
@@ -229,8 +252,8 @@ def sync_financial_metrics_yearly(workbook: str) -> int:
     if "company" not in df.columns or "year" not in df.columns:
         print("  financial_metrics_yearly: missing required columns")
         return 0
-    out = pd.DataFrame()
-    out["company"] = df["company"].astype(str).str.strip()
+    out = pd.DataFrame(index=df.index)
+    out["company"] = _str_col(df, "company")
     out["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
     for src, dst in [
         ("revenue", "revenue"),
@@ -298,8 +321,12 @@ def sync_global_adv_aggregates(workbook: str) -> int:
     if not metric_col or not year_col or not value_col:
         print("  global_adv_aggregates: missing required columns")
         return 0
-    out = pd.DataFrame()
-    out["metric_type"] = df[metric_col].astype(str).str.replace(" Worldwide", "", regex=False).str.strip()
+    out = pd.DataFrame(index=df.index)
+    out["metric_type"] = (
+        _str_col(df, metric_col)
+        .str.replace(" Worldwide", "", regex=False)
+        .str.strip()
+    )
     out["year"] = pd.to_numeric(df[year_col], errors="coerce").astype("Int64")
     out["value"] = pd.to_numeric(df[value_col], errors="coerce")
     out = out.dropna(subset=["metric_type", "year"])
@@ -311,8 +338,8 @@ def sync_company_employees(workbook: str) -> int:
     df = _read_sheet(workbook, "Company_Employees")
     if df.empty or "company" not in df.columns or "year" not in df.columns:
         return 0
-    out = pd.DataFrame()
-    out["company"] = df["company"].astype(str).str.strip()
+    out = pd.DataFrame(index=df.index)
+    out["company"] = _str_col(df, "company")
     out["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
     emp_col = "employee_count" if "employee_count" in df.columns else ("employees" if "employees" in df.columns else None)
     if not emp_col:

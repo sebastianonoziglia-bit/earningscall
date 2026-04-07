@@ -29,9 +29,13 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
+        # Pin pandas<3 explicitly. pandas 3.0 changed .astype(str) behavior
+        # for NaN values: instead of producing the literal string "nan" it
+        # now yields pd.NA, which silently becomes JSON null and trips
+        # NOT NULL constraints downstream (see stock_daily.tag failure).
         run: |
           python -m pip install --upgrade pip
-          pip install pandas requests openpyxl
+          pip install "pandas>=2.2,<3" "requests>=2.31,<3" "openpyxl>=3.1,<4"
 
       - name: Run sync
         env:
