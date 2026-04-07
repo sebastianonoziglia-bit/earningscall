@@ -1,6 +1,12 @@
 .venv
 app/.venv
 .DS_Store
+
+# Local secrets — never commit
+.env
+.env.local
+.env.*.local
+app/.env
 app/.streamlit.log
 app/.streamlit.pid
 app/.streamlit.port

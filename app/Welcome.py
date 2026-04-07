@@ -6062,7 +6062,17 @@ _render_transcript_pulse_strip(effective_year, selected_quarter)
 _separator()
 
 # Beat 15 — Stock tape (no section header, just the tape)
-_render_stock_price_strip(market_feed_df)
+# Live yfinance fetch (60s cache) overrides the slower sheet-based feed so the
+# strip is always within ~60s of real time. If yfinance fails for any reason
+# we fall back to the merged Stocks/Daily/Minute sheet feed.
+try:
+    from utils.live_ticker import get_live_strip_feed
+    _live_strip_df = get_live_strip_feed()
+except Exception:
+    _live_strip_df = pd.DataFrame()
+_render_stock_price_strip(
+    _live_strip_df if not _live_strip_df.empty else market_feed_df
+)
 _separator()
 
 # Beat 16 — Polymarket prediction strip
