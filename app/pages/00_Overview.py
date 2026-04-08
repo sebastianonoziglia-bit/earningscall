@@ -5755,6 +5755,71 @@ def _load_overview_iconic_quotes_csv() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def _load_scored_signals_df() -> pd.DataFrame:
+    """Load the full scored_signals.csv — quarterly, all categories, all companies.
+
+    This is the source of truth for Iconic CEO/CFO Commentary and the
+    Market Signals grid in Narrative & Sentiment. It has ~3.5k rows with
+    quarterly coverage through 2025+, whereas the legacy
+    overview_iconic_quotes.csv is frozen at Q1 2025.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    path = repo_root / "earningscall_transcripts" / "scored_signals.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_csv(path)
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    required = {"company", "year", "quarter", "quote", "category", "score"}
+    if not required.issubset(df.columns):
+        return pd.DataFrame()
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    df = df.dropna(subset=["year"]).copy()
+    df["year"] = df["year"].astype(int)
+    df["quarter"] = df["quarter"].astype(str).str.strip().str.upper()
+    df["quarter_num"] = df["quarter"].str.extract(r"(\d)").astype(float)
+    df["company"] = df["company"].astype(str).str.strip()
+    df["category"] = df["category"].astype(str).str.strip()
+    df["quote"] = df["quote"].astype(str).str.strip()
+    df["score"] = pd.to_numeric(df["score"], errors="coerce").fillna(0.0)
+    for col in ("speaker", "role"):
+        if col in df.columns:
+            df[col] = df[col].fillna("").astype(str).str.strip()
+        else:
+            df[col] = ""
+    df = df[(df["company"] != "") & (df["quote"] != "")].copy()
+    return df.sort_values("score", ascending=False).reset_index(drop=True)
+
+
+def _filter_scored_signals(
+    df: pd.DataFrame,
+    *,
+    year: int | None,
+    quarter: str | None,
+    company: str | None,
+    categories: list[str] | None = None,
+) -> pd.DataFrame:
+    """Apply the shared Narrative & Sentiment filters to scored_signals."""
+    if df is None or df.empty:
+        return pd.DataFrame()
+    out = df
+    if year is not None:
+        out = out[out["year"] == int(year)]
+    if quarter and str(quarter).lower() not in ("", "all", "none"):
+        q_norm = str(quarter).strip().upper()
+        out = out[out["quarter"] == q_norm]
+    if company and str(company).lower() not in ("", "all companies", "all"):
+        out = out[out["company"].str.lower() == str(company).strip().lower()]
+    if categories:
+        out = out[out["category"].isin(list(categories))]
+    return out.copy()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_all_company_signals(
     excel_path: str,
     source_stamp: int,
@@ -5809,100 +5874,538 @@ def _render_iconic_quote_section(
     selected_year: int,
     selected_quarter: str,
 ) -> bool:
-    excel_path = getattr(data_processor, "data_path", "")
-    source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
-    sheet_df = _load_overview_iconic_quotes_sheet(excel_path, source_stamp) if excel_path else pd.DataFrame()
-    csv_df = _load_overview_iconic_quotes_csv()
-    quotes_df = sheet_df if not sheet_df.empty else csv_df
-    if quotes_df.empty:
-        # Fallback — live extraction from Transcripts sheet
-        try:
-            from utils.transcript_live import extract_iconic_quotes as _live_iconic
-            _live_df = _live_iconic(
-                str(excel_path) if excel_path else "",
-                year=int(selected_year),
-                quarter=selected_quarter,
-                max_quotes=12,
-            )
-            if not _live_df.empty:
-                quotes_df = _live_df
-        except Exception:
-            pass
-    if quotes_df.empty:
-        return False
+    """Company-grouped CEO/CFO commentary card.
 
-    scoped_df, selected_period = _pick_rows_for_period(quotes_df, selected_year, selected_quarter)
-    if scoped_df.empty:
-        return False
-    scoped_df = scoped_df.sort_values(["score", "company", "speaker"], ascending=[False, True, True]).head(12)
-    if scoped_df.empty:
-        return False
+    Primary source: `scored_signals.csv` — quarterly through 2025+, has
+    `category` and `score`, so we can filter by the shared pill state and
+    rank within each company. Falls back to the old iconic quotes sheet /
+    CSV only when the fresh source is unavailable.
 
-    st.markdown("#### Iconic CEO/CFO Commentary")
-    source_label = "Overview_Iconic_Quotes (sheet)" if not sheet_df.empty else "earningscall_transcripts/overview_iconic_quotes.csv"
-    st.caption(f"Source: {source_label} · Period: {selected_period}")
+    Reads shared filter state from session_state so this panel stays in
+    sync with the Topic Signal Map at the top of the section:
+      * ts_year_filter       → year
+      * ts_quarter_filter    → "All" | "Q1..Q4"
+      * ts_company_filter    → "All companies" | specific company
+      * ts_active_pills      → list of signal categories to keep
+    """
+    # Shared filter state (falls back to the section's year/quarter args
+    # when the topic map hasn't been rendered yet).
+    _ss = st.session_state
+    filt_year = int(_ss.get("ts_year_filter", selected_year) or selected_year or 0) or int(selected_year or 0)
+    filt_quarter = str(_ss.get("ts_quarter_filter", selected_quarter) or selected_quarter or "All")
+    filt_company = str(_ss.get("ts_company_filter", "All companies") or "All companies")
+    filt_pills = list(_ss.get("ts_active_pills", []) or [])
 
     try:
-        from utils.scoring_config import SIGNAL_COLORS as _IQ_COLORS, SIGNAL_ICONS as _IQ_ICONS
+        from utils.scoring_config import (
+            SIGNAL_COLORS as _IQ_COLORS,
+            SIGNAL_ICONS as _IQ_ICONS,
+        )
     except ImportError:
         _IQ_COLORS = {}
         _IQ_ICONS = {}
 
-    cards = []
-    for row in scoped_df.itertuples(index=False):
-        company = html.escape(str(getattr(row, "company", "") or "").strip())
-        speaker = html.escape(str(getattr(row, "speaker", "") or "").strip() or "Unknown")
-        role = html.escape(str(getattr(row, "role_bucket", "") or "").strip())
-        quote = html.escape(str(getattr(row, "quote", "") or "").strip())
-        category = str(getattr(row, "category", "") or "").strip()
-        year_val = getattr(row, "year", "")
-        quarter_val = getattr(row, "quarter", "")
-        period_str = ""
-        try:
-            if year_val and pd.notna(year_val):
-                period_str = str(int(year_val))
-                if quarter_val and pd.notna(quarter_val) and str(quarter_val).strip():
-                    period_str += f" {str(quarter_val).strip()}"
-        except Exception:
-            pass
+    # ── Primary source: scored_signals.csv ──────────────────────────────
+    scored = _load_scored_signals_df()
+    used_source = "scored_signals.csv"
+    picked_period = ""
 
-        _cat_cfg = _IQ_COLORS.get(category, {"tag": "#6b7280", "bg": "#f9fafb", "border": "#e5e7eb"})
-        _cat_icon = _IQ_ICONS.get(category, "")
-        _cat_tag_color = _cat_cfg["tag"]
-        _cat_border_color = _cat_cfg["border"]
-        _cat_badge = (
-            f"<span style='font-size:0.65rem;background:{_cat_tag_color};color:white;"
-            f"padding:2px 7px;border-radius:10px;font-weight:600;white-space:nowrap;'>"
-            f"{_cat_icon} {html.escape(category)}</span>"
-        ) if category else ""
+    def _first_non_empty_period(df: pd.DataFrame) -> pd.DataFrame:
+        """Try requested year+quarter, then requested year only, then latest year."""
+        nonlocal picked_period
+        if df.empty:
+            return df
+        # Exact year + quarter
+        tryq = filt_quarter if filt_quarter not in ("All", "", "None") else ""
+        if filt_year:
+            sub = df[df["year"] == filt_year]
+            if tryq:
+                sub_q = sub[sub["quarter"] == tryq.upper()]
+                if not sub_q.empty:
+                    picked_period = f"{filt_year} {tryq.upper()}"
+                    return sub_q
+            if not sub.empty:
+                picked_period = f"{filt_year}"
+                return sub
+        # Latest period available
+        latest_year = int(df["year"].max())
+        sub = df[df["year"] == latest_year]
+        latest_q = sub["quarter_num"].dropna()
+        if not latest_q.empty:
+            q_max = int(latest_q.max())
+            sub_q = sub[sub["quarter_num"] == q_max]
+            if not sub_q.empty:
+                picked_period = f"{latest_year} Q{q_max}"
+                return sub_q
+        picked_period = f"{latest_year}"
+        return sub
 
-        meta_parts = [company]
-        if role:
-            meta_parts.append(role)
-        meta_parts.append(speaker)
-        if period_str:
-            meta_parts.append(period_str)
-        meta = " · ".join(meta_parts)
-
-        cards.append(
-            f"""
-            <div class="ov-quote-card" style="border-left:3px solid {_cat_border_color};">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                    <div class="ov-quote-meta">{meta}</div>
-                    {_cat_badge}
-                </div>
-                <p class="ov-quote-body">"{quote}"</p>
-            </div>
-            """
+    scoped_df = pd.DataFrame()
+    if not scored.empty:
+        period_df = _first_non_empty_period(scored)
+        period_df = _filter_scored_signals(
+            period_df,
+            year=None,  # already period-scoped above
+            quarter=None,
+            company=filt_company,
+            categories=filt_pills or None,
         )
+        scoped_df = period_df
+
+    # ── Fallback: old iconic sheet / csv ────────────────────────────────
+    if scoped_df.empty:
+        excel_path = getattr(data_processor, "data_path", "")
+        source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+        sheet_df = _load_overview_iconic_quotes_sheet(excel_path, source_stamp) if excel_path else pd.DataFrame()
+        csv_df = _load_overview_iconic_quotes_csv()
+        legacy_df = sheet_df if not sheet_df.empty else csv_df
+        if not legacy_df.empty:
+            used_source = "Overview_Iconic_Quotes sheet" if not sheet_df.empty else "overview_iconic_quotes.csv (legacy)"
+            legacy_scoped, legacy_period = _pick_rows_for_period(legacy_df, selected_year, selected_quarter)
+            if not legacy_scoped.empty:
+                picked_period = legacy_period
+                legacy_scoped = legacy_scoped.rename(columns={"role_bucket": "role"})
+                # normalize to scored_signals shape
+                if "category" not in legacy_scoped.columns:
+                    legacy_scoped["category"] = ""
+                scoped_df = legacy_scoped[["year", "quarter", "company", "speaker", "role", "quote", "score", "category"]].copy()
+                if filt_company and filt_company.lower() not in ("all companies", "all", ""):
+                    scoped_df = scoped_df[scoped_df["company"].str.lower() == filt_company.strip().lower()]
+                if filt_pills:
+                    scoped_df = scoped_df[scoped_df["category"].isin(filt_pills)]
+
+    if scoped_df is None or scoped_df.empty:
+        return False
+
+    # ── Group by company → top 2 by score each ──────────────────────────
+    scoped_df = scoped_df.sort_values(["company", "score"], ascending=[True, False])
+    top_per_company = (
+        scoped_df.groupby("company", sort=False)
+        .head(2)
+        .reset_index(drop=True)
+    )
+    # Stable company order: by that company's max score, descending.
+    company_order = (
+        top_per_company.groupby("company")["score"]
+        .max()
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
+
+    # ── Header + source caption ─────────────────────────────────────────
+    st.markdown("#### Iconic CEO/CFO Commentary")
+    _filt_bits = []
+    if filt_pills:
+        _filt_bits.append(" · ".join(filt_pills))
+    if filt_company and filt_company.lower() not in ("all companies", "all", ""):
+        _filt_bits.append(filt_company)
+    _filt_suffix = (" · " + " · ".join(_filt_bits)) if _filt_bits else ""
+    st.caption(f"Source: {used_source} · Period: {picked_period or '—'}{_filt_suffix}")
+
+    # ── Render one section per company ──────────────────────────────────
+    sections_html: list[str] = []
+    for company in company_order:
+        _co_rows = top_per_company[top_per_company["company"] == company]
+        if _co_rows.empty:
+            continue
+        company_esc = html.escape(str(company))
+        cards_html: list[str] = []
+        for row in _co_rows.itertuples(index=False):
+            speaker = html.escape(str(getattr(row, "speaker", "") or "").strip() or "Unknown")
+            role = html.escape(str(getattr(row, "role", "") or "").strip())
+            quote_text = str(getattr(row, "quote", "") or "").strip()
+            # Collapse long quotes
+            if len(quote_text) > 360:
+                quote_text = quote_text[:360].rsplit(" ", 1)[0] + "…"
+            quote = html.escape(quote_text)
+            category = str(getattr(row, "category", "") or "").strip()
+            year_val = getattr(row, "year", "")
+            quarter_val = getattr(row, "quarter", "")
+            period_str = ""
+            try:
+                if pd.notna(year_val) and year_val != "":
+                    period_str = str(int(float(year_val)))
+                    if quarter_val and pd.notna(quarter_val) and str(quarter_val).strip():
+                        period_str += f" {str(quarter_val).strip()}"
+            except Exception:
+                pass
+
+            _cat_cfg = _IQ_COLORS.get(category, {"tag": "#6b7280", "bg": "#f9fafb", "border": "#e5e7eb"})
+            _cat_icon = _IQ_ICONS.get(category, "")
+            _cat_badge = (
+                f"<span style='font-size:0.62rem;background:{_cat_cfg['tag']};color:white;"
+                f"padding:2px 7px;border-radius:10px;font-weight:600;white-space:nowrap;'>"
+                f"{_cat_icon} {html.escape(category)}</span>"
+            ) if category else ""
+
+            meta_parts = []
+            if role:
+                meta_parts.append(role)
+            meta_parts.append(speaker)
+            if period_str:
+                meta_parts.append(period_str)
+            meta = " · ".join(meta_parts)
+
+            cards_html.append(
+                f"<div class='ov-quote-card' style='border-left:3px solid {_cat_cfg['border']};"
+                f"padding:10px 12px;background:{_cat_cfg['bg']};border-radius:0 8px 8px 0;margin-bottom:6px;'>"
+                f"<div style='display:flex;justify-content:space-between;align-items:center;"
+                f"gap:8px;margin-bottom:4px;'>"
+                f"<div class='ov-quote-meta' style='font-size:0.72rem;color:#6b7280;'>{meta}</div>"
+                f"{_cat_badge}</div>"
+                f"<p class='ov-quote-body' style='margin:0;font-size:0.83rem;"
+                f"color:#374151;line-height:1.55;font-style:italic;'>\"{quote}\"</p>"
+                f"</div>"
+            )
+
+        sections_html.append(
+            f"<div style='margin-bottom:14px;'>"
+            f"<div style='font-size:0.78rem;font-weight:700;color:#1f2937;"
+            f"text-transform:uppercase;letter-spacing:0.05em;padding-bottom:4px;"
+            f"border-bottom:1px solid #e5e7eb;margin-bottom:8px;'>{company_esc}</div>"
+            f"{''.join(cards_html)}"
+            f"</div>"
+        )
+
     st.markdown(
         _html_block(
-            f"<div style='display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:8px;'>"
-            f"{''.join(cards)}</div>"
+            f"<div style='display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:8px;'>"
+            f"{''.join(sections_html)}</div>"
         ),
         unsafe_allow_html=True,
     )
     return True
+
+
+def _render_market_signals_grid(
+    selected_year: int,
+    selected_quarter: str,
+) -> bool:
+    """All 9 signal categories in a responsive 3-column grid.
+
+    Reads the shared filter state so filtering the Topic Signal Map pills
+    collapses the grid to matching categories, and the company filter
+    narrows each category to a single company's quotes.
+    """
+    try:
+        from utils.scoring_config import (
+            SIGNAL_CATEGORIES as _MS_CATS,
+            SIGNAL_COLORS as _MS_COLORS,
+            SIGNAL_ICONS as _MS_ICONS,
+        )
+    except ImportError:
+        _MS_CATS = ["Outlook", "Risks", "Opportunities", "Investment",
+                    "Product Shifts", "User Behavior", "Monetization",
+                    "Strategic Direction", "Broadcaster Threats"]
+        _MS_COLORS = {}
+        _MS_ICONS = {}
+
+    _ss = st.session_state
+    filt_year = int(_ss.get("ts_year_filter", selected_year) or selected_year or 0) or int(selected_year or 0)
+    filt_quarter_raw = str(_ss.get("ts_quarter_filter", selected_quarter) or selected_quarter or "All")
+    filt_quarter = filt_quarter_raw if filt_quarter_raw not in ("All", "", "None") else ""
+    filt_company = str(_ss.get("ts_company_filter", "All companies") or "All companies")
+    filt_pills = list(_ss.get("ts_active_pills", []) or [])
+
+    scored = _load_scored_signals_df()
+    if scored.empty:
+        return False
+
+    # Period scoping: try exact year+quarter, fall back to latest available
+    # period within the requested year, then global latest.
+    picked_period = ""
+    candidates = scored.copy()
+    if filt_year:
+        year_rows = candidates[candidates["year"] == filt_year]
+        if not year_rows.empty:
+            candidates = year_rows
+            if filt_quarter:
+                q_rows = candidates[candidates["quarter"] == filt_quarter.upper()]
+                if not q_rows.empty:
+                    candidates = q_rows
+                    picked_period = f"{filt_year} {filt_quarter.upper()}"
+                else:
+                    latest_q_num = candidates["quarter_num"].dropna()
+                    if not latest_q_num.empty:
+                        q_max = int(latest_q_num.max())
+                        candidates = candidates[candidates["quarter_num"] == q_max]
+                        picked_period = f"{filt_year} Q{q_max}"
+            else:
+                picked_period = f"{filt_year}"
+    if not picked_period:
+        latest_year = int(candidates["year"].max())
+        candidates = candidates[candidates["year"] == latest_year]
+        picked_period = f"{latest_year}"
+
+    if filt_company and filt_company.lower() not in ("all companies", "all", ""):
+        candidates = candidates[candidates["company"].str.lower() == filt_company.strip().lower()]
+
+    if candidates.empty:
+        return False
+
+    # Which categories to show: the pills (if any), otherwise all 9.
+    cats_to_show = [c for c in _MS_CATS if (not filt_pills or c in filt_pills)]
+
+    st.markdown("### Market Signals")
+    cats_pretty = " · ".join(cats_to_show) if len(cats_to_show) <= 4 else f"{len(cats_to_show)} categories"
+    st.caption(
+        f"{cats_pretty} extracted from earnings calls · {picked_period}"
+        + (f" · {filt_company}" if filt_company and filt_company.lower() not in ("all companies", "all", "") else "")
+    )
+
+    # Render in rows of 3 columns.
+    for row_start in range(0, len(cats_to_show), 3):
+        _row_cats = cats_to_show[row_start:row_start + 3]
+        _cols = st.columns(3, gap="medium")
+        for _col, _cat in zip(_cols, _row_cats):
+            with _col:
+                _c = _MS_COLORS.get(_cat, {"bg": "#f9fafb", "border": "#6b7280", "tag": "#374151"})
+                _icon = _MS_ICONS.get(_cat, "")
+                _cat_df = candidates[candidates["category"] == _cat]
+                # Top 2 per company, then overall top 6 by score
+                _cat_df = (
+                    _cat_df.sort_values(["company", "score"], ascending=[True, False])
+                    .groupby("company", sort=False)
+                    .head(2)
+                    .sort_values("score", ascending=False)
+                    .head(6)
+                )
+                st.markdown(
+                    f"<div style='display:flex;align-items:center;gap:8px;"
+                    f"margin-bottom:10px;padding-bottom:6px;"
+                    f"border-bottom:2px solid {_c['border']};'>"
+                    f"<span>{_icon}</span>"
+                    f"<span style='font-weight:700;font-size:0.88rem;color:#1f2937;'>{_cat}</span>"
+                    f"<span style='margin-left:auto;background:{_c['tag']};color:white;"
+                    f"font-size:0.62rem;padding:2px 7px;border-radius:10px;font-weight:600;'>"
+                    f"{len(_cat_df)}</span></div>",
+                    unsafe_allow_html=True,
+                )
+                if _cat_df.empty:
+                    st.markdown(
+                        f"<div style='font-size:0.75rem;color:#9ca3af;padding:6px 0;'>"
+                        f"No quotes for this filter.</div>",
+                        unsafe_allow_html=True,
+                    )
+                    continue
+                # Group quotes by company header within the column.
+                _last_company = None
+                for sig in _cat_df.itertuples(index=False):
+                    _co = str(getattr(sig, "company", "")).strip()
+                    _q = str(getattr(sig, "quote", "")).strip()
+                    _sp = str(getattr(sig, "speaker", "")).strip()
+                    if len(_q) > 200:
+                        _q = _q[:200].rsplit(" ", 1)[0] + "…"
+                    if _co != _last_company:
+                        st.markdown(
+                            f"<div style='font-size:0.68rem;font-weight:700;color:#1f2937;"
+                            f"margin:6px 0 3px 0;text-transform:uppercase;letter-spacing:0.04em;'>"
+                            f"{html.escape(_co)}</div>",
+                            unsafe_allow_html=True,
+                        )
+                        _last_company = _co
+                    st.markdown(
+                        f"<div style='background:{_c['bg']};border-left:3px solid {_c['border']};"
+                        f"border-radius:0 6px 6px 0;padding:8px 10px;margin-bottom:6px;'>"
+                        f"<p style='margin:0 0 3px 0;font-size:0.76rem;color:#374151;"
+                        f"line-height:1.5;font-style:italic;'>\"{html.escape(_q)}\"</p>"
+                        + (
+                            f"<div style='font-size:0.65rem;color:#6b7280;'>{html.escape(_sp)}</div>"
+                            if _sp and _sp.lower() not in ("", "unknown", "nan")
+                            else ""
+                        )
+                        + f"</div>",
+                        unsafe_allow_html=True,
+                    )
+    return True
+
+
+def _render_mentions_over_time_panel(
+    plotly_config: dict,
+    selected_year: int,
+) -> None:
+    """Multi-line chart of topic & signal mention counts across quarters.
+
+    Data sources:
+      * Topics   → earningscall_transcripts/topic_metrics.csv
+      * Signals  → earningscall_transcripts/scored_signals.csv
+                   (aggregated: count rows per (year, quarter, category))
+    """
+    try:
+        from utils.scoring_config import (
+            SIGNAL_CATEGORIES as _MT_CATS,
+            SIGNAL_COLORS as _MT_COLORS,
+        )
+    except ImportError:
+        _MT_CATS = []
+        _MT_COLORS = {}
+
+    # Load topic metrics (already period-indexed)
+    topic_df = _load_transcript_topic_metrics(excel_path="", selected_year=0, selected_quarter="")
+    signals_df = _load_scored_signals_df()
+
+    if (topic_df is None or topic_df.empty) and (signals_df is None or signals_df.empty):
+        return
+
+    st.markdown("#### Mentions Over Time")
+    st.caption("Track how selected topics and signal categories trend across quarters.")
+
+    _topic_options = sorted(topic_df["topic"].dropna().unique().tolist()) if not topic_df.empty else []
+    _sig_options = [c for c in _MT_CATS if c in signals_df["category"].unique().tolist()] if not signals_df.empty else []
+
+    _ss = st.session_state
+    _default_topics = _ss.get("ns_mt_topics", ["AI & Machine Learning", "Advertising"] if _topic_options else [])
+    _default_topics = [t for t in _default_topics if t in _topic_options][:4]
+    _default_signals = _ss.get("ns_mt_signals", [])
+    _default_signals = [s for s in _default_signals if s in _sig_options][:4]
+
+    _c1, _c2, _c3 = st.columns([3, 3, 2])
+    with _c1:
+        picked_topics = st.multiselect(
+            "Topics",
+            _topic_options,
+            default=_default_topics,
+            key="ns_mt_topics",
+            placeholder="Pick topics to plot",
+        )
+    with _c2:
+        picked_signals = st.multiselect(
+            "Signal categories",
+            _sig_options,
+            default=_default_signals,
+            key="ns_mt_signals",
+            placeholder="Pick signal categories to plot",
+        )
+    with _c3:
+        time_range = st.radio(
+            "Range",
+            ["2Y", "3Y", "5Y", "All"],
+            index=2,
+            horizontal=True,
+            key="ns_mt_range",
+            label_visibility="collapsed",
+        )
+
+    if not picked_topics and not picked_signals:
+        st.caption("Pick at least one topic or signal category above.")
+        return
+
+    # Compute the year window
+    def _period_key(y: int, q: str) -> str:
+        q_u = str(q).strip().upper()
+        return f"{int(y)} {q_u}" if q_u else str(int(y))
+
+    # Determine max year available across both sources
+    max_year_candidates = []
+    if not topic_df.empty:
+        max_year_candidates.append(int(pd.to_numeric(topic_df["year"], errors="coerce").max()))
+    if not signals_df.empty:
+        max_year_candidates.append(int(signals_df["year"].max()))
+    if not max_year_candidates:
+        return
+    max_year = max(max_year_candidates)
+    range_map = {"2Y": 2, "3Y": 3, "5Y": 5, "All": 99}
+    window_years = range_map.get(time_range, 5)
+    min_year = max_year - window_years + 1 if window_years < 99 else 0
+
+    fig = go.Figure()
+
+    # Topic lines
+    if picked_topics and not topic_df.empty:
+        t = topic_df.copy()
+        t["year"] = pd.to_numeric(t["year"], errors="coerce")
+        t = t.dropna(subset=["year"])
+        t["year"] = t["year"].astype(int)
+        t["quarter"] = t["quarter"].astype(str).str.strip().str.upper()
+        t = t[t["year"] >= min_year]
+        t["period"] = t.apply(lambda r: _period_key(int(r["year"]), r["quarter"]), axis=1)
+        t["sort_key"] = t["year"] * 10 + t["quarter"].str.extract(r"(\d)").fillna(0).astype(int).iloc[:, 0]
+        for _topic in picked_topics:
+            _tp = t[t["topic"] == _topic].sort_values("sort_key")
+            if _tp.empty:
+                continue
+            fig.add_trace(go.Scatter(
+                x=_tp["period"].tolist(),
+                y=_tp["mention_count"].tolist(),
+                mode="lines+markers",
+                name=_topic,
+                line=dict(width=2),
+                marker=dict(size=6),
+                hovertemplate=f"<b>{_topic}</b><br>%{{x}}<br>Mentions: %{{y:,.0f}}<extra></extra>",
+            ))
+
+    # Signal lines (aggregate scored_signals by year+quarter+category)
+    if picked_signals and not signals_df.empty:
+        s = signals_df.copy()
+        s = s[s["year"] >= min_year]
+        agg = (
+            s.groupby(["year", "quarter", "category"])
+            .size()
+            .reset_index(name="mention_count")
+        )
+        agg["period"] = agg.apply(lambda r: _period_key(int(r["year"]), r["quarter"]), axis=1)
+        agg["sort_key"] = agg["year"] * 10 + agg["quarter"].str.extract(r"(\d)").fillna(0).astype(int).iloc[:, 0]
+        for _cat in picked_signals:
+            _sp = agg[agg["category"] == _cat].sort_values("sort_key")
+            if _sp.empty:
+                continue
+            _color = _MT_COLORS.get(_cat, {}).get("tag", None)
+            fig.add_trace(go.Scatter(
+                x=_sp["period"].tolist(),
+                y=_sp["mention_count"].tolist(),
+                mode="lines+markers",
+                name=_cat,
+                line=dict(width=2, dash="dot", color=_color),
+                marker=dict(size=6, color=_color),
+                hovertemplate=f"<b>{_cat}</b><br>%{{x}}<br>Signals: %{{y:,.0f}}<extra></extra>",
+            ))
+
+    if not fig.data:
+        st.caption("No data for the selected topics/signals in this time range.")
+        return
+
+    # Build stable x-axis order across all traces so quarters line up.
+    all_x: list[str] = []
+    seen: set[str] = set()
+    for tr in fig.data:
+        for x in tr.x:
+            if x not in seen:
+                seen.add(x)
+                all_x.append(x)
+    all_x = sorted(all_x, key=lambda k: (int(k.split()[0]), int(k.split()[1].replace("Q", "")) if len(k.split()) > 1 else 0))
+
+    fig.update_layout(
+        height=360,
+        margin=dict(l=60, r=30, t=20, b=70),
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        font=dict(color="#374151", family="DM Sans, Inter, sans-serif"),
+        hovermode="x unified",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.38,
+            xanchor="left",
+            x=0.0,
+            font=dict(size=11, color="#374151"),
+            bgcolor="rgba(0,0,0,0)",
+        ),
+    )
+    fig.update_xaxes(
+        categoryorder="array",
+        categoryarray=all_x,
+        tickfont=dict(color="#374151", size=10),
+        gridcolor="rgba(0,0,0,0.05)",
+        tickangle=-35,
+    )
+    fig.update_yaxes(
+        title=dict(text="Mention count", font=dict(color="#6b7280", size=11)),
+        tickfont=dict(color="#374151", size=11),
+        gridcolor="rgba(0,0,0,0.05)",
+        zeroline=False,
+    )
+    _apply_light_theme(fig)
+    st.plotly_chart(fig, use_container_width=True, config=plotly_config, key="ov_ns_mentions_time")
 
 
 def _apply_year_window(df: pd.DataFrame, start_year: int, end_year: int, year_col: str = "Year") -> pd.DataFrame:
@@ -8294,74 +8797,16 @@ if selected_overview_area == "narrative_sentiment":
             "No transcript topic metrics found for this period. "
             "Check that the Transcripts sheet exists in the workbook with columns: company, year, quarter, transcript_text."
         )
+    _render_mentions_over_time_panel(plotly_config, selected_year)
+
     iconic_quotes_rendered = _render_iconic_quote_section(data_processor, selected_year, selected_quarter)
     if not iconic_quotes_rendered:
         st.caption("No iconic CEO/CFO quote rows found for this period.")
 
-    # ── Cross-company Outlook / Risks / Opportunities ────────────────────────
-    _ov_excel_path = str(getattr(data_processor, "data_path", "") or "")
-    _ov_source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
-    try:
-        from utils.transcript_live import SIGNAL_ICONS, SIGNAL_COLORS
-        _all_sigs = _load_all_company_signals(
-            _ov_excel_path, _ov_source_stamp,
-            int(selected_year), selected_quarter,
-        )
-        _has_sigs = any(bool(v) for v in _all_sigs.values())
-    except Exception:
-        _all_sigs = {}
-        _has_sigs = False
-        SIGNAL_ICONS = {"Outlook": "🔭", "Risks": "⚠️", "Opportunities": "🚀"}
-        SIGNAL_COLORS = {
-            "Outlook":       {"bg": "#eff6ff", "border": "#3b82f6", "tag": "#1d4ed8"},
-            "Risks":         {"bg": "#fff7ed", "border": "#f97316", "tag": "#c2410c"},
-            "Opportunities": {"bg": "#f0fdf4", "border": "#22c55e", "tag": "#15803d"},
-        }
-
-    if _has_sigs:
-        st.markdown("### Market Signals")
-        st.caption(
-            f"Outlook · Risks · Opportunities extracted from earnings calls "
-            f"· {selected_year} {selected_quarter}"
-        )
-        _sig_cols = st.columns(3, gap="medium")
-        for _col, _cat in zip(_sig_cols, ["Outlook", "Risks", "Opportunities"]):
-            with _col:
-                _sigs = _all_sigs.get(_cat, [])
-                _c = SIGNAL_COLORS[_cat]
-                _icon = SIGNAL_ICONS[_cat]
-                st.markdown(
-                    f"<div style='display:flex;align-items:center;gap:8px;"
-                    f"margin-bottom:12px;padding-bottom:8px;"
-                    f"border-bottom:2px solid {_c['border']};'>"
-                    f"<span>{_icon}</span>"
-                    f"<span style='font-weight:700;font-size:0.9rem;'>{_cat}</span>"
-                    f"<span style='margin-left:auto;background:{_c['tag']};"
-                    f"color:white;font-size:0.65rem;padding:2px 7px;"
-                    f"border-radius:10px;font-weight:600;'>{len(_sigs)}</span>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-                for _sig in _sigs:
-                    _q = str(_sig.get("quote", "")).strip()
-                    _co = str(_sig.get("company", "")).strip()
-                    _sp = str(_sig.get("speaker", "")).strip()
-                    if len(_q) > 160:
-                        _q = _q[:160].rsplit(" ", 1)[0] + "…"
-                    st.markdown(
-                        f"<div style='background:{_c['bg']};"
-                        f"border-left:3px solid {_c['border']};"
-                        f"border-radius:0 6px 6px 0;"
-                        f"padding:10px 12px;margin-bottom:8px;'>"
-                        f"<p style='margin:0 0 4px 0;font-size:0.83rem;"
-                        f"color:#374151;line-height:1.6;font-style:italic;'>"
-                        f"\"{html.escape(_q)}\"</p>"
-                        f"<div style='font-size:0.72rem;color:#6b7280;'>"
-                        f"<b>{html.escape(_co)}</b>"
-                        + (f" · {html.escape(_sp)}" if _sp and _sp.lower() not in ("", "unknown", "nan") else "")
-                        + f"</div></div>",
-                        unsafe_allow_html=True,
-                    )
+    # Market Signals — all 9 categories (or the subset matching active pills)
+    signals_rendered = _render_market_signals_grid(selected_year, selected_quarter)
+    if not signals_rendered:
+        st.caption("No market signals for the current filter.")
 
     _render_overview_download_section(data_processor, selected_year, selected_quarter, key_suffix="_ns")
     end_snap_section()
