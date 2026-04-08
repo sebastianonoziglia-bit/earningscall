@@ -3271,7 +3271,12 @@ def main():
             "Then click Reload below."
         )
         if st.button("🔄 Reload data", key="reload_data_btn"):
+            # Clear BOTH cache layers — cache_resource holds the optimized
+            # loader/workbook handle, cache_data holds the derived frames
+            # (scored_signals, topic_metrics, etc.). Clearing only one can
+            # leave stale DataFrames in place for up to the ttl window.
             st.cache_resource.clear()
+            st.cache_data.clear()
             st.rerun()
         st.stop()
 

@@ -5852,6 +5852,61 @@ def _filter_scored_signals(
     return out.copy()
 
 
+def _scored_signals_xlsx_fallback(
+    excel_path: str,
+    source_stamp: int,
+    selected_year: int,
+    selected_quarter: str,
+) -> pd.DataFrame:
+    """xlsx → scored_signals shape.
+
+    Used by the Narrative & Sentiment panels when
+    `earningscall_transcripts/scored_signals.csv` isn't present on disk
+    (e.g. HF Spaces deploy before the CSV was whitelisted). Extracts the
+    same 9 signal categories live from the Transcripts sheet via
+    `_load_all_company_signals`, then flattens into the DataFrame shape
+    that `_filter_scored_signals` + the Market Signals grid expect.
+    """
+    if not excel_path:
+        return pd.DataFrame()
+    try:
+        by_cat = _load_all_company_signals(
+            excel_path, source_stamp, int(selected_year or 0), selected_quarter or ""
+        )
+    except Exception:
+        return pd.DataFrame()
+    if not by_cat:
+        return pd.DataFrame()
+    rows: list[dict] = []
+    q_norm = (selected_quarter or "").strip().upper() or None
+    q_num = None
+    if q_norm and q_norm.startswith("Q"):
+        try:
+            q_num = int(q_norm[1:])
+        except ValueError:
+            q_num = None
+    for category, signals in by_cat.items():
+        for sig in signals or []:
+            if not isinstance(sig, dict):
+                continue
+            rows.append({
+                "company": str(sig.get("company", "")).strip(),
+                "year": int(selected_year or 0) or None,
+                "quarter": q_norm or "",
+                "quarter_num": q_num,
+                "category": category,
+                "quote": str(sig.get("quote", "")).strip(),
+                "speaker": str(sig.get("speaker", "") or "").strip(),
+                "role": str(sig.get("role", "") or "").strip(),
+                "score": float(sig.get("score", 0.0) or 0.0),
+            })
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows)
+    df = df[(df["company"] != "") & (df["quote"] != "")].copy()
+    return df.sort_values("score", ascending=False).reset_index(drop=True)
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_all_company_signals(
     excel_path: str,
@@ -5941,6 +5996,15 @@ def _render_iconic_quote_section(
     # ── Primary source: scored_signals.csv ──────────────────────────────
     scored = _load_scored_signals_df()
     used_source = "scored_signals.csv"
+    if scored.empty:
+        # HF Spaces fallback — scored_signals.csv not shipped → extract live
+        excel_path = getattr(data_processor, "data_path", "") or ""
+        source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+        scored = _scored_signals_xlsx_fallback(
+            excel_path, source_stamp, filt_year, filt_quarter,
+        )
+        if not scored.empty:
+            used_source = "Transcripts sheet (live)"
     picked_period = ""
 
     def _first_non_empty_period(df: pd.DataFrame) -> pd.DataFrame:
@@ -6113,6 +6177,7 @@ def _render_iconic_quote_section(
 def _render_market_signals_grid(
     selected_year: int,
     selected_quarter: str,
+    data_processor: "FinancialDataProcessor | None" = None,
 ) -> bool:
     """Pill-driven, scrollable Market Signals panel.
 
@@ -6125,6 +6190,13 @@ def _render_market_signals_grid(
         scrollable list behavior.
       * All columns honor year/quarter/company filters from the shared
         Narrative & Sentiment filter state.
+
+    Data sources (in order):
+      1. `earningscall_transcripts/scored_signals.csv` (preferred — fresh,
+         all 9 categories pre-scored, quarterly granularity)
+      2. Live xlsx extraction from the Transcripts sheet via
+         `_scored_signals_xlsx_fallback` (HF Spaces fallback when the CSV
+         wasn't shipped with the repo)
     """
     try:
         from utils.scoring_config import (
@@ -6147,6 +6219,14 @@ def _render_market_signals_grid(
     filt_pills = list(_ss.get("ts_active_pills", []) or [])
 
     scored = _load_scored_signals_df()
+    source_label = "scored_signals.csv"
+    if scored.empty and data_processor is not None:
+        excel_path = getattr(data_processor, "data_path", "") or ""
+        source_stamp = int(getattr(data_processor, "source_stamp", 0) or 0)
+        scored = _scored_signals_xlsx_fallback(
+            excel_path, source_stamp, filt_year, filt_quarter,
+        )
+        source_label = "Transcripts sheet (live)"
     if scored.empty:
         return False
 
@@ -8867,7 +8947,9 @@ if selected_overview_area == "narrative_sentiment":
         st.caption("No iconic CEO/CFO quote rows found for this period.")
 
     # Market Signals — all 9 categories (or the subset matching active pills)
-    signals_rendered = _render_market_signals_grid(selected_year, selected_quarter)
+    signals_rendered = _render_market_signals_grid(
+        selected_year, selected_quarter, data_processor=data_processor,
+    )
     if not signals_rendered:
         st.caption("No market signals for the current filter.")
 

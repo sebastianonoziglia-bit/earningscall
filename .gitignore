@@ -25,8 +25,19 @@ __pycache__/
 node_modules/
 app/attached_assets/live_data.xlsx
 
-# Transcripts — app reads from SQLite DB, not raw files
-earningscall_transcripts/
+# Transcripts — default ignore everything, then whitelist derived intelligence CSVs
+# that the app needs at runtime on HF Spaces
+earningscall_transcripts/*
+# Derived intelligence artifacts — MUST ship with the app
+!earningscall_transcripts/scored_signals.csv
+!earningscall_transcripts/topic_metrics.csv
+!earningscall_transcripts/overview_iconic_quotes.csv
+!earningscall_transcripts/generated_insights_latest.csv
+!earningscall_transcripts/transcript_index.csv
+!earningscall_transcripts/transcript_highlights.csv
+!earningscall_transcripts/transcript_kpis.csv
+!earningscall_transcripts/company_summary.csv
+# NOTE: transcript_topics.csv intentionally NOT whitelisted (33 MB, too heavy for HF Spaces)
 
 # Generated reports
 reports/*.pdf
