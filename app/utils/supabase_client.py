@@ -91,8 +91,13 @@ def fetch_table_paginated(
     order: str | None = None,
     page_size: int = 1000,
     max_rows: int = 200_000,
+    filters: dict[str, str] | None = None,
 ) -> pd.DataFrame:
-    """Page through a large table in 1000-row chunks (PostgREST default cap)."""
+    """Page through a large table in 1000-row chunks (PostgREST default cap).
+
+    Accepts the same `filters` shape as `fetch_table` — dict of
+    {column: "op.value"}, e.g. {"asset": "in.(AAPL,MSFT)"}.
+    """
     if not is_configured():
         return pd.DataFrame()
     out: list[pd.DataFrame] = []
@@ -105,6 +110,8 @@ def fetch_table_paginated(
         }
         if order:
             params["order"] = order
+        if filters:
+            params.update(filters)
         url = f"{SUPABASE_URL}/rest/v1/{table}"
         try:
             resp = requests.get(url, headers=_headers(), params=params, timeout=30)

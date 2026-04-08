@@ -2494,16 +2494,60 @@ def _normalize_market_feed(raw: pd.DataFrame) -> pd.DataFrame:
     return out.sort_values("date")
 
 
+_TICKER_STRIP_ALIASES: tuple[str, ...] = (
+    "GOOGL", "GOOG", "META", "AMZN", "AAPL", "MSFT",
+    "NFLX", "DIS", "CMCSA", "SPOT", "ROKU", "WBD", "PARA",
+)
+
+
+def _load_market_feed_supabase() -> pd.DataFrame:
+    """Supabase-first ticker feed for the Welcome strip.
+
+    Pulls the latest minute + recent daily rows for the tickers shown in
+    the strip. Returns a DataFrame shaped like the xlsx path so the
+    downstream rendering code is unchanged. Empty frame on any failure —
+    caller falls back to the xlsx merge.
+    """
+    try:
+        from utils.supabase_stock import fetch_latest_prices
+    except Exception:
+        return pd.DataFrame()
+    try:
+        df = fetch_latest_prices(_TICKER_STRIP_ALIASES)
+    except Exception:
+        return pd.DataFrame()
+    if df is None or df.empty:
+        return pd.DataFrame()
+    out = pd.DataFrame(
+        {
+            "date": pd.to_datetime(df["date"], errors="coerce"),
+            "price": pd.to_numeric(df["price"], errors="coerce"),
+            "tag": df["tag"].astype(str).str.upper(),
+            "asset": df["asset"].astype(str),
+            "change": pd.to_numeric(df.get("change_pct"), errors="coerce"),
+        }
+    )
+    out = out.dropna(subset=["date", "price"])
+    return out.sort_values("date").reset_index(drop=True)
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def _load_market_feed(_excel_path: str, _live_excel_path: str, _source_stamp: int, _live_source_stamp: int) -> pd.DataFrame:
-    """Load & merge all market-feed sheets (Stocks, Daily, Minute) — cached."""
+    """Load the market-feed used by the Welcome ticker strip.
+
+    Prefers Supabase (fast, small payload). Falls back to merging the
+    Daily + Minute xlsx sheets if Supabase is unreachable or empty.
+    """
+    supa = _load_market_feed_supabase()
+    if not supa.empty:
+        return supa
+
     if not _excel_path and not _live_excel_path:
         return pd.DataFrame()
     _src = _live_excel_path or _excel_path
     _stamp = _live_source_stamp if _live_excel_path else _source_stamp
-    # Always merge all three sheets: Stocks & Crypto gives long historical data,
     # Daily gives recent daily closes, Minute gives intraday prices.
-    _sheet_priority = [("Stocks & Crypto", 1), ("Daily", 2), ("Minute", 3)]
+    _sheet_priority = [("Daily", 2), ("Minute", 3)]
     frames = []
     for sheet_name, prio in _sheet_priority:
         raw = _read_excel_sheet_cached(_src, sheet_name, _stamp)

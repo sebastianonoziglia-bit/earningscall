@@ -1895,28 +1895,31 @@ def _coerce_percent_series(series: pd.Series) -> pd.Series:
 
 @st.cache_data(ttl=3600)
 def _load_stocks_crypto_timeseries_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
-    if not excel_path:
-        return pd.DataFrame()
-    path = Path(excel_path)
-    if not path.exists():
-        return pd.DataFrame()
-    try:
-        df = pd.read_excel(path, sheet_name="Stocks & Crypto", usecols=["date", "price", "asset"])
-    except Exception:
+    # The "Stocks & Crypto" sheet was removed from the workbook. The DXY
+    # and VIX fallbacks below expected this sheet to exist; they now
+    # return empty and the corresponding charts degrade gracefully to
+    # showing no data (which is the same behaviour users saw before the
+    # sheet was removed, just without the wasted xlsx read).
+    del excel_path, source_stamp
+    return pd.DataFrame()
+    # Dead code kept below as a reference for when/if a replacement
+    # macro source is wired in. It is unreachable.
+    if False:  # pragma: no cover
+        path = Path(excel_path)  # type: ignore[unreachable]
+        if not path.exists():
+            return pd.DataFrame()
         try:
-            df = pd.read_excel(path, sheet_name="Stocks & Crypto")
+            df = pd.read_excel(path, sheet_name="Stocks & Crypto", usecols=["date", "price", "asset"])
         except Exception:
             return pd.DataFrame()
-    if df is None or df.empty:
-        return pd.DataFrame()
-    out = df.copy()
-    out.columns = [str(c).strip() for c in out.columns]
-    date_col = _find_column_by_alias(out, ["date", "datetime", "timestamp"])
-    price_col = _find_column_by_alias(out, ["price", "close", "close price", "closing price", "adj close", "adj_close"])
-    asset_col = _find_column_by_alias(out, ["asset", "name", "symbol", "ticker"])
-    if not date_col or not price_col or not asset_col:
-        return pd.DataFrame()
-    out = out.rename(columns={date_col: "date", price_col: "price", asset_col: "asset"})
+        out = df.copy()
+        out.columns = [str(c).strip() for c in out.columns]
+        date_col = _find_column_by_alias(out, ["date", "datetime", "timestamp"])
+        price_col = _find_column_by_alias(out, ["price", "close", "close price", "closing price", "adj close", "adj_close"])
+        asset_col = _find_column_by_alias(out, ["asset", "name", "symbol", "ticker"])
+        if not date_col or not price_col or not asset_col:
+            return pd.DataFrame()
+        out = out.rename(columns={date_col: "date", price_col: "price", asset_col: "asset"})
     out["date"] = pd.to_datetime(out["date"], errors="coerce")
     out["price"] = pd.to_numeric(out["price"], errors="coerce")
     out["asset"] = out["asset"].astype(str).str.strip()

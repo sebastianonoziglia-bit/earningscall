@@ -72,7 +72,6 @@ _ALIAS_TO_COMPANY = {
 }
 
 _SOURCE_PRIORITY = {
-    "Stocks & Crypto": 1,
     "Daily": 2,
     "Minute": 3,
 }
@@ -216,16 +215,18 @@ def _normalize_stock_sheet(raw_df: pd.DataFrame, source_sheet: str) -> pd.DataFr
 def load_combined_stock_market_data(
     excel_path: str,
     source_stamp: int = 0,
-    include_baseline: bool = True,
+    include_baseline: bool = False,  # kept for signature stability; no baseline sheet exists anymore
     include_daily: bool = True,
     include_minute: bool = True,
 ) -> pd.DataFrame:
+    # `include_baseline` used to select a "Stocks & Crypto" tab that has
+    # since been removed from the workbook. The parameter is kept so
+    # callers don't need to change, but it is now a no-op.
+    del include_baseline
     if not excel_path:
         return _empty_stock_frame()
 
     sheets: list[str] = []
-    if include_baseline:
-        sheets.append("Stocks & Crypto")
     if include_daily:
         sheets.append("Daily")
     if include_minute:
@@ -270,7 +271,6 @@ def build_company_ticker_map_from_market_data(excel_path: str, source_stamp: int
     df = load_combined_stock_market_data(
         excel_path=excel_path,
         source_stamp=source_stamp,
-        include_baseline=True,
         include_daily=True,
         include_minute=True,
     )

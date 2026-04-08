@@ -1525,15 +1525,39 @@ def main():
 
 
     @st.cache_data
-    def load_stock_data(excel_path, source_stamp=0):
-        """Load stock data only when needed."""
+    def load_stock_data(excel_path, source_stamp=0, company: str = ""):
+        """Load stock history for a single company.
+
+        Prefers Supabase (small per-company query) and falls back to the
+        xlsx Daily+Minute merge when Supabase is unavailable. Passing
+        `company` narrows the payload — without it we fall through to the
+        legacy full-workbook merge (kept for any caller that still wants
+        the old behavior).
+        """
+        # Supabase-first for the per-company case.
+        if company:
+            try:
+                from utils.supabase_stock import fetch_company_history
+                ticker_aliases = list(COMPANY_TICKERS.get(company, []))
+                if company and company not in ticker_aliases:
+                    ticker_aliases.append(company)
+                if ticker_aliases:
+                    supa = fetch_company_history(ticker_aliases)
+                    if supa is not None and not supa.empty:
+                        keep_cols = [
+                            c for c in ["date", "price", "volume", "asset", "tag", "source_sheet"]
+                            if c in supa.columns
+                        ]
+                        return supa[keep_cols].copy()
+            except Exception as exc:
+                logger.warning("Supabase stock fetch failed for %s: %s", company, exc)
+
         if not excel_path:
             return pd.DataFrame()
         try:
             merged = load_combined_stock_market_data(
                 excel_path=excel_path,
                 source_stamp=int(source_stamp or 0),
-                include_baseline=True,
                 include_daily=True,
                 include_minute=True,
             )
@@ -3372,6 +3396,7 @@ def main():
     stock_df = load_stock_data(
         data_processor.data_path,
         int(getattr(data_processor, "source_stamp", 0) or 0),
+        company=company,
     )
     stock_company_df = filter_stock_for_company(stock_df, company)
     ticker_options = COMPANY_TICKERS.get(company, [])

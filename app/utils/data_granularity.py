@@ -12,7 +12,6 @@ KNOWN_SHEET_GRANULARITY: dict[str, str] = {
     "Daily": "Daily",
     "Minute": "Daily",
     "Holders": "Daily",
-    "Stocks & Crypto": "Daily",
     "USD Inflation": "Annual",
     "Nasdaq Composite Est. (FRED)": "Monthly",
     "Country_Totals_vs_GDP": "Annual",
@@ -203,7 +202,7 @@ def get_day_labels_for_year(excel_path: str, year: int) -> list[str]:
     if not excel_path:
         return []
     names = set(get_workbook_sheet_names(excel_path))
-    sheet_candidates = [sheet for sheet in ["Daily", "Minute", "Stocks & Crypto"] if sheet in names]
+    sheet_candidates = [sheet for sheet in ["Daily", "Minute"] if sheet in names]
     if not sheet_candidates:
         return []
 
