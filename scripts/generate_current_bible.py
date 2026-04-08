@@ -27,6 +27,8 @@ KEY_FILES = [
     "app/stock_processor_fix.py",
     "app/utils/workbook_source.py",
     "app/utils/workbook_market_data.py",
+    "app/utils/supabase_client.py",
+    "app/utils/supabase_stock.py",
     "app/utils/transcript_startup_sync.py",
     "scripts/rebuild_transcript_index.py",
     "scripts/extract_transcript_topics.py",
@@ -34,8 +36,38 @@ KEY_FILES = [
     "scripts/extract_kpi_values.py",
     "scripts/build_intelligence_db.py",
     "scripts/sync_gsheet_to_sql.py",
+    "scripts/sync_gsheet_to_supabase.py",
     "scripts/generate_insights.py",
     "scripts/sync_all_intelligence.py",
+]
+
+# Supabase tables currently covered by the sync script (scripts/sync_gsheet_to_supabase.py)
+# and read at runtime by the app. Kept as a single source of truth so the
+# Supabase Migration Status section stays accurate.
+SUPABASE_SYNCED_TABLES = [
+    ("financial_metrics_yearly",    "Company_metrics_earnings_values",     "data_processor._load_metrics_from_supabase()"),
+    ("company_employees",            "Company_Employees",                   "data_processor._load_employees_from_supabase()"),
+    ("company_advertising_revenue",  "Company_advertising_revenue",         "(synced, read-path still xlsx — pivot shape pending)"),
+    ("global_adv_aggregates",        "Global_Adv_Aggregates",               "(synced, read-path still xlsx)"),
+    ("country_advertising_data",     "Country_Advertising_Data_FullVi",     "00_Overview._load_country_advertising_df()"),
+    ("stock_yearly",                 "Stocks & Crypto (legacy, now empty)", "(synced for history; no runtime reads)"),
+    ("stock_daily",                  "Daily",                               "utils/supabase_stock.fetch_company_history()"),
+    ("stock_minute",                 "Minute",                              "utils/supabase_stock.fetch_latest_prices()"),
+    ("holders",                      "Holders",                             "(synced, read-path still xlsx)"),
+]
+
+# Tables that exist in the Supabase schema but have no sync function yet.
+# When you add one to sync_gsheet_to_supabase.py::SYNCS move it to the
+# list above.
+SUPABASE_PENDING_TABLES = [
+    "company_segments_yearly", "company_segments_quarterly",
+    "company_segment_insights", "company_insights", "company_auto_narratives",
+    "company_revenue_by_region", "company_subscribers", "company_speakers",
+    "company_minute_dollar_earned", "country_totals_vs_gdp",
+    "global_advertising_groupm", "nasdaq_composite_fred", "usd_inflation",
+    "transcripts", "transcript_topics", "transcript_kpis", "transcript_highlights",
+    "forward_signals", "overview_iconic_quotes", "overview_auto_insights",
+    "topics_master", "polymarket_cache", "financial_metrics_quarterly",
 ]
 
 # Human-readable description of every page in the app
@@ -94,6 +126,8 @@ SHEET_CATALOG = [
 UTILS_CATALOG = {
     "workbook_source.py":    "Resolves the primary Excel data file — tries local files first (attached_assets/*.xlsx), then falls back to Google Sheets download with 20s timeout. Validates sheet count, required tabs, and financial coverage.",
     "workbook_market_data.py": "Loads stock/market data from the 'Stocks & Crypto' sheet. Builds company-ticker maps for market tape and 02_Stocks.py.",
+    "supabase_client.py":    "Read-only Supabase PostgREST client. Uses SUPABASE_URL + SUPABASE_ANON_KEY/PUBLISHABLE_KEY from env. Exposes fetch_table() and fetch_table_paginated(); returns empty DataFrames on any failure so callers can cleanly fall back to xlsx reads.",
+    "supabase_stock.py":     "Stock-specific Supabase helpers: fetch_latest_prices(tickers) batches a single asset=in.(...) query for the ticker strip, and fetch_company_history(aliases, start_date) paginates stock_daily/stock_minute for the Earnings hero sparkline. Both are cached via @st.cache_data.",
     "state_management.py":  "Provides get_data_processor() — a cached singleton FinancialDataProcessor instance shared across all pages via Streamlit session state.",
     "data_granularity.py":  "Detects available data granularity (annual/quarterly/monthly) per company from the workbook sheets.",
     "data_availability.py": "Returns available quarters for a given company/year pair from quarterly segment sheets.",
@@ -124,7 +158,10 @@ UTILS_CATALOG = {
 
 # Environment variables used by the app
 ENV_VARS = [
-    ("GOOGLE_SHEET_URL",    "Required", "URL to the Google Sheet XLSX export. Used by workbook_source.py as fallback if no local XLSX found."),
+    ("GOOGLE_SHEET_URL",    "Required", "URL to the Google Sheet XLSX export. Used by workbook_source.py as the canonical data source — still needed because only a subset of sheets have migrated to Supabase."),
+    ("SUPABASE_URL",        "Optional (production)", "Supabase project URL (e.g. https://xxxxxxxx.supabase.co). When set together with SUPABASE_ANON_KEY, the Streamlit app reads from Postgres first for any table covered by the sync and falls back to the xlsx otherwise."),
+    ("SUPABASE_ANON_KEY",   "Optional (production)", "Supabase publishable / anon key (`sb_publishable_*`). Runtime read path. Alias: SUPABASE_PUBLISHABLE_KEY."),
+    ("SUPABASE_SERVICE_ROLE_KEY", "Required for sync script", "Supabase service-role key (`sb_secret_*`). ONLY used by scripts/sync_gsheet_to_supabase.py — must NEVER be set on the Streamlit app itself or on HF Spaces."),
     ("AUTO_REFRESH_INTELLIGENCE_PIPELINE_ON_STARTUP", "Optional", "Set to '1'/'true' to run the transcript intelligence pipeline on app startup. Disabled by default on HF to keep cold start fast."),
     ("AUTO_SYNC_TRANSCRIPTS_ON_STARTUP", "Optional", "Set to '1'/'true' to sync local transcript .txt files into the Excel workbook on startup. Disabled by default."),
     ("OPENAI_API_KEY",      "Required for Genie", "OpenAI API key for the Genie AI assistant (04_Genie.py)."),
@@ -439,9 +476,11 @@ def build() -> str:
         "4. Home Page Render Order (Welcome.py)",
         "5. Overview Page Architecture",
         "6. Excel Workbook — Complete Sheet Inventory",
-        "7. Data Flow: Excel → Processors → Pages",
+        "6b. Supabase Migration Status (Postgres)",
+        "7. Data Flow: Sheets → Supabase → App",
         "8. Utils Module Catalog",
         "9. Transcript Intelligence Pipeline",
+        "9b. Signal Category Extraction Flow (scored_signals.csv)",
         "10. Environment Variables & Secrets",
         "11. Deployment — HuggingFace Spaces",
         "12. Function Inventory (Key Files)",
@@ -583,42 +622,119 @@ def build() -> str:
         lines.append("_(Workbook probe unavailable — run from repo root with `app/` in path)_")
         lines.append("")
 
-    # ── 7. DATA FLOW ───────────────────────────────────────────────────────────
-    lines += _section("7) Data Flow: Excel → Processors → Pages")
+    # ── 6b. SUPABASE MIGRATION STATUS ────────────────────────────────────────
+    lines += _section("6b) Supabase Migration Status (Postgres)")
+    lines.append("The long-term plan is to move every sheet out of the Google Sheets / xlsx")
+    lines.append("download path and into Supabase Postgres. The Sheet stays as the **editing**")
+    lines.append("surface; `scripts/sync_gsheet_to_supabase.py` pushes updates to Postgres and")
+    lines.append("the Streamlit app reads from Postgres at runtime (falling back to the xlsx")
+    lines.append("whenever a table is not yet synced).")
+    lines.append("")
+    lines.append("**Schema:** `supabase/migrations/0001_initial_schema.sql` defines the full")
+    lines.append("target schema — ~30 tables mirroring every source the app needs.")
+    lines.append("")
+    lines.append("**Runtime read path:** `app/utils/supabase_client.py` exposes `fetch_table()`")
+    lines.append("and `fetch_table_paginated()`, both using the publishable/anon key. Any call")
+    lines.append("site that wants Supabase data does:")
+    lines.append("```python")
+    lines.append("from utils.supabase_client import fetch_table_paginated, is_configured")
+    lines.append("if is_configured():")
+    lines.append("    df = fetch_table_paginated('my_table', order='...', page_size=1000)")
+    lines.append("    if df is not None and not df.empty:")
+    lines.append("        return df          # ← Supabase path (fast)")
+    lines.append("return _read_from_xlsx()   # ← fallback (slow)")
     lines.append("```")
-    lines.append("Excel Workbook (app/attached_assets/*.xlsx)")
+    lines.append("")
+    lines.append("### Tables currently synced + where they are read")
+    lines.append("")
+    synced_rows = [[f"`{t}`", src, reader] for t, src, reader in SUPABASE_SYNCED_TABLES]
+    lines += _md_table(["Supabase table", "Google Sheet source", "Runtime reader"], synced_rows)
+    lines.append("### Tables in the schema but NOT yet synced")
+    lines.append("")
+    lines.append("These tables exist in `0001_initial_schema.sql` but have no entry in")
+    lines.append("`sync_gsheet_to_supabase.py::SYNCS`. Until a sync function is added, the app")
+    lines.append("keeps reading the corresponding Google Sheet tab through the xlsx download.")
+    lines.append("")
+    for t in SUPABASE_PENDING_TABLES:
+        lines.append(f"- `{t}`")
+    lines.append("")
+    lines.append("### Sync operation (how data gets into Supabase)")
+    lines.append("```")
+    lines.append("Google Sheet (editing surface)")
     lines.append("  │")
-    lines.append("  ├─ resolve_financial_data_xlsx()        ← utils/workbook_source.py")
-    lines.append("  │    Resolution order:")
-    lines.append("  │    1. Explicit local candidates passed by caller")
-    lines.append("  │    2. Auto-detect *.xlsx in app/attached_assets/")
-    lines.append("  │    3. Download from GOOGLE_SHEET_URL (20s timeout)")
+    lines.append("  │  (human edits cells in the Sheet)")
+    lines.append("  ▼")
+    lines.append("scripts/sync_gsheet_to_supabase.py     ← run manually or via cron")
+    lines.append("  │   uses SUPABASE_SERVICE_ROLE_KEY (sb_secret_*) — server-side only")
+    lines.append("  │   reads workbook via resolve_financial_data_xlsx()")
+    lines.append("  │   iterates SYNCS registry: one function per table")
+    lines.append("  │   upserts rows into PostgREST /rest/v1/<table>")
+    lines.append("  ▼")
+    lines.append("Supabase Postgres (public schema)")
     lines.append("  │")
-    lines.append("  ├─ FinancialDataProcessor               ← app/data_processor.py")
-    lines.append("  │    .load_data()  →  reads sheets:")
-    lines.append("  │      Company_metrics_earnings_values  → df_metrics")
-    lines.append("  │      Company_yearly_segments_values   → df_segments")
-    lines.append("  │      Company_subscribers_values       → df_subscribers")
-    lines.append("  │      Company_Employees                → employee data")
-    lines.append("  │      Company_revenue_by_region        → regional data")
-    lines.append("  │    Cached via get_data_processor() in utils/state_management.py")
+    lines.append("  │  (Streamlit reads via SUPABASE_ANON_KEY, never service-role)")
+    lines.append("  ▼")
+    lines.append("Streamlit app (data_processor, 00_Overview, Welcome, 01_Earnings)")
+    lines.append("```")
+    lines.append("")
+    lines.append("**Key rule:** the sync script uses `sb_secret_*`; the app uses `sb_publishable_*`.")
+    lines.append("Never set `SUPABASE_SERVICE_ROLE_KEY` as a secret on HF Spaces — it would ship")
+    lines.append("a server-privilege credential to the browser.")
+    lines.append("")
+
+    # ── 7. DATA FLOW ───────────────────────────────────────────────────────────
+    lines += _section("7) Data Flow: Sheets → Supabase → App")
+    lines.append("```")
+    lines.append("Google Sheet (editing surface)")
     lines.append("  │")
-    lines.append("  ├─ _read_excel_sheet_cached()           ← Welcome.py internal")
-    lines.append("  │    Reads individual sheets on demand (KPIs, map, anatomy, etc.)")
-    lines.append("  │    Cached with @st.cache_data(ttl=4h)")
+    lines.append("  ├─ sync_gsheet_to_supabase.py (offline)   Google Sheet → Supabase")
+    lines.append("  │    Upserts into:                        (see section 6b)")
+    lines.append("  │      financial_metrics_yearly, company_employees,")
+    lines.append("  │      company_advertising_revenue, global_adv_aggregates,")
+    lines.append("  │      country_advertising_data, stock_daily/minute/yearly, holders")
     lines.append("  │")
-    lines.append("  ├─ load_quarterly_segments()            ← 01_Earnings.py internal")
-    lines.append("  │    Reads per-company 'X Quarterly Segments' sheets")
-    lines.append("  │")
-    lines.append("  └─ load_combined_stock_market_data()    ← utils/workbook_market_data.py")
-    lines.append("       Reads 'Stocks & Crypto' sheet")
-    lines.append("       → Used by Welcome.py (market tape) and 02_Stocks.py")
+    lines.append("  └─ GOOGLE_SHEET_URL xlsx download (runtime fallback)")
+    lines.append("       resolve_financial_data_xlsx() — utils/workbook_source.py")
+    lines.append("       1. Explicit local candidates passed by caller")
+    lines.append("       2. Auto-detect *.xlsx in app/attached_assets/")
+    lines.append("       3. Download from GOOGLE_SHEET_URL (20s timeout)")
+    lines.append("")
+    lines.append("Supabase Postgres            Streamlit runtime")
+    lines.append("  │                            │")
+    lines.append("  ├─ financial_metrics_yearly ─┤ data_processor._load_metrics_from_supabase()")
+    lines.append("  ├─ company_employees ────────┤ data_processor._load_employees_from_supabase()")
+    lines.append("  ├─ country_advertising_data ─┤ 00_Overview._load_country_advertising_df()")
+    lines.append("  ├─ stock_daily / stock_minute┤ utils/supabase_stock.fetch_company_history()")
+    lines.append("  │                            │ utils/supabase_stock.fetch_latest_prices()")
+    lines.append("  └─ (other tables — pending) ─┘")
+    lines.append("")
+    lines.append("Every Supabase reader returns an empty DataFrame on failure and falls")
+    lines.append("back to the corresponding xlsx sheet read, so the app keeps working even")
+    lines.append("when SUPABASE_URL is unset or the sync is stale.")
+    lines.append("")
+    lines.append("FinancialDataProcessor               ← app/data_processor.py")
+    lines.append("  .load_data()  →  Supabase-first for metrics + employees, xlsx for")
+    lines.append("                    segments, ad_revenue, quarterly segments, transcripts")
+    lines.append("                    and every sheet listed under 'pending' in section 6b.")
+    lines.append("  Cached via get_data_processor() in utils/state_management.py")
+    lines.append("")
+    lines.append("_read_excel_sheet_cached()           ← Welcome.py internal")
+    lines.append("  Reads individual sheets on demand (KPIs, map, anatomy, etc.) — will")
+    lines.append("  become Supabase-first as more tables migrate.")
+    lines.append("")
+    lines.append("load_quarterly_segments()            ← 01_Earnings.py internal")
+    lines.append("  Reads per-company 'X Quarterly Segments' sheets (xlsx-only today).")
+    lines.append("")
+    lines.append("load_combined_stock_market_data()    ← utils/workbook_market_data.py")
+    lines.append("  Reads 'Daily' + 'Minute' sheets (xlsx fallback only — runtime")
+    lines.append("  stock reads go through supabase_stock.* on the hot paths).")
+    lines.append("```")
     lines.append("")
     lines.append("SQLite (earningscall_intelligence.db)")
-    lines.append("  Built by: scripts/build_intelligence_db.py")
-    lines.append("  Tables: transcript_highlights, transcript_topics, topic_metrics")
-    lines.append("  Used by: Welcome.py (Human Voice strip), 04_Genie.py (Genie AI context)")
-    lines.append("```")
+    lines.append("- Built by: scripts/build_intelligence_db.py")
+    lines.append("- Tables: transcript_highlights, transcript_topics, topic_metrics")
+    lines.append("- Used by: Welcome.py (Human Voice strip), 04_Genie.py (Genie AI context)")
+    lines.append("- Not yet mirrored in Supabase — see `transcripts` in the pending list above.")
     lines.append("")
 
     # ── 8. UTILS CATALOG ───────────────────────────────────────────────────────
@@ -674,6 +790,104 @@ def build() -> str:
     lines.append("")
     lines.append("**Trigger:** Pipeline only runs automatically if `AUTO_REFRESH_INTELLIGENCE_PIPELINE_ON_STARTUP=1`.")
     lines.append("Otherwise run manually: `python3 scripts/sync_all_intelligence.py`")
+    lines.append("")
+
+    # ── 9b. SIGNAL CATEGORY EXTRACTION FLOW ──────────────────────────────────
+    lines += _section("9b) Signal Category Extraction Flow (scored_signals.csv)")
+    lines.append("**Script:** `scripts/extract_transcript_topics.py` → `extract_scored_signals_from_file()`")
+    lines.append("**Config:** `scripts/scoring_config.py` → `SIGNAL_CATEGORIES`, `SIGNAL_CATEGORY_KEYWORDS`")
+    lines.append("**Output:** `earningscall_transcripts/scored_signals.csv` (consumed by Overview → Narrative & Sentiment → Market Signals)")
+    lines.append("")
+    lines.append("**The 9 signal categories** (from `SIGNAL_CATEGORIES`, in priority order):")
+    lines.append("")
+    cats_list = [
+        ("Outlook",             "forward-looking guidance, expectations, trajectories"),
+        ("Risks",               "headwinds, uncertainty, regulatory / macro concerns"),
+        ("Opportunities",       "growth vectors, TAM expansion, new markets"),
+        ("Investment",          "capex, R&D, hiring, infra build-out"),
+        ("Product Shifts",      "product launches, format changes, platform pivots"),
+        ("User Behavior",       "consumption, engagement, churn, time-spent"),
+        ("Monetization",        "pricing, ARPU, ad loads, subscription tiers"),
+        ("Strategic Direction", "M&A, restructuring, long-term bets"),
+        ("Broadcaster Threats", "cord-cutting, streaming disruption, linear decline"),
+    ]
+    for i, (name, desc) in enumerate(cats_list, start=1):
+        lines.append(f"{i}. **{name}** — {desc}")
+    lines.append("")
+    lines.append("### Pipeline (per transcript file)")
+    lines.append("")
+    lines.append("```")
+    lines.append("┌─────────────────────────────────────────────────────────────────────┐")
+    lines.append("│  1. Split transcript into sentences                                 │")
+    lines.append("└─────────────────────────────────────────────────────────────────────┘")
+    lines.append("                                │")
+    lines.append("                                ▼")
+    lines.append("┌─────────────────────────────────────────────────────────────────────┐")
+    lines.append("│  2. Candidate filter: keep sentences that match ANY keyword         │")
+    lines.append("│     from the UNION of all 9 category keyword lists                  │")
+    lines.append("│     (previously only 5 → Risks/UB/Monet/BT sentences dropped!)      │")
+    lines.append("└─────────────────────────────────────────────────────────────────────┘")
+    lines.append("                                │")
+    lines.append("                                ▼")
+    lines.append("┌─────────────────────────────────────────────────────────────────────┐")
+    lines.append("│  3. Score sentence: keyword weights + position + speaker role       │")
+    lines.append("│     → final `signal_score` (0–100)                                  │")
+    lines.append("└─────────────────────────────────────────────────────────────────────┘")
+    lines.append("                                │")
+    lines.append("                                ▼")
+    lines.append("┌─────────────────────────────────────────────────────────────────────┐")
+    lines.append("│  4. Category assignment: BEST-MATCH                                 │")
+    lines.append("│     For each category, count how many of its keywords appear.       │")
+    lines.append("│     Pick the category with the highest hit count.                   │")
+    lines.append("│     Tie-break: earlier index in SIGNAL_CATEGORIES wins.             │")
+    lines.append("│     (previously FIRST-MATCH on dict order → Outlook dominated!)     │")
+    lines.append("└─────────────────────────────────────────────────────────────────────┘")
+    lines.append("                                │")
+    lines.append("                                ▼")
+    lines.append("┌─────────────────────────────────────────────────────────────────────┐")
+    lines.append("│  5. Row written to scored_signals.csv                               │")
+    lines.append("│     Columns: company, year, quarter, category, score, text, ...    │")
+    lines.append("└─────────────────────────────────────────────────────────────────────┘")
+    lines.append("```")
+    lines.append("")
+    lines.append("### Before vs After the 2026-04 fix")
+    lines.append("")
+    lines.append("Prior to the fix, two bugs compounded:")
+    lines.append("")
+    lines.append("1. **Candidate pool was too narrow** — only 5 of 9 category keyword lists were")
+    lines.append("   unioned into the sentence filter. Sentences that only matched Risks, User")
+    lines.append("   Behavior, Monetization, or Broadcaster Threats keywords were silently dropped.")
+    lines.append("2. **Category assignment was first-match** — iteration order of the keyword dict")
+    lines.append("   meant Outlook (broad phrases like _'we expect', 'going forward'_) absorbed any")
+    lines.append("   sentence that touched it, even when another category was a much better fit.")
+    lines.append("")
+    lines.append("Net result: ~66% of all extracted signals were labelled Outlook; four categories")
+    lines.append("had zero rows. The Market Signals grid looked broken because 5 of 9 columns were empty.")
+    lines.append("")
+    lines.append("| Category            | Before (buggy) | After (fixed) |")
+    lines.append("|---------------------|---------------:|--------------:|")
+    lines.append("| Outlook             |           2321 |          1856 |")
+    lines.append("| Opportunities       |            920 |           706 |")
+    lines.append("| Risks               |             77 |           397 |")
+    lines.append("| Investment          |            170 |           284 |")
+    lines.append("| Broadcaster Threats |              0 |           145 |")
+    lines.append("| User Behavior       |              1 |            54 |")
+    lines.append("| Monetization        |              1 |            43 |")
+    lines.append("| Strategic Direction |             14 |            16 |")
+    lines.append("| Product Shifts      |              3 |            11 |")
+    lines.append("| **Total rows**      |       **3507** |      **3512** |")
+    lines.append("")
+    lines.append("**How to regenerate** after tweaking keywords or category weights:")
+    lines.append("")
+    lines.append("```bash")
+    lines.append("python3 -c \"from scripts.extract_transcript_topics import \\")
+    lines.append("  extract_scored_signals_from_file; import pathlib, pandas as pd; \\")
+    lines.append("  rows=[r for p in pathlib.Path('earningscall_transcripts').glob('*.txt') \\")
+    lines.append("        for r in extract_scored_signals_from_file(p)]; \\")
+    lines.append("  pd.DataFrame(rows).to_csv('earningscall_transcripts/scored_signals.csv', index=False)\"")
+    lines.append("```")
+    lines.append("")
+    lines.append("Or re-run the full pipeline: `python3 scripts/sync_all_intelligence.py`")
     lines.append("")
 
     # ── 10. ENVIRONMENT VARIABLES ─────────────────────────────────────────────

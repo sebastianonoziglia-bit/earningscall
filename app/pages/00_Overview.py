@@ -1728,6 +1728,39 @@ def get_available_years(data_processor):
 
 @st.cache_data(ttl=3600)
 def _load_country_advertising_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
+    # Supabase-first. The xlsx path parses a ~large sheet on every cold
+    # start; if Supabase has the country_advertising_data table we can
+    # skip that entirely and the world map spinner finally disappears.
+    try:
+        from utils.supabase_client import fetch_table_paginated, is_configured
+        if is_configured():
+            supa = fetch_table_paginated(
+                "country_advertising_data",
+                order="country.asc,year.asc",
+                page_size=1000,
+                max_rows=100_000,
+            )
+            if supa is not None and not supa.empty:
+                s = supa.copy()
+                # Supabase: country, year, metric, value
+                # Callers expect: Country, Year, Metric_type, Value
+                s = s.rename(columns={
+                    "country": "Country",
+                    "year": "Year",
+                    "metric": "Metric_type",
+                    "value": "Value",
+                })
+                s["Country"] = s["Country"].astype(str).str.strip()
+                s["Metric_type"] = s["Metric_type"].astype(str).str.strip()
+                s["Year"] = pd.to_numeric(s["Year"], errors="coerce")
+                s["Value"] = pd.to_numeric(s["Value"], errors="coerce")
+                s = s.dropna(subset=["Country", "Year", "Metric_type", "Value"])
+                s["Year"] = s["Year"].astype(int)
+                if not s.empty:
+                    return s
+    except Exception:
+        pass
+
     if not excel_path:
         return pd.DataFrame()
     path = Path(excel_path)
@@ -6081,11 +6114,17 @@ def _render_market_signals_grid(
     selected_year: int,
     selected_quarter: str,
 ) -> bool:
-    """All 9 signal categories in a responsive 3-column grid.
+    """Pill-driven, scrollable Market Signals panel.
 
-    Reads the shared filter state so filtering the Topic Signal Map pills
-    collapses the grid to matching categories, and the company filter
-    narrows each category to a single company's quotes.
+    Behavior:
+      * No pill active → show the top-4 populated categories for the
+        current period, side-by-side. Each column is a scrollable list
+        of ALL quotes in that category for the period, ordered by score
+        descending (no top-N cap).
+      * Pill(s) active → show only the matching category columns, same
+        scrollable list behavior.
+      * All columns honor year/quarter/company filters from the shared
+        Narrative & Sentiment filter state.
     """
     try:
         from utils.scoring_config import (
@@ -6143,80 +6182,104 @@ def _render_market_signals_grid(
     if candidates.empty:
         return False
 
-    # Which categories to show: the pills (if any), otherwise all 9.
-    cats_to_show = [c for c in _MS_CATS if (not filt_pills or c in filt_pills)]
+    # ── Pick which categories to show ──────────────────────────────────
+    # If the user clicked pills, honor exactly those. Otherwise show the
+    # top-4 most-populated categories for the current period so we don't
+    # waste real estate on empty columns (the 9-category grid produced
+    # 5 blank panels for most periods because extraction is skewed
+    # toward Outlook / Opportunities).
+    if filt_pills:
+        cats_to_show = [c for c in _MS_CATS if c in filt_pills]
+    else:
+        pop = (
+            candidates.groupby("category").size()
+            .reindex(_MS_CATS, fill_value=0)
+            .sort_values(ascending=False)
+        )
+        cats_to_show = [c for c, n in pop.items() if n > 0][:4]
+
+    if not cats_to_show:
+        return False
 
     st.markdown("### Market Signals")
+    total_sigs = int(candidates[candidates["category"].isin(cats_to_show)].shape[0])
     cats_pretty = " · ".join(cats_to_show) if len(cats_to_show) <= 4 else f"{len(cats_to_show)} categories"
     st.caption(
-        f"{cats_pretty} extracted from earnings calls · {picked_period}"
+        f"{cats_pretty} · {total_sigs} signals · {picked_period}"
         + (f" · {filt_company}" if filt_company and filt_company.lower() not in ("all companies", "all", "") else "")
+        + (" · scroll each column to see more" if total_sigs > 12 else "")
     )
 
-    # Render in rows of 3 columns.
-    for row_start in range(0, len(cats_to_show), 3):
-        _row_cats = cats_to_show[row_start:row_start + 3]
-        _cols = st.columns(3, gap="medium")
+    # Render in rows of up to 4 columns so each column stays readable.
+    _per_row = 4 if len(cats_to_show) >= 4 else max(1, len(cats_to_show))
+    _scroll_max_height = 560  # px — tall enough for ~8 cards without scrolling
+
+    for row_start in range(0, len(cats_to_show), _per_row):
+        _row_cats = cats_to_show[row_start:row_start + _per_row]
+        _cols = st.columns(len(_row_cats), gap="medium")
         for _col, _cat in zip(_cols, _row_cats):
             with _col:
                 _c = _MS_COLORS.get(_cat, {"bg": "#f9fafb", "border": "#6b7280", "tag": "#374151"})
                 _icon = _MS_ICONS.get(_cat, "")
-                _cat_df = candidates[candidates["category"] == _cat]
-                # Top 2 per company, then overall top 6 by score
-                _cat_df = (
-                    _cat_df.sort_values(["company", "score"], ascending=[True, False])
-                    .groupby("company", sort=False)
-                    .head(2)
-                    .sort_values("score", ascending=False)
-                    .head(6)
+                # ALL quotes for this category + period, sorted by score.
+                _cat_df = candidates[candidates["category"] == _cat].sort_values(
+                    "score", ascending=False
                 )
+
+                # Header bar (sticky-ish — stays above the scrollable list).
                 st.markdown(
                     f"<div style='display:flex;align-items:center;gap:8px;"
-                    f"margin-bottom:10px;padding-bottom:6px;"
+                    f"margin-bottom:6px;padding-bottom:6px;"
                     f"border-bottom:2px solid {_c['border']};'>"
                     f"<span>{_icon}</span>"
-                    f"<span style='font-weight:700;font-size:0.88rem;color:#1f2937;'>{_cat}</span>"
+                    f"<span style='font-weight:700;font-size:0.9rem;color:#1f2937;'>{_cat}</span>"
                     f"<span style='margin-left:auto;background:{_c['tag']};color:white;"
                     f"font-size:0.62rem;padding:2px 7px;border-radius:10px;font-weight:600;'>"
                     f"{len(_cat_df)}</span></div>",
                     unsafe_allow_html=True,
                 )
+
                 if _cat_df.empty:
                     st.markdown(
-                        f"<div style='font-size:0.75rem;color:#9ca3af;padding:6px 0;'>"
-                        f"No quotes for this filter.</div>",
+                        "<div style='font-size:0.75rem;color:#9ca3af;padding:6px 0;'>"
+                        "No quotes for this filter.</div>",
                         unsafe_allow_html=True,
                     )
                     continue
-                # Group quotes by company header within the column.
-                _last_company = None
+
+                # Build the scrollable card list as a single HTML block
+                # so the max-height + overflow container actually wraps
+                # every card (st.markdown in a loop defeats that).
+                _cards: list[str] = []
                 for sig in _cat_df.itertuples(index=False):
                     _co = str(getattr(sig, "company", "")).strip()
                     _q = str(getattr(sig, "quote", "")).strip()
                     _sp = str(getattr(sig, "speaker", "")).strip()
-                    if len(_q) > 200:
-                        _q = _q[:200].rsplit(" ", 1)[0] + "…"
-                    if _co != _last_company:
-                        st.markdown(
-                            f"<div style='font-size:0.68rem;font-weight:700;color:#1f2937;"
-                            f"margin:6px 0 3px 0;text-transform:uppercase;letter-spacing:0.04em;'>"
-                            f"{html.escape(_co)}</div>",
-                            unsafe_allow_html=True,
-                        )
-                        _last_company = _co
-                    st.markdown(
+                    _sc = float(getattr(sig, "score", 0.0) or 0.0)
+                    if not _q:
+                        continue
+                    _meta_bits = [_co] if _co else []
+                    if _sp and _sp.lower() not in ("", "unknown", "nan"):
+                        _meta_bits.append(_sp)
+                    _meta = " · ".join(_meta_bits)
+                    _cards.append(
                         f"<div style='background:{_c['bg']};border-left:3px solid {_c['border']};"
                         f"border-radius:0 6px 6px 0;padding:8px 10px;margin-bottom:6px;'>"
-                        f"<p style='margin:0 0 3px 0;font-size:0.76rem;color:#374151;"
-                        f"line-height:1.5;font-style:italic;'>\"{html.escape(_q)}\"</p>"
-                        + (
-                            f"<div style='font-size:0.65rem;color:#6b7280;'>{html.escape(_sp)}</div>"
-                            if _sp and _sp.lower() not in ("", "unknown", "nan")
-                            else ""
-                        )
-                        + f"</div>",
-                        unsafe_allow_html=True,
+                        f"<div style='display:flex;justify-content:space-between;"
+                        f"align-items:center;gap:6px;margin-bottom:3px;'>"
+                        f"<div style='font-size:0.68rem;font-weight:700;color:#1f2937;"
+                        f"text-transform:uppercase;letter-spacing:0.04em;'>{html.escape(_meta)}</div>"
+                        f"<div style='font-size:0.6rem;color:{_c['tag']};font-weight:600;'>"
+                        f"{_sc:.1f}</div></div>"
+                        f"<p style='margin:0;font-size:0.78rem;color:#374151;"
+                        f"line-height:1.5;font-style:italic;'>&ldquo;{html.escape(_q)}&rdquo;</p>"
+                        f"</div>"
                     )
+                st.markdown(
+                    f"<div style='max-height:{_scroll_max_height}px;overflow-y:auto;"
+                    f"padding-right:6px;'>{''.join(_cards)}</div>",
+                    unsafe_allow_html=True,
+                )
     return True
 
 

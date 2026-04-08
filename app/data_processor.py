@@ -92,12 +92,23 @@ class FinancialDataProcessor:
         employees_cols = ("Company", "Year", "Employee Count")
         segments_cols = ("Company", "year", "segments", "Yearly Segment Revenue")
 
-        self.df_metrics = self._read_sheet_relaxed(
-            excel_path, self.source_stamp, "Company_metrics_earnings_values", metrics_cols
-        )
-        self.df_employees = self._read_sheet_relaxed(
-            excel_path, self.source_stamp, "Company_Employees", employees_cols
-        )
+        # Try Supabase first for tables that live there; fall back to the
+        # xlsx read when Supabase is unconfigured or returns nothing.
+        # Only metrics + employees are wired today — segments, ad_revenue,
+        # country_advertising_data and the rest are still xlsx-first and
+        # will be migrated in later passes.
+        self.df_metrics = self._load_metrics_from_supabase()
+        if self.df_metrics is None or self.df_metrics.empty:
+            self.df_metrics = self._read_sheet_relaxed(
+                excel_path, self.source_stamp, "Company_metrics_earnings_values", metrics_cols
+            )
+
+        self.df_employees = self._load_employees_from_supabase()
+        if self.df_employees is None or self.df_employees.empty:
+            self.df_employees = self._read_sheet_relaxed(
+                excel_path, self.source_stamp, "Company_Employees", employees_cols
+            )
+
         self.df_segments = self._read_sheet_relaxed(
             excel_path, self.source_stamp, "Company_yearly_segments_values", segments_cols
         )
@@ -113,6 +124,74 @@ class FinancialDataProcessor:
 
         self.process_data()
         return
+
+    # ── Supabase-first loaders ──────────────────────────────────────────
+    # Each of these tries the matching Supabase table and returns a
+    # DataFrame shaped to match what _read_sheet_relaxed would have
+    # returned (so the downstream rename + coercion in process_data()
+    # keeps working unchanged). They all silently return an empty
+    # DataFrame if Supabase is unconfigured or empty, so callers can
+    # trivially fall back to the xlsx read.
+    def _load_metrics_from_supabase(self):
+        try:
+            from utils.supabase_client import fetch_table_paginated, is_configured
+        except Exception:
+            return pd.DataFrame()
+        if not is_configured():
+            return pd.DataFrame()
+        df = fetch_table_paginated(
+            "financial_metrics_yearly",
+            order="company.asc,year.asc",
+            page_size=1000,
+            max_rows=20_000,
+        )
+        if df is None or df.empty:
+            return pd.DataFrame()
+        # Supabase columns: company, year, revenue, cost_of_revenue,
+        #   operating_income, net_income, rd, capex, total_assets,
+        #   market_cap, cash_balance, debt
+        # process_data() expects the xlsx-style Title Case column names.
+        # Map them here so the downstream rename_map is a no-op.
+        rename = {
+            "company": "Company",
+            "year": "Year",
+            "revenue": "Revenue",
+            "cost_of_revenue": "Cost Of Revenue",
+            "operating_income": "Operating Income",
+            "net_income": "Net Income",
+            "rd": "R&D",
+            "capex": "Capex",
+            "total_assets": "Total Assets",
+            "market_cap": "Market Cap.",
+            "cash_balance": "Cash Balance",
+            "debt": "Debt",
+        }
+        df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
+        return df.copy()
+
+    def _load_employees_from_supabase(self):
+        try:
+            from utils.supabase_client import fetch_table_paginated, is_configured
+        except Exception:
+            return pd.DataFrame()
+        if not is_configured():
+            return pd.DataFrame()
+        df = fetch_table_paginated(
+            "company_employees",
+            order="company.asc,year.asc",
+            page_size=1000,
+            max_rows=20_000,
+        )
+        if df is None or df.empty:
+            return pd.DataFrame()
+        # Supabase → xlsx-style names expected by process_data().
+        rename = {
+            "company": "Company",
+            "year": "Year",
+            "employee_count": "Employee Count",
+        }
+        df = df.rename(columns={k: v for k, v in rename.items() if k in df.columns})
+        return df.copy()
 
     def _read_sheet_relaxed(self, path, source_stamp, sheet_name, expected_cols):
         """Read a sheet robustly.

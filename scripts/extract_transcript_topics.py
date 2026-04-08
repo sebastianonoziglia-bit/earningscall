@@ -644,13 +644,20 @@ def extract_scored_signals_from_file(
 
     # Detect speaker roles
     speaker_re = SPEAKER_RE
-    all_kw = list(set(
-        _CFG_CATEGORY_KW.get("Outlook", [])
-        + _CFG_CATEGORY_KW.get("Opportunities", [])
-        + _CFG_CATEGORY_KW.get("Investment", [])
-        + _CFG_CATEGORY_KW.get("Product Shifts", [])
-        + _CFG_CATEGORY_KW.get("Strategic Direction", [])
-    ))
+    # Candidate-sentence filter: a sentence must mention at least one
+    # keyword from ANY of the 9 signal categories. Previously this pool
+    # was hardcoded to 5 categories, which made it impossible for Risks,
+    # User Behavior, Monetization, and Broadcaster Threats rows to ever
+    # reach scored_signals.csv — any rows in those categories only leaked
+    # in because they *also* mentioned one of the 5 allowed categories.
+    all_kw: list[str] = []
+    _seen_kw: set[str] = set()
+    for _cat in _CFG_SIGNAL_CATS:
+        for _kw in _CFG_CATEGORY_KW.get(_cat, []):
+            _k = _kw.lower()
+            if _k not in _seen_kw:
+                _seen_kw.add(_k)
+                all_kw.append(_kw)
 
     signals: list[dict] = []
     seen_prefixes: set[str] = set()
@@ -696,12 +703,28 @@ def extract_scored_signals_from_file(
                 continue
             seen_prefixes.add(prefix)
 
-            # Determine category
-            category = "Outlook"
+            # Determine category by best-match (highest keyword hit
+            # count), not first-match-wins. The old code iterated
+            # _CFG_CATEGORY_KW in dict-insertion order, so Outlook —
+            # which has the broadest phrases ("we expect", "going
+            # forward", "guidance") — captured ~66% of all rows and
+            # starved every other category. Best-match ties fall back
+            # to the narrower category (longer keyword list wins on a
+            # tie because more specific vocabularies tend to win).
+            _cat_scores: list[tuple[str, int]] = []
             for cat_name, cat_kws in _CFG_CATEGORY_KW.items():
-                if any(kw.lower() in s_lower for kw in cat_kws):
-                    category = cat_name
-                    break
+                hits = sum(1 for kw in cat_kws if kw.lower() in s_lower)
+                if hits > 0:
+                    _cat_scores.append((cat_name, hits))
+            if _cat_scores:
+                _cat_scores.sort(key=lambda t: (-t[1], _CFG_SIGNAL_CATS.index(t[0])))
+                category = _cat_scores[0][0]
+            else:
+                # No category matched — the sentence survived the
+                # candidate filter on a keyword that lives in multiple
+                # lists or via a case-insensitive edge case. Fall back
+                # to Outlook only as a last resort.
+                category = "Outlook"
 
             has_number = bool(re.search(r'\$[\d,]+|\d+%', sentence))
             has_year_ref = bool(re.search(r'\b20(?:2[4-9]|3[0-9])\b', sentence))

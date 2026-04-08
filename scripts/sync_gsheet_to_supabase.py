@@ -377,12 +377,32 @@ def sync_company_employees(workbook: str) -> int:
     return upsert("company_employees", _records(out))
 
 
+def sync_country_advertising_data(workbook: str) -> int:
+    df = _read_sheet(workbook, "Country_Advertising_Data_FullVi")
+    if df.empty:
+        return 0
+    if not {"country", "year", "metric_type", "value"}.issubset(df.columns):
+        print("  country_advertising_data: missing required columns")
+        return 0
+    out = pd.DataFrame(index=df.index)
+    out["country"] = _str_col(df, "country")
+    out["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
+    out["metric"] = _str_col(df, "metric_type")
+    out["value"] = pd.to_numeric(df["value"], errors="coerce")
+    out = out.dropna(subset=["country", "year", "metric"])
+    out["year"] = out["year"].astype(int)
+    out = out[out["country"] != ""]
+    out = out[out["metric"] != ""]
+    return upsert("country_advertising_data", _records(out))
+
+
 # ── registry: table → sync function ────────────────────────────────────
 SYNCS: dict[str, Callable[[str], int]] = {
     "financial_metrics_yearly": sync_financial_metrics_yearly,
     "company_advertising_revenue": sync_company_advertising_revenue,
     "global_adv_aggregates": sync_global_adv_aggregates,
     "company_employees": sync_company_employees,
+    "country_advertising_data": sync_country_advertising_data,
     "stock_yearly": sync_stock_yearly,
     "stock_daily": sync_stock_daily,
     "stock_minute": sync_stock_minute,
