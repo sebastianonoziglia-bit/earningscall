@@ -129,11 +129,27 @@ def _str_col(df: pd.DataFrame, name: str, default: str = "") -> pd.Series:
 
 
 # ── Supabase upsert ────────────────────────────────────────────────────
-def upsert(table: str, rows: list[dict[str, Any]], batch_size: int = 500) -> int:
+def upsert(
+    table: str,
+    rows: list[dict[str, Any]],
+    batch_size: int = 500,
+    on_conflict: str | None = None,
+) -> int:
+    """Upsert rows into a Supabase table.
+
+    PostgREST's `Prefer: resolution=merge-duplicates` normally resolves
+    conflicts on the primary key. For tables that use a surrogate
+    `bigserial primary key` with the real dedup key expressed as a
+    separate UNIQUE constraint (e.g. `holders`), pass `on_conflict` with
+    the comma-separated column list so PostgREST uses that constraint
+    instead. Without this the insert raises 23505 on the unique index.
+    """
     if not rows:
         print(f"  {table}: no rows")
         return 0
     url = f"{SUPABASE_URL}/rest/v1/{table}"
+    if on_conflict:
+        url += f"?on_conflict={on_conflict}"
     headers = {
         "apikey": SUPABASE_KEY,
         "Content-Type": "application/json",
@@ -242,7 +258,18 @@ def sync_holders(workbook: str) -> int:
     out["holder_type"] = _str_col(df, "holder_type")
     out = out.dropna(subset=["date_fetched"])
     out = out[(out["company"].str.len() > 0) & (out["holder_name"].str.len() > 0)]
-    return upsert("holders", _records(out))
+    # Pre-dedup on the UNIQUE key. PostgREST rejects a batch that contains
+    # two rows with the same on_conflict tuple even when merge-duplicates
+    # is set, so we collapse duplicates here and keep the latest row.
+    out = out.drop_duplicates(
+        subset=["company", "ticker", "holder_name", "date_fetched"],
+        keep="last",
+    )
+    return upsert(
+        "holders",
+        _records(out),
+        on_conflict="company,ticker,holder_name,date_fetched",
+    )
 
 
 def sync_financial_metrics_yearly(workbook: str) -> int:
