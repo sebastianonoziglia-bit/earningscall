@@ -202,7 +202,8 @@ def _render_nav(active_key: str):
     # ── Nav pill via st.markdown (proven to work with position:fixed in Streamlit).
     # Uses direct page-slug URLs — NO ?nav= query params.
     _SLUG = {"home": ".", "overview": "Overview", "earnings": "Earnings",
-             "stocks": "Stocks", "editorial": "Editorial", "genie": "Genie"}
+             "stocks": "Stocks", "editorial": "Editorial", "genie": "Genie",
+             "oracle": "Oracle"}
 
     nav_links = ""
     for item in _NAV_ITEMS:
