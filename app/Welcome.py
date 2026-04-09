@@ -4257,6 +4257,25 @@ for _hc_clean in _human_companies:
                 _hc_clean[_hk] = float(_hv) if _hv == _hv else None
             except (TypeError, ValueError):
                 _hc_clean[_hk] = str(_hv)
+# Final safety: ensure every entry has a positive numeric val
+_human_companies = [
+    _hc for _hc in _human_companies
+    if isinstance(_hc.get("val"), (int, float)) and _hc["val"] > 0
+]
+if not _human_companies:
+    _human_companies = [
+        {"name": "YouTube", "val": 2500, "mins": 1000, "revenue": 36.1, "users": "2.5B users", "color": "#ff0000", "label": "2.5B users"},
+        {"name": "Meta \u2013 Facebook", "val": 2100, "users": "2.1B DAUs", "color": "#0866ff", "label": "2.1B DAUs"},
+        {"name": "Meta \u2013 Instagram", "val": 2000, "users": "2.0B MAUs", "color": "#e1306c", "label": "2.0B MAUs"},
+        {"name": "Spotify", "val": 675, "mins": 30, "revenue": 15.7, "users": "675M users", "color": "#1db954", "label": "675M users"},
+        {"name": "Netflix", "val": 301, "mins": 120, "revenue": 33.7, "users": "301M subs", "color": "#e50914", "label": "301M subs"},
+        {"name": "Disney+ / Hulu / ESPN+", "val": 174, "mins": 68, "revenue": 14.5, "users": "174M subs", "color": "#113ccf", "label": "174M subs"},
+        {"name": "Amazon Prime Video", "val": 200, "mins": 55, "revenue": 10.2, "users": "200M Prime", "color": "#ff9900", "label": "200M Prime"},
+        {"name": "WBD Max / HBO", "val": 116, "mins": 42, "revenue": 10.2, "users": "116M subs", "color": "#0047ab", "label": "116M subs"},
+        {"name": "Paramount+", "val": 77, "mins": 35, "revenue": 6.8, "users": "77M subs", "color": "#0033a0", "label": "77M subs"},
+        {"name": "Comcast Peacock", "val": 35, "users": "35M subs", "color": "#2563eb", "label": "35M subs"},
+        {"name": "Roku", "val": 89, "mins": 25, "revenue": 3.9, "users": "89M accounts", "color": "#6f1ab1", "label": "89M accounts"},
+    ]
 try:
     _human_json = json.dumps(_human_companies, allow_nan=False, default=str)
 except (ValueError, TypeError):
