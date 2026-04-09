@@ -3776,258 +3776,172 @@ _deep_dive("overview", "Explore signals in Narrative & Sentiment")
 _separator()
 
 def _build_attn_html(ad_json_str: str, groupm_json_str: str, human_json_str: str = '[]', logos_json: str = '{}') -> str:
-    # Escape </ sequences in JSON to prevent premature </script> closing
-    _safe_human = human_json_str.replace("</", "<\\/")
-    _safe_logos = logos_json.replace("</", "<\\/")
-    return (
-        """<!DOCTYPE html><html><head><meta charset='utf-8'>
-<style>
-*{box-sizing:border-box;margin:0;padding:0;}
-html,body{background:#020810;color:#e6edf3;font-family:'DM Sans','Montserrat',sans-serif;height:100%;overflow:hidden;}
-#wa-attn-root{position:relative;width:100%;height:520px;background:transparent;overflow:hidden;display:flex;align-items:stretch;}
-.glow-yt,.glow-sp{display:none;}
-#wa-attn-root::before{content:none;}
-#wa-attn-left{position:relative;z-index:2;width:40%;padding:40px 32px;display:flex;flex-direction:column;justify-content:center;flex-shrink:0;}
-.attn-label{color:#4aaeff;font-size:10px;letter-spacing:.22em;text-transform:uppercase;font-weight:700;margin-bottom:14px;}
-.attn-headline{font-family:'Syne','DM Sans',sans-serif;font-size:clamp(28px,3.5vw,44px);font-weight:900;line-height:1.1;color:#e6edf3;margin-bottom:16px;}
-.attn-body{color:#8899aa;font-size:13px;line-height:1.6;margin-bottom:24px;}
-.attn-stat-label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#8899aa;margin-bottom:4px;}
-.attn-stat-val{font-family:'Syne',sans-serif;font-size:clamp(32px,4vw,52px);font-weight:900;color:#ff0033;line-height:1;}
-.attn-legend{margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;}
-.attn-leg-row{display:flex;align-items:center;gap:8px;font-size:13px;color:#8899aa;}
-.attn-leg-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
-#wa-attn-bubbles{position:absolute;right:0;top:0;width:60%;height:100%;z-index:1;}
-.wa-bubble{position:absolute;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default;transform:scale(0);opacity:0;padding:8px;text-align:center;backdrop-filter:blur(8px);transition:transform 0.5s ease, opacity 0.5s ease;}
-.wa-bubble.pop{animation-fill-mode:forwards;}
-.wa-bubble.visible{transform:scale(1);opacity:1;}
-.wa-bubble .bletter{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.25);font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:#ffffff;margin-bottom:3px;}
-.wa-bubble .blogo-wrap{width:42%;height:42%;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:3px;}
-.wa-bubble .blogo-img{width:72%;height:72%;object-fit:contain;}
-.wa-bubble .bname{font-weight:700;text-align:center;line-height:1.2;color:#fff;max-width:88%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;}
-.wa-bubble .busers{font-size:.58em;opacity:.7;color:#fff;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90%;}
-.wa-bubble .brevenue{font-size:.54em;opacity:.85;color:#ff9955;margin-top:1px;white-space:nowrap;font-weight:600;}
-@keyframes floatA{0%,100%{transform:scale(1) translateY(0);}50%{transform:scale(1) translateY(-10px);}}
-@keyframes floatB{0%,100%{transform:scale(1) translateY(0) rotate(0deg);}33%{transform:scale(1) translateY(-7px) rotate(-.4deg);}66%{transform:scale(1) translateY(5px) rotate(.4deg);}}
-@keyframes floatC{0%,100%{transform:scale(1) translateY(0);}50%{transform:scale(1) translateY(-14px);}}
-@keyframes popIn{0%{transform:scale(0);opacity:0;}70%{transform:scale(1.08);opacity:1;}100%{transform:scale(1);opacity:1;}}
-</style></head><body>
-<div id='wa-attn-root'>
-  <div class='glow-yt'></div><div class='glow-sp'></div>
-  <div id='wa-attn-left'>
-    <div class='attn-body'>Each bubble = a platform. Size = subscribers or monthly active users.</div>
-    <div class='attn-stat-label'>YouTube daily</div>
-    <div id='wa-attn-counter' class='attn-stat-val'>0B hours</div>
-    <div class='attn-legend' id='wa-attn-legend'></div>
-  </div>
-  <div id='wa-attn-bubbles'></div>
-</div>
-<script>
-(function _initBubbles(){
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',_run);return;}
-_run();
-function _run(){
-try {
-var RAW="""
-        + _safe_human
-        + """;
-var LOGOS="""
-        + _safe_logos
-        + """;
+    """Build Attention Economy bubble chart as pure server-side HTML + CSS only.
 
-function logoForName(name) {
-  var n = String(name || '').toLowerCase();
-  for (var k in LOGOS) {
-    if (k.toLowerCase() === n) return LOGOS[k];
-  }
-  for (var k in LOGOS) {
-    var kl = k.toLowerCase();
-    if (n.indexOf(kl) !== -1 || kl.indexOf(n.split(/[^a-z]/)[0]) !== -1) return LOGOS[k];
-  }
-  return '';
-}
-var DATA = [];
-if (Array.isArray(RAW) && RAW.length > 0) {
-  DATA = RAW.slice().sort(function(a, b) { return (b.val || 0) - (a.val || 0); });
-}
-if (DATA.length === 0) {
-  DATA = [
-    {name:'YouTube',color:'#FF0033',val:2500,users:'2.5B MAUs',mins:21.9},
-    {name:'Meta \u2013 Facebook',color:'#0866ff',val:2100,users:'2.1B DAUs'},
-    {name:'Meta \u2013 Instagram',color:'#e1306c',val:2000,users:'2.0B MAUs'},
-    {name:'Twitch',color:'#9147FF',val:240,users:'240M MAUs'},
-    {name:'Spotify',color:'#1DB954',val:600,users:'600M MAUs'},
-    {name:'Netflix',color:'#E50914',val:301,users:'301M subs'},
-    {name:'Amazon Prime Video',color:'#FF9900',val:200,users:'200M actives'},
-    {name:'Disney+ / Hulu / ESPN+',color:'#113CCF',val:149,users:'149M subs'},
-    {name:'WBD Max / HBO',color:'#0047ab',val:97,users:'97M subs'},
-    {name:'Paramount+',color:'#0033a0',val:71,users:'71M subs'},
-    {name:'Comcast Peacock',color:'#2563eb',val:35,users:'35M subs'}
-  ].sort(function(a,b){ return b.val-a.val; });
-}
-var maxVal = Math.max.apply(null, DATA.map(function(d){ return d.val || 1; }));
-// Shorten long platform names to fit inside bubble (max 2 meaningful words)
-function shortName(n) {
-  var parts = (n||'').replace(/[/\u2013\u002d]+/g,' ').trim().split(/[ \t\n\r]+/).filter(Boolean);
-  if (!parts.length) return n;
-  var out = parts[0];
-  if (parts.length > 1 && (out+' '+parts[1]).length <= 13) out = out+' '+parts[1];
-  return out.length > 15 ? out.slice(0,14)+'\u2026' : out;
-}
-var ALL_POS = [
-  {l:'3%',  t:'5%'},
-  {l:'52%', t:'2%'},
-  {l:'68%', t:'18%'},
-  {l:'25%', t:'8%'},
-  {l:'42%', t:'44%'},
-  {l:'65%', t:'50%'},
-  {l:'10%', t:'50%'},
-  {l:'30%', t:'68%'},
-  {l:'57%', t:'70%'},
-  {l:'80%', t:'4%'},
-  {l:'76%', t:'36%'},
-  {l:'8%',  t:'28%'},
-  {l:'46%', t:'22%'},
-  {l:'82%', t:'62%'},
-  {l:'18%', t:'80%'},
-  {l:'63%', t:'82%'}
-];
-var FLOATS = ['floatA','floatB','floatC'];
-var bfield = document.getElementById('wa-attn-bubbles');
-var legend = document.getElementById('wa-attn-legend');
-if (!bfield || !legend) {
-  throw new Error('DOM elements not found: bfield=' + !!bfield + ' legend=' + !!legend);
-}
-var ytData = DATA.find(function(d){ return String(d.name||'').toLowerCase().indexOf('youtube') !== -1; });
-var ytHoursB = 1.0;
-if (ytData && ytData.mins) {
-  ytHoursB = ytData.mins * 1e12 / 365 / 60 / 1e9;
-  if (ytHoursB < 0.1) ytHoursB = 1.0;
-}
-var allBubbles = [];
-DATA.forEach(function(item, i) {
-  var normVal = maxVal > 0 ? (item.val || 1) / maxVal : 0.01;
-  /* Reduce inter-bubble gap by 20%: multiplier 112 -> 90 */
-  var size = Math.max(70, Math.round(28 + Math.sqrt(normVal) * 90));
-  var radius = size / 2;
-  var pos = ALL_POS[i] || {l: (5 + (i % 4) * 22) + '%', t: (5 + Math.floor(i / 4) * 30) + '%'};
-  var fs = Math.max(7, Math.min(12, Math.round(size / 11)));
-  var logoB64 = logoForName(item.name);
-  /* Abbreviate name for small bubbles */
-  var displayName;
-  if (radius < 40) {
-    displayName = item.users || shortName(item.name);
-  } else if (radius < 55) {
-    var parts = (item.name||'').replace(/[/\u2013\u002d]+/g,' ').trim().split(/[ \t\n\r]+/).filter(Boolean);
-    displayName = parts[0] || item.name;
-  } else {
-    displayName = shortName(item.name);
-  }
-  var revStr = item.revenue ? '$' + (item.revenue >= 10 ? Math.round(item.revenue) + 'B' : item.revenue.toFixed(1) + 'B') + ' rev' : '';
-  var rpmStr = item.rpm ? '$' + Number(item.rpm).toFixed(4) + '/min' : '';
-  /* Semi-transparent backdrop style for text readability */
-  var backdropStyle = 'text-shadow:0 0 6px rgba(0,0,0,0.8),0 1px 3px rgba(0,0,0,0.9);';
-  var fs2 = Math.max(fs - 3, 6);
-  /* Consistent stack: name -> users (always) -> revenue (if any) -> rpm (if any) */
-  var commonLines = ''
-    + (item.users && radius >= 40 ? '<div class="busers" style="font-size:' + Math.max(fs - 2, 7) + 'px;' + backdropStyle + '">' + item.users + '</div>' : '')
-    + (revStr && radius >= 45 ? '<div class="brevenue" style="font-size:' + fs2 + 'px;' + backdropStyle + '">' + revStr + '</div>' : '')
-    + (rpmStr && radius >= 50 ? '<div class="brevenue" style="font-size:' + fs2 + 'px;opacity:0.8;' + backdropStyle + '">' + rpmStr + '</div>' : '');
-  var innerHtml;
-  if (logoB64) {
-    innerHtml = '<div class="blogo-wrap" style="background:rgba(255,255,255,0.88);">'
-      + '<img class="blogo-img" src="data:image/png;base64,' + logoB64 + '" alt="' + displayName + '">'
-      + '</div>'
-      + '<div class="bname" style="font-size:' + fs + 'px;' + backdropStyle + '">' + displayName + '</div>'
-      + commonLines;
-  } else {
-    var badge = (item.name||'?').replace(/[^A-Za-z0-9]+/g,' ').trim().split(' ').slice(0,2)
-      .map(function(p){ return p.charAt(0).toUpperCase(); }).join('').slice(0,2) || '?';
-    innerHtml = '<div class="bletter">' + badge + '</div>'
-      + '<div class="bname" style="font-size:' + fs + 'px;' + backdropStyle + '">' + displayName + '</div>'
-      + commonLines;
-  }
-  var b = document.createElement('div');
-  b.className = 'wa-bubble';
-  b.style.cssText = 'width:' + size + 'px;height:' + size + 'px;left:' + pos.l + ';top:' + pos.t
-    + ';background:radial-gradient(circle at 35% 35%,' + item.color + 'cc,' + item.color + '66)'
-    + ';border:1.5px solid ' + item.color + '55;box-shadow:0 0 ' + Math.round(size / 3) + 'px ' + item.color + '44;cursor:pointer;';
-  b.innerHTML = innerHtml;
-  b.title = 'Explore ' + item.name + ' on Editorial';
-  (function(platformName){ b.addEventListener('click', function(){ try{ var bUrl=window.parent.location.pathname.replace(/[/][^/]*$/,'/'); window.parent.location.href = bUrl+'Editorial?company=' + encodeURIComponent(platformName); }catch(e){} }); })(item.name);
-  bfield.appendChild(b);
-  b._idx = i;
-  allBubbles.push({el:b, idx:i, floatAnim:FLOATS[i%3], floatDur:3000+i*220});
-  var row = document.createElement('div');
-  row.className = 'attn-leg-row';
-  row.innerHTML = '<div class="attn-leg-dot" style="background:' + item.color + ';"></div><span>' + item.name + (item.users ? ' \u2014 ' + item.users : '') + '</span>';
-  legend.appendChild(row);
-});
-/* Animate bubbles in — multiple fallbacks for iframe timing */
-function animateBubbles() {
-  allBubbles.forEach(function(info) {
-    var delay = info.idx * 80;
-    setTimeout(function() {
-      var el = info.el;
-      el.style.animation = 'popIn 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards,' + info.floatAnim + ' ' + info.floatDur + 'ms ease-in-out ' + (600 + info.idx * 80) + 'ms infinite';
-      el.classList.add('pop');
-    }, delay);
-  });
-  /* Safety nets: force-show bubbles if animations fail */
-  [1500, 3000, 5000].forEach(function(ms) {
-    setTimeout(function() {
-      allBubbles.forEach(function(info) {
-        if (!info.el.classList.contains('visible')) {
-          var cs = window.getComputedStyle(info.el);
-          var op = parseFloat(cs.opacity);
-          if (isNaN(op) || op < 0.5) {
-            info.el.style.transform = 'scale(1)';
-            info.el.style.opacity = '1';
-            info.el.classList.add('visible');
-            info.el.style.animation = info.floatAnim + ' ' + info.floatDur + 'ms ease-in-out infinite';
-          }
-        }
-      });
-    }, ms);
-  });
-}
-/* Try multiple entry points — iframes can be unreliable with rAF */
-if (typeof requestAnimationFrame === 'function') {
-  requestAnimationFrame(animateBubbles);
-} else {
-  setTimeout(animateBubbles, 100);
-}
-/* Extra fallback: also run on window load */
-window.addEventListener('load', function() { setTimeout(animateBubbles, 200); });
-function countUp(el, target, dur) {
-  var start = performance.now();
-  function step(now) {
-    var p = Math.min((now - start) / dur, 1);
-    var ease = 1 - Math.pow(1 - p, 3);
-    var value = ease * target;
-    el.textContent = (p < 1 ? value.toFixed(1) : Math.round(value).toString()) + 'B hours';
-    if (p < 1) requestAnimationFrame(step);
-  }
-  requestAnimationFrame(step);
-}
-setTimeout(function(){ countUp(document.getElementById('wa-attn-counter'), ytHoursB, 2000); }, 400);
-/* Fallback: if counter still shows 0 after 4s, set it directly */
-setTimeout(function(){
-  var ctr = document.getElementById('wa-attn-counter');
-  if (ctr && ctr.textContent.indexOf('0B') === 0) {
-    ctr.textContent = Math.round(ytHoursB) + 'B hours';
-  }
-}, 4000);
-} catch(err) {
-  console.error('Bubble chart error:', err);
-  var _errEl = document.getElementById('wa-attn-bubbles');
-  if (_errEl) _errEl.innerHTML = '<div style="color:#ff5b1f;padding:40px 20px;font-size:14px;font-family:monospace;"><b>Bubble chart error</b><br>' + String(err.message||err) + '<br><br><span style="opacity:0.5;">RAW type: ' + typeof RAW + ', length: ' + (Array.isArray(RAW)?RAW.length:'N/A') + '</span></div>';
-  var _ctrEl = document.getElementById('wa-attn-counter');
-  if (_ctrEl) _ctrEl.textContent = 'Error';
-}
-}})();
-</script>
+    All bubble <div>s are generated in Python — NO JavaScript DOM creation.
+    CSS-only animations (popIn + float). This approach works even when
+    HuggingFace / Streamlit iframe CSP blocks inline script execution.
+    """
+    import json as _json_mod
+    import math as _math_mod2
+
+    # Parse data — try dynamic, fall back to hardcoded
+    _items: list[dict] = []
+    try:
+        _parsed = _json_mod.loads(human_json_str)
+        if isinstance(_parsed, list):
+            _items = [d for d in _parsed if isinstance(d, dict) and isinstance(d.get("val"), (int, float)) and d["val"] > 0]
+    except Exception:
+        pass
+
+    if not _items:
+        _items = [
+            {"name": "YouTube", "color": "#FF0033", "val": 2500, "users": "2.5B MAUs", "mins": 21.9, "revenue": 36.1},
+            {"name": "Meta \u2013 Facebook", "color": "#0866ff", "val": 2100, "users": "2.1B DAUs"},
+            {"name": "Meta \u2013 Instagram", "color": "#e1306c", "val": 2000, "users": "2.0B MAUs"},
+            {"name": "Spotify", "color": "#1DB954", "val": 675, "users": "675M MAUs", "revenue": 15.7},
+            {"name": "Netflix", "color": "#E50914", "val": 301, "users": "301M subs", "revenue": 33.7},
+            {"name": "Amazon Prime Video", "color": "#FF9900", "val": 200, "users": "200M actives", "revenue": 10.2},
+            {"name": "Disney+", "color": "#113CCF", "val": 174, "users": "174M subs", "revenue": 14.5},
+            {"name": "WBD Max", "color": "#0047ab", "val": 116, "users": "116M subs", "revenue": 10.2},
+            {"name": "Roku", "color": "#6f1ab1", "val": 89, "users": "89M accounts", "revenue": 3.9},
+            {"name": "Paramount+", "color": "#0033a0", "val": 77, "users": "77M subs", "revenue": 6.8},
+            {"name": "Peacock", "color": "#2563eb", "val": 35, "users": "35M subs"},
+        ]
+
+    # Sort descending by val
+    _items.sort(key=lambda d: d.get("val", 0), reverse=True)
+    _max_val = max((d.get("val", 1) for d in _items), default=1)
+
+    # Positions for up to 16 bubbles
+    _positions = [
+        ("3%", "5%"), ("52%", "2%"), ("68%", "18%"), ("25%", "8%"),
+        ("42%", "44%"), ("65%", "50%"), ("10%", "50%"), ("30%", "68%"),
+        ("57%", "70%"), ("80%", "4%"), ("76%", "36%"), ("8%", "28%"),
+        ("46%", "22%"), ("82%", "62%"), ("18%", "80%"), ("63%", "82%"),
+    ]
+    _floats = ["floatA", "floatB", "floatC"]
+
+    def _short_name(n: str) -> str:
+        parts = n.replace("/", " ").replace("\u2013", " ").replace("-", " ").split()
+        if not parts:
+            return n
+        out = parts[0]
+        if len(parts) > 1 and len(out + " " + parts[1]) <= 13:
+            out = out + " " + parts[1]
+        return out[:14] + "\u2026" if len(out) > 15 else out
+
+    def _badge(n: str) -> str:
+        import re as _re2
+        words = _re2.sub(r"[^A-Za-z0-9]+", " ", n).strip().split()[:2]
+        return "".join(w[0].upper() for w in words if w)[:2] or "?"
+
+    # YouTube hours stat
+    _yt = next((d for d in _items if "youtube" in d.get("name", "").lower()), None)
+    _yt_hours = "1B hours"
+    if _yt and _yt.get("mins"):
+        _h = _yt["mins"] * 1e12 / 365 / 60 / 1e9
+        if _h >= 0.1:
+            _yt_hours = f"{_h:.1f}B hours"
+
+    # Build bubble divs server-side
+    _bubble_divs = []
+    _legend_rows = []
+    for i, item in enumerate(_items[:16]):
+        norm = (item.get("val", 1)) / _max_val if _max_val > 0 else 0.01
+        size = max(70, round(28 + _math_mod2.sqrt(norm) * 90))
+        radius = size / 2
+        pos = _positions[i] if i < len(_positions) else (f"{5 + (i % 4) * 22}%", f"{5 + (i // 4) * 30}%")
+        fs = max(7, min(12, round(size / 11)))
+        color = item.get("color", "#4aaeff")
+        name = item.get("name", "")
+        users = item.get("users", "")
+        revenue = item.get("revenue")
+        rpm = item.get("rpm")
+        float_anim = _floats[i % 3]
+        float_dur = 3000 + i * 220
+        delay_pop = i * 0.08
+        delay_float = 0.6 + i * 0.08
+
+        # Display name
+        if radius < 40:
+            display = users or _short_name(name)
+        elif radius < 55:
+            parts = name.replace("/", " ").replace("\u2013", " ").replace("-", " ").split()
+            display = parts[0] if parts else name
+        else:
+            display = _short_name(name)
+
+        badge = _badge(name)
+        backdrop = "text-shadow:0 0 6px rgba(0,0,0,0.8),0 1px 3px rgba(0,0,0,0.9);"
+        fs2 = max(fs - 3, 6)
+
+        # Inner content
+        inner = f'<div class="bletter">{badge}</div>'
+        inner += f'<div class="bname" style="font-size:{fs}px;{backdrop}">{display}</div>'
+        if users and radius >= 40:
+            inner += f'<div class="busers" style="font-size:{max(fs-2,7)}px;{backdrop}">{users}</div>'
+        if revenue and radius >= 45:
+            rev_s = f"${round(revenue)}B" if revenue >= 10 else f"${revenue:.1f}B"
+            inner += f'<div class="brevenue" style="font-size:{fs2}px;{backdrop}">{rev_s} rev</div>'
+        if rpm and radius >= 50:
+            inner += f'<div class="brevenue" style="font-size:{fs2}px;opacity:0.8;{backdrop}">${rpm:.4f}/min</div>'
+
+        glow_size = round(size / 3)
+        style = (
+            f"width:{size}px;height:{size}px;left:{pos[0]};top:{pos[1]};"
+            f"background:radial-gradient(circle at 35% 35%,{color}cc,{color}66);"
+            f"border:1.5px solid {color}55;box-shadow:0 0 {glow_size}px {color}44;"
+            f"animation:popIn 0.55s cubic-bezier(0.34,1.56,0.64,1) {delay_pop:.2f}s forwards,"
+            f"{float_anim} {float_dur}ms ease-in-out {delay_float:.2f}s infinite;"
+        )
+
+        _bubble_divs.append(f'<div class="wa-bubble" style="{style}">{inner}</div>')
+
+        # Legend row
+        _leg_label = f"{name} \u2014 {users}" if users else name
+        _legend_rows.append(
+            f'<div class="attn-leg-row">'
+            f'<div class="attn-leg-dot" style="background:{color};"></div>'
+            f'<span>{_leg_label}</span></div>'
+        )
+
+    _bubbles_html = "\n".join(_bubble_divs)
+    _legend_html = "\n".join(_legend_rows)
+
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+*{{box-sizing:border-box;margin:0;padding:0;}}
+html,body{{background:#020810;color:#e6edf3;font-family:'DM Sans','Montserrat',sans-serif;height:100%;overflow:hidden;}}
+#wa-attn-root{{position:relative;width:100%;height:520px;background:transparent;overflow:hidden;display:flex;align-items:stretch;}}
+#wa-attn-left{{position:relative;z-index:2;width:40%;padding:40px 32px;display:flex;flex-direction:column;justify-content:center;flex-shrink:0;}}
+.attn-body{{color:#8899aa;font-size:13px;line-height:1.6;margin-bottom:24px;}}
+.attn-stat-label{{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#8899aa;margin-bottom:4px;}}
+.attn-stat-val{{font-family:'Syne',sans-serif;font-size:clamp(32px,4vw,52px);font-weight:900;color:#ff0033;line-height:1;}}
+.attn-legend{{margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;}}
+.attn-leg-row{{display:flex;align-items:center;gap:8px;font-size:13px;color:#8899aa;}}
+.attn-leg-dot{{width:12px;height:12px;border-radius:50%;flex-shrink:0;}}
+#wa-attn-bubbles{{position:absolute;right:0;top:0;width:60%;height:100%;z-index:1;}}
+.wa-bubble{{position:absolute;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:default;transform:scale(0);opacity:0;padding:8px;text-align:center;backdrop-filter:blur(8px);animation-fill-mode:forwards;}}
+.wa-bubble .bletter{{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.25);font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:#ffffff;margin-bottom:3px;}}
+.wa-bubble .bname{{font-weight:700;text-align:center;line-height:1.2;color:#fff;max-width:88%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;}}
+.wa-bubble .busers{{font-size:.58em;opacity:.7;color:#fff;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90%;}}
+.wa-bubble .brevenue{{font-size:.54em;opacity:.85;color:#ff9955;margin-top:1px;white-space:nowrap;font-weight:600;}}
+@keyframes floatA{{0%,100%{{transform:scale(1) translateY(0);}}50%{{transform:scale(1) translateY(-10px);}}}}
+@keyframes floatB{{0%,100%{{transform:scale(1) translateY(0) rotate(0deg);}}33%{{transform:scale(1) translateY(-7px) rotate(-.4deg);}}66%{{transform:scale(1) translateY(5px) rotate(.4deg);}}}}
+@keyframes floatC{{0%,100%{{transform:scale(1) translateY(0);}}50%{{transform:scale(1) translateY(-14px);}}}}
+@keyframes popIn{{0%{{transform:scale(0);opacity:0;}}70%{{transform:scale(1.08);opacity:1;}}100%{{transform:scale(1);opacity:1;}}}}
+</style></head><body>
+<div id="wa-attn-root">
+  <div id="wa-attn-left">
+    <div class="attn-body">Each bubble = a platform. Size = subscribers or monthly active users.</div>
+    <div class="attn-stat-label">YouTube daily</div>
+    <div class="attn-stat-val">{_yt_hours}</div>
+    <div class="attn-legend">{_legend_html}</div>
+  </div>
+  <div id="wa-attn-bubbles">{_bubbles_html}</div>
+</div>
 </body></html>"""
-    )
 
 def _safe_float(v) -> float:
     import math
