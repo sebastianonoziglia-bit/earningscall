@@ -548,7 +548,7 @@ def _inject_page_css() -> None:
 
 
 def _render_prediction_cards(predictions: pd.DataFrame) -> None:
-    top_cards = predictions.sort_values(["confidence", "composite_score"], ascending=[False, False]).head(6)
+    top_cards = predictions.sort_values(["confidence", "composite_score"], ascending=[False, False])
     cols = st.columns(3, gap="medium")
     for idx, row in enumerate(top_cards.itertuples(index=False)):
         col = cols[idx % 3]
@@ -586,7 +586,7 @@ def _render_prediction_cards(predictions: pd.DataFrame) -> None:
 
 def _build_layer_chart(predictions: pd.DataFrame, metric: str) -> go.Figure:
     scoped = predictions[predictions["metric"] == metric].copy()
-    scoped = scoped.sort_values("confidence", ascending=True).tail(10)
+    scoped = scoped.sort_values("confidence", ascending=True)
 
     fig = go.Figure()
     fig.add_trace(
@@ -628,7 +628,7 @@ def _build_layer_chart(predictions: pd.DataFrame, metric: str) -> go.Figure:
     )
     fig.update_layout(
         barmode="group",
-        height=430,
+        height=max(430, len(scoped) * 36),
         margin=dict(l=10, r=10, t=40, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -798,7 +798,7 @@ def main() -> None:
         company_filter = st.multiselect(
             "Companies",
             options=available_companies,
-            default=available_companies[:8],
+            default=available_companies,
         )
 
     filtered = predictions[predictions["metric"] == metric_filter].copy()
@@ -811,35 +811,41 @@ def main() -> None:
         st.plotly_chart(_build_layer_chart(filtered, metric_filter), use_container_width=True, config={"displayModeBar": False})
         st.caption("Signal = transcript momentum · Market = price consensus/Polymarket · Fundamental = financial trajectory · ◆ = weighted composite")
 
-    st.markdown("<div class='oracle-section-label' style='margin-top:6px;'>Top Oracle Dials</div>", unsafe_allow_html=True)
-    _render_prediction_cards(filtered)
+    # ══════════════════════════════════════════════════════════════════
+    # Tabbed Analysis Menu — choose what to analyze
+    # ══════════════════════════════════════════════════════════════════
+    st.markdown("---")
+    oracle_tabs = st.tabs([
+        "🎯 Predictions",
+        "📊 Revenue Simulator",
+        "🌍 Country Ad Spend",
+        "🧠 Intelligence Layer",
+        "🐟 MiroFish Simulator",
+    ])
 
-    st.markdown("<div class='oracle-section-label' style='margin-top:14px;'>Prediction Table</div>", unsafe_allow_html=True)
-    table_frame = _build_table_frame(filtered.sort_values(["confidence", "composite_score"], ascending=[False, False]), factors)
-    st.markdown("<div class='oracle-table-shell'>", unsafe_allow_html=True)
-    st.dataframe(table_frame, use_container_width=True, hide_index=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    with oracle_tabs[0]:
+        st.markdown("<div class='oracle-section-label' style='margin-top:6px;'>Oracle Dials</div>", unsafe_allow_html=True)
+        _render_prediction_cards(filtered)
 
-    # ──────────────────────────────────────────────────────────────────
-    # Revenue Simulator — YTD quarterly revenue estimation
-    # ──────────────────────────────────────────────────────────────────
-    _render_revenue_simulator()
+        st.markdown("<div class='oracle-section-label' style='margin-top:14px;'>Prediction Table</div>", unsafe_allow_html=True)
+        table_frame = _build_table_frame(filtered.sort_values(["confidence", "composite_score"], ascending=[False, False]), factors)
+        st.markdown("<div class='oracle-table-shell'>", unsafe_allow_html=True)
+        st.dataframe(table_frame, use_container_width=True, hide_index=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # ──────────────────────────────────────────────────────────────────
-    # Country Ad Spend Predictor
-    # ──────────────────────────────────────────────────────────────────
-    _render_country_predictor()
+    with oracle_tabs[1]:
+        _render_revenue_simulator()
 
-    # ──────────────────────────────────────────────────────────────────
-    # Intelligence Layer — Cross-source derived metrics
-    # ──────────────────────────────────────────────────────────────────
-    _render_intelligence_section()
+    with oracle_tabs[2]:
+        _render_country_predictor()
 
-    # ──────────────────────────────────────────────────────────────────
-    # MiroFish Ad-Spend Simulator — swarm prediction panel
-    # ──────────────────────────────────────────────────────────────────
-    _render_mirofish_panel()
+    with oracle_tabs[3]:
+        _render_intelligence_section()
 
+    with oracle_tabs[4]:
+        _render_mirofish_panel()
+
+    # Metadata at the very bottom
     with st.expander("Oracle Snapshot Metadata", expanded=False):
         st.json(metadata)
 
@@ -856,7 +862,6 @@ def _render_revenue_simulator() -> None:
     except ImportError:
         return
 
-    st.markdown("---")
     st.markdown(
         """
         <div style="margin-top:10px;margin-bottom:6px;">
@@ -889,7 +894,7 @@ def _render_revenue_simulator() -> None:
 
     try:
         excel_path = resolve_financial_data_xlsx()
-        source_stamp = get_workbook_source_stamp()
+        source_stamp = get_workbook_source_stamp(excel_path)
         results = estimate_all_companies(excel_path, source_stamp, through_quarter=through_q)
     except Exception as e:
         st.warning(f"Revenue simulator error: {e}")
@@ -962,7 +967,6 @@ def _render_country_predictor() -> None:
     except ImportError:
         return
 
-    st.markdown("---")
     st.markdown(
         """
         <div style="margin-top:10px;margin-bottom:6px;">
@@ -1116,7 +1120,6 @@ def _render_intelligence_section() -> None:
     if not derived:
         return
 
-    st.markdown("---")
     st.markdown(
         """
         <div style="margin-top:10px;margin-bottom:6px;">
@@ -1257,7 +1260,6 @@ def _render_mirofish_panel() -> None:
         st.warning("MiroFish engine not available. Check that `app/utils/mirofish_engine.py` exists.")
         return
 
-    st.markdown("---")
     st.markdown(
         """
         <div style="margin-top:10px;margin-bottom:6px;">
