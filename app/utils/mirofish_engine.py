@@ -5,6 +5,9 @@ Clean-room reimplementation of the MiroFish 5-phase architecture
 (Graph → Persona → Simulation → Report → Chat), specialized for
 global advertising-spend forecasting against GroupM baselines.
 
+Uses DeepSeek (preferred) or OpenAI via the same client as Genie — set
+DEEPSEEK_API_KEY in .env or HF secrets. No Anthropic key needed.
+
 Phases:
   1. build_ad_market_graph  — ingest workbook ad-spend data into a networkx graph
   2. seed_ad_agents         — generate N personas with ad-industry biases
@@ -102,11 +105,13 @@ SCENARIO_PRESETS = {
     "ctv_saturation": "CTV ad load reaches viewer tolerance limits. AVOD churn spikes. Linear TV stabilizes as CTV growth plateaus.",
 }
 
-# Cost constants (Anthropic Claude pricing — haiku for agents, sonnet for reports)
-HAIKU_INPUT_COST = 0.25 / 1_000_000   # $0.25 per 1M input tokens
-HAIKU_OUTPUT_COST = 1.25 / 1_000_000  # $1.25 per 1M output tokens
-SONNET_INPUT_COST = 3.00 / 1_000_000
-SONNET_OUTPUT_COST = 15.00 / 1_000_000
+# Cost constants — DeepSeek pricing (primary), falls back to OpenAI/Anthropic
+# DeepSeek V3: $0.27/M input, $1.10/M output (cache miss)
+DEEPSEEK_INPUT_COST = 0.27 / 1_000_000
+DEEPSEEK_OUTPUT_COST = 1.10 / 1_000_000
+# Fallback: OpenAI GPT-4o-mini pricing
+GPT4O_MINI_INPUT_COST = 0.15 / 1_000_000
+GPT4O_MINI_OUTPUT_COST = 0.60 / 1_000_000
 MAX_COST_PER_RUN = 2.00  # hard abort
 
 
@@ -423,48 +428,77 @@ Round {round_num}: Give your 2-3 sentence forecast reaction for {horizon}. State
 Be specific and numerical. Respond ONLY with your forecast statement, no preamble."""
 
 
-def _call_claude_haiku(prompt: str, system: str = "") -> tuple[str, float]:
-    """Call Claude Haiku. Returns (response_text, cost_usd)."""
+def _get_llm_client():
+    """Get the shared OpenAI-compatible client (DeepSeek preferred, else OpenAI).
+
+    Reuses the exact same resolution logic as Genie — no extra keys needed.
+    """
     try:
-        import anthropic
-        client = anthropic.Anthropic()
-        messages = [{"role": "user", "content": prompt}]
-        kwargs: dict[str, Any] = {
-            "model": "claude-haiku-4-20250414",
-            "max_tokens": 200,
-            "messages": messages,
-        }
+        from utils.genie_ai import get_openai_client, _default_model
+        return get_openai_client(), _default_model()
+    except ImportError:
+        pass
+    # Fallback: try direct env vars
+    import os
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return None, ""
+    ds_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    if ds_key:
+        return OpenAI(api_key=ds_key, base_url="https://api.deepseek.com"), "deepseek-chat"
+    oai_key = os.environ.get("OPENAI_API_KEY", "")
+    if oai_key:
+        return OpenAI(api_key=oai_key), "gpt-4o-mini"
+    return None, ""
+
+
+def _call_llm_short(prompt: str, system: str = "") -> tuple[str, float]:
+    """Call LLM for agent reactions (short output). Returns (text, cost_usd)."""
+    client, model = _get_llm_client()
+    if client is None:
+        return "[No API key configured — set DEEPSEEK_API_KEY in .env or HF secrets]", 0.0
+    try:
+        messages = []
         if system:
-            kwargs["system"] = system
-        response = client.messages.create(**kwargs)
-        text = response.content[0].text if response.content else ""
-        inp = response.usage.input_tokens
-        out = response.usage.output_tokens
-        cost = (inp * HAIKU_INPUT_COST) + (out * HAIKU_OUTPUT_COST)
-        return text, cost
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=200,
+            temperature=0.8,
+        )
+        text = response.choices[0].message.content or ""
+        inp = getattr(response.usage, "prompt_tokens", 0) or 0
+        out = getattr(response.usage, "completion_tokens", 0) or 0
+        cost = (inp * DEEPSEEK_INPUT_COST) + (out * DEEPSEEK_OUTPUT_COST)
+        return text.strip(), cost
     except Exception as e:
         return f"[Agent error: {e}]", 0.0
 
 
-def _call_claude_sonnet(prompt: str, system: str = "") -> tuple[str, float]:
-    """Call Claude Sonnet for report generation. Returns (response_text, cost_usd)."""
+def _call_llm_long(prompt: str, system: str = "") -> tuple[str, float]:
+    """Call LLM for report generation (longer output). Returns (text, cost_usd)."""
+    client, model = _get_llm_client()
+    if client is None:
+        return "[No API key configured — set DEEPSEEK_API_KEY in .env or HF secrets]", 0.0
     try:
-        import anthropic
-        client = anthropic.Anthropic()
-        messages = [{"role": "user", "content": prompt}]
-        kwargs: dict[str, Any] = {
-            "model": "claude-sonnet-4-20250514",
-            "max_tokens": 2000,
-            "messages": messages,
-        }
+        messages = []
         if system:
-            kwargs["system"] = system
-        response = client.messages.create(**kwargs)
-        text = response.content[0].text if response.content else ""
-        inp = response.usage.input_tokens
-        out = response.usage.output_tokens
-        cost = (inp * SONNET_INPUT_COST) + (out * SONNET_OUTPUT_COST)
-        return text, cost
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=2000,
+            temperature=0.4,
+        )
+        text = response.choices[0].message.content or ""
+        inp = getattr(response.usage, "prompt_tokens", 0) or 0
+        out = getattr(response.usage, "completion_tokens", 0) or 0
+        cost = (inp * DEEPSEEK_INPUT_COST) + (out * DEEPSEEK_OUTPUT_COST)
+        return text.strip(), cost
     except Exception as e:
         return f"[Report error: {e}]", 0.0
 
@@ -489,12 +523,12 @@ def _extract_growth_estimate(text: str) -> float | None:
 
 
 def estimate_run_cost(n_agents: int, n_rounds: int) -> float:
-    """Estimate cost before running. Returns USD."""
+    """Estimate cost before running. Returns USD (DeepSeek pricing)."""
     # Each agent produces ~150 output tokens per round, reads ~600 input tokens
     agent_calls = n_agents * n_rounds
-    agent_cost = agent_calls * (600 * HAIKU_INPUT_COST + 150 * HAIKU_OUTPUT_COST)
-    # One report call (sonnet)
-    report_cost = 3000 * SONNET_INPUT_COST + 1500 * SONNET_OUTPUT_COST
+    agent_cost = agent_calls * (600 * DEEPSEEK_INPUT_COST + 150 * DEEPSEEK_OUTPUT_COST)
+    # One report call (longer)
+    report_cost = 3000 * DEEPSEEK_INPUT_COST + 1500 * DEEPSEEK_OUTPUT_COST
     return agent_cost + report_cost
 
 
@@ -536,7 +570,7 @@ def run_ad_simulation(
                 break
 
             prompt = _build_agent_prompt(agent, context, social_feed, scenario_text, r)
-            response, cost = _call_claude_haiku(prompt)
+            response, cost = _call_llm_short(prompt)
             total_cost += cost
 
             # Extract growth estimate
@@ -689,7 +723,7 @@ TASK: Return a JSON object with exactly these keys:
 
 Return ONLY valid JSON, no markdown fences, no extra text."""
 
-    report_text, report_cost = _call_claude_sonnet(report_prompt)
+    report_text, report_cost = _call_llm_long(report_prompt)
     total_cost = sim_results.get("total_cost", 0.0) + report_cost
 
     # ── Parse report JSON ────────────────────────────────────────────

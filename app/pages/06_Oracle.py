@@ -807,7 +807,7 @@ def _render_mirofish_panel() -> None:
             MiroFish Ad-Spend Simulator
           </span>
           <span style="font-size:0.75rem;color:#94a3b8;margin-left:12px;">
-            Multi-agent swarm forecasting · Powered by Claude
+            Multi-agent swarm forecasting · Powered by DeepSeek
           </span>
         </div>
         <p style="font-size:0.82rem;color:#94a3b8;margin-top:0;margin-bottom:14px;">
@@ -873,7 +873,7 @@ def _render_mirofish_panel() -> None:
 
     # Cost estimate
     est_cost = estimate_run_cost(n_agents, n_rounds)
-    st.caption(f"Estimated cost: **${est_cost:.2f}** · {n_agents} agents × {n_rounds} rounds · Requires `ANTHROPIC_API_KEY` in environment")
+    st.caption(f"Estimated cost: **${est_cost:.2f}** · {n_agents} agents × {n_rounds} rounds · Uses same DeepSeek/OpenAI key as Genie")
 
     # ── Run button ───────────────────────────────────────────────────
     run_clicked = st.button(
