@@ -19,9 +19,17 @@ from utils.page_transition import apply_page_transition_fix
 apply_page_transition_fix()
 
 from utils.header import render_header
-from utils.oracle_engine import build_oracle_snapshot, persist_oracle_snapshot
 from utils.styles import load_common_styles
 
+# Lazy-import oracle_engine — if it fails (missing dep, path issue on HF),
+# the page still renders and shows a clear error instead of crashing to Home.
+_oracle_import_error = ""
+try:
+    from utils.oracle_engine import build_oracle_snapshot, persist_oracle_snapshot
+except Exception as _exc:
+    _oracle_import_error = f"{type(_exc).__name__}: {_exc}"
+    build_oracle_snapshot = None  # type: ignore
+    persist_oracle_snapshot = None  # type: ignore
 
 load_common_styles()
 st.session_state["active_nav_page"] = "oracle"
@@ -31,6 +39,8 @@ render_header()
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def get_oracle_snapshot(use_polymarket: bool) -> dict:
+    if build_oracle_snapshot is None:
+        return {}
     return build_oracle_snapshot(use_polymarket=use_polymarket)
 
 
@@ -672,6 +682,14 @@ def _build_table_frame(predictions: pd.DataFrame, factors: pd.DataFrame) -> pd.D
 
 def main() -> None:
     _inject_page_css()
+
+    if _oracle_import_error:
+        st.error(
+            f"**Oracle engine failed to import.**\n\n"
+            f"`{_oracle_import_error}`\n\n"
+            "Check Space logs for details."
+        )
+        return
 
     st.markdown(
         """

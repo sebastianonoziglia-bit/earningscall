@@ -10,5 +10,8 @@ python-dateutil
 yfinance
 vaderSentiment
 scipy
-anthropic
 fpdf2
+networkx
+google-api-python-client
+google-auth
+psycopg2-binary

@@ -3514,9 +3514,14 @@ try:
         "Roku", "Spotify", "Warner Bros. Discovery", "Samsung", "Tencent",
     ]
 
-    # Single batch call reads the Transcripts sheet ONCE instead of 14 times
-    _fi_all = extract_forward_looking_signals_batch(
-        excel_path, companies=tuple(_FI_COMPANIES), year=int(selected_year), max_signals_per_company=1
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def _cached_forward_signals(path: str, companies: tuple, year: int):
+        return extract_forward_looking_signals_batch(
+            path, companies=companies, year=year, max_signals_per_company=1
+        )
+
+    _fi_all = _cached_forward_signals(
+        excel_path, companies=tuple(_FI_COMPANIES), year=int(selected_year),
     )
 
     _fi_cards: list[dict] = []
