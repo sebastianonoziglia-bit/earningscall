@@ -430,7 +430,81 @@ def _read_annual_metrics_cached(path_str: str, mtime_ns: int) -> pd.DataFrame:
     return metrics
 
 
+def _load_annual_metrics_supabase() -> pd.DataFrame:
+    """Supabase-first read for annual metrics + employees + ad revenue."""
+    try:
+        from utils.supabase_client import is_configured, fetch_table_paginated
+        if not is_configured():
+            return pd.DataFrame()
+
+        # Financial metrics
+        metrics = fetch_table_paginated("financial_metrics_yearly", order="year.asc")
+        if metrics.empty:
+            return pd.DataFrame()
+        metrics.columns = [str(c).strip().lower() for c in metrics.columns]
+        metrics["company"] = metrics["company"].apply(canonical_company)
+        metrics = metrics[metrics["company"] != "MFE"].copy()
+        for col in ["year", "revenue", "operating_income", "net_income",
+                     "cost_of_revenue", "rd", "capex", "total_assets",
+                     "market_cap", "cash_balance", "debt"]:
+            if col in metrics.columns:
+                metrics[col] = pd.to_numeric(metrics[col], errors="coerce")
+        # Supabase uses "rd" not "r_and_d"
+        if "rd" in metrics.columns and "r_and_d" not in metrics.columns:
+            metrics = metrics.rename(columns={"rd": "r_and_d"})
+        metrics = metrics.dropna(subset=["company", "year", "revenue"]).copy()
+        metrics["year"] = metrics["year"].astype(int)
+        metrics["operating_margin"] = np.where(
+            metrics["revenue"].replace(0, np.nan).notna(),
+            metrics["operating_income"] / metrics["revenue"],
+            np.nan,
+        )
+
+        # Employees
+        try:
+            emp = fetch_table_paginated("company_employees", order="year.asc")
+            if not emp.empty:
+                emp.columns = [str(c).strip().lower() for c in emp.columns]
+                emp["company"] = emp["company"].apply(canonical_company)
+                emp["year"] = pd.to_numeric(emp["year"], errors="coerce")
+                emp["employee_count"] = pd.to_numeric(emp["employee_count"], errors="coerce")
+                emp = emp.dropna(subset=["company", "year", "employee_count"]).copy()
+                emp["year"] = emp["year"].astype(int)
+                metrics = metrics.merge(emp[["company", "year", "employee_count"]], on=["company", "year"], how="left")
+            else:
+                metrics["employee_count"] = np.nan
+        except Exception:
+            metrics["employee_count"] = np.nan
+
+        # Ad revenue
+        try:
+            ad = fetch_table_paginated("company_advertising_revenue", order="year.asc")
+            if not ad.empty:
+                ad.columns = [str(c).strip().lower() for c in ad.columns]
+                ad["company"] = ad["company"].apply(canonical_company)
+                ad["year"] = pd.to_numeric(ad["year"], errors="coerce")
+                if "ad_revenue" in ad.columns:
+                    ad = ad.rename(columns={"ad_revenue": "advertising_revenue_b"})
+                ad["advertising_revenue_b"] = pd.to_numeric(ad.get("advertising_revenue_b"), errors="coerce")
+                ad = ad.dropna(subset=["company", "year", "advertising_revenue_b"]).copy()
+                ad["year"] = ad["year"].astype(int)
+                metrics = metrics.merge(ad[["company", "year", "advertising_revenue_b"]], on=["company", "year"], how="left")
+            else:
+                metrics["advertising_revenue_b"] = np.nan
+        except Exception:
+            metrics["advertising_revenue_b"] = np.nan
+
+        return metrics.sort_values(["company", "year"]).reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
+
 def load_annual_metrics_frame() -> pd.DataFrame:
+    # Supabase first
+    df = _load_annual_metrics_supabase()
+    if not df.empty:
+        return df
+    # Fallback: xlsx
     workbook_path = _latest_local_workbook()
     if workbook_path is None:
         return pd.DataFrame()
@@ -493,7 +567,41 @@ def _read_daily_prices_cached(path_str: str, mtime_ns: int) -> pd.DataFrame:
     return daily_prices.sort_values(["company", "date"]).reset_index(drop=True)
 
 
+def _load_daily_prices_supabase() -> pd.DataFrame:
+    """Supabase-first read for daily stock prices."""
+    try:
+        from utils.supabase_client import is_configured, fetch_table_paginated
+        if not is_configured():
+            return pd.DataFrame()
+        daily = fetch_table_paginated(
+            "stock_daily",
+            select="date,asset,tag,price,market_cap",
+            order="date.asc",
+            max_rows=50_000,
+        )
+        if daily.empty:
+            return pd.DataFrame()
+        daily = daily.copy()
+        daily["company"] = [
+            canonical_company(infer_company_label(str(a), str(t)))
+            for a, t in zip(daily.get("asset", []), daily.get("tag", []))
+        ]
+        daily["date"] = pd.to_datetime(daily["date"], errors="coerce")
+        daily["price"] = pd.to_numeric(daily["price"], errors="coerce")
+        daily["market_cap"] = pd.to_numeric(daily.get("market_cap"), errors="coerce")
+        daily = daily.dropna(subset=["date", "price"]).copy()
+        daily = daily[daily["company"].astype(str).str.strip() != ""].copy()
+        return daily.sort_values(["company", "date"]).reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
+
 def load_daily_prices_frame() -> pd.DataFrame:
+    # Supabase first
+    df = _load_daily_prices_supabase()
+    if not df.empty:
+        return df
+    # Fallback: xlsx
     workbook_path = _latest_local_workbook()
     if workbook_path is None:
         return pd.DataFrame()
