@@ -3506,8 +3506,6 @@ _deep_dive("earnings", "See full earnings breakdown")
 # Beat 5.5 — Forward Intelligence CEO Carousel
 # ═══════════════════════════════════════════════════════════════════════════════
 try:
-    from utils.transcript_live import extract_forward_looking_signals_batch
-
     _FI_COMPANIES = [
         "Alphabet", "Amazon", "Apple", "Comcast", "Disney",
         "Meta Platforms", "Microsoft", "Netflix", "Paramount Global",
@@ -3515,14 +3513,66 @@ try:
     ]
 
     @st.cache_data(ttl=3600, show_spinner=False)
-    def _cached_forward_signals(path: str, companies: tuple, year: int):
-        return extract_forward_looking_signals_batch(
-            path, companies=companies, year=year, max_signals_per_company=1
-        )
+    def _cached_forward_signals_fast(year: int) -> dict[str, list[dict]]:
+        """Load top forward signal per company from Supabase/SQLite (instant).
+        Falls back to Excel extraction only if DB has nothing."""
+        result: dict[str, list[dict]] = {}
+        # Try Supabase first
+        try:
+            from utils.supabase_client import is_configured, fetch_table_paginated
+            if is_configured():
+                df = fetch_table_paginated(
+                    "forward_signals",
+                    select="company,year,quarter,quote,speaker,role,score,category",
+                    order="score.desc",
+                )
+                if not df.empty:
+                    if year:
+                        yr_df = df[df["year"] == year]
+                        if not yr_df.empty:
+                            df = yr_df
+                    for co, grp in df.groupby("company"):
+                        top = grp.head(1).iloc[0].to_dict()
+                        result[str(co)] = [top]
+                    if result:
+                        return result
+        except Exception:
+            pass
+        # Try SQLite
+        try:
+            import sqlite3
+            from pathlib import Path as _P
+            for db_path in [
+                _P(__file__).resolve().parent.parent / "earningscall_intelligence.db",
+                _P("/tmp/replit_revival_data/earningscall_intelligence.db"),
+            ]:
+                if db_path.exists():
+                    conn = sqlite3.connect(str(db_path))
+                    import pandas as _pd
+                    df = _pd.read_sql_query(
+                        "SELECT company, year, quarter, quote, speaker, role, score, category "
+                        "FROM forward_signals WHERE year = ? ORDER BY score DESC",
+                        conn, params=[year],
+                    )
+                    conn.close()
+                    if not df.empty:
+                        for co, grp in df.groupby("company"):
+                            top = grp.head(1).iloc[0].to_dict()
+                            result[str(co)] = [top]
+                        return result
+                    break
+        except Exception:
+            pass
+        # Last resort: slow Excel extraction
+        try:
+            from utils.transcript_live import extract_forward_looking_signals_batch
+            return extract_forward_looking_signals_batch(
+                excel_path, companies=tuple(_FI_COMPANIES), year=year, max_signals_per_company=1
+            )
+        except Exception:
+            return {}
 
-    _fi_all = _cached_forward_signals(
-        excel_path, companies=tuple(_FI_COMPANIES), year=int(selected_year),
-    )
+    _fi_all = _cached_forward_signals_fast(year=int(selected_year))
 
     _fi_cards: list[dict] = []
     for _fi_co in _FI_COMPANIES:
