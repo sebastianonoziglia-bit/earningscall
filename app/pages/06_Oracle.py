@@ -622,20 +622,36 @@ def _build_layer_chart(predictions: pd.DataFrame, metric: str) -> go.Figure:
             x=scoped["composite_score"],
             mode="markers",
             name="Composite",
-            marker=dict(color="#020617", size=10, symbol="diamond"),
+            marker=dict(color="#fbbf24", size=10, symbol="diamond", line=dict(color="#0f172a", width=1)),
             hovertemplate="<b>%{y}</b><br>Composite %{x:.2f}<extra></extra>",
         )
     )
     fig.update_layout(
-        barmode="relative",
+        barmode="group",
         height=430,
-        margin=dict(l=10, r=10, t=24, b=10),
+        margin=dict(l=10, r=10, t=40, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        title=dict(text=f"Layer Breakdown · {metric}", font=dict(size=16)),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        xaxis=dict(range=[-1.15, 1.15], gridcolor="rgba(148,163,184,0.18)", zerolinecolor="rgba(15,23,42,0.22)"),
-        yaxis=dict(gridcolor="rgba(0,0,0,0)"),
+        font=dict(color="#e6edf3"),
+        title=dict(
+            text=f"Layer Breakdown · {metric}",
+            font=dict(size=16, color="#e6edf3"),
+        ),
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+            font=dict(color="#e6edf3", size=11),
+        ),
+        xaxis=dict(
+            range=[-1.15, 1.15],
+            gridcolor="rgba(148,163,184,0.18)",
+            zerolinecolor="rgba(148,163,184,0.3)",
+            tickfont=dict(color="#e6edf3"),
+            title=dict(text="Bearish ← Score → Bullish", font=dict(color="#94a3b8", size=11)),
+        ),
+        yaxis=dict(
+            gridcolor="rgba(0,0,0,0)",
+            tickfont=dict(color="#e6edf3", size=12),
+        ),
     )
     return fig
 
@@ -793,6 +809,7 @@ def main() -> None:
 
     with filter_col2:
         st.plotly_chart(_build_layer_chart(filtered, metric_filter), use_container_width=True, config={"displayModeBar": False})
+        st.caption("Signal = transcript momentum · Market = price consensus/Polymarket · Fundamental = financial trajectory · ◆ = weighted composite")
 
     st.markdown("<div class='oracle-section-label' style='margin-top:6px;'>Top Oracle Dials</div>", unsafe_allow_html=True)
     _render_prediction_cards(filtered)
@@ -804,12 +821,160 @@ def main() -> None:
     st.markdown("</div>", unsafe_allow_html=True)
 
     # ──────────────────────────────────────────────────────────────────
+    # Intelligence Layer — Cross-source derived metrics
+    # ──────────────────────────────────────────────────────────────────
+    _render_intelligence_section()
+
+    # ──────────────────────────────────────────────────────────────────
     # MiroFish Ad-Spend Simulator — swarm prediction panel
     # ──────────────────────────────────────────────────────────────────
     _render_mirofish_panel()
 
     with st.expander("Oracle Snapshot Metadata", expanded=False):
         st.json(metadata)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Intelligence Layer Section
+# ═══════════════════════════════════════════════════════════════════════
+
+def _render_intelligence_section() -> None:
+    """Render cross-source derived metrics from the intelligence layer."""
+    try:
+        from utils.intelligence_layer import compute_all_derived_metrics
+    except ImportError:
+        return
+
+    try:
+        derived = compute_all_derived_metrics()
+    except Exception:
+        return
+
+    if not derived:
+        return
+
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="margin-top:10px;margin-bottom:6px;">
+          <span style="font-size:1.5rem;">🧠</span>
+          <span style="font-size:1.1rem;font-weight:800;color:#e6edf3;margin-left:6px;">
+            Intelligence Layer
+          </span>
+          <span style="font-size:0.75rem;color:#94a3b8;margin-left:12px;">
+            Cross-source derived metrics · Auto-computed from Supabase + signals
+          </span>
+        </div>
+        <p style="font-size:0.82rem;color:#94a3b8;margin-top:0;margin-bottom:14px;">
+          Combines transcript signals, stock prices, institutional holdings, ad revenue, and GroupM
+          channel forecasts to produce metrics no single source provides.
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ── Signal-to-Price Divergence ──────────────────────────────────
+    spd = derived.get("signal_price_divergence")
+    if spd is not None and not spd.empty:
+        st.markdown(
+            "<div style='font-size:0.85rem;font-weight:700;color:#e6edf3;margin-bottom:4px;'>"
+            "Signal-to-Price Divergence</div>"
+            "<div style='font-size:0.72rem;color:#64748b;margin-bottom:8px;'>"
+            "When transcript signals diverge from stock momentum → market may be mispricing</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Build a horizontal bar chart
+        fig = go.Figure()
+        spd_sorted = spd.sort_values("divergence", ascending=True)
+        colors = ["#22c55e" if d > 0.1 else ("#ef4444" if d < -0.1 else "#64748b") for d in spd_sorted["divergence"]]
+        fig.add_trace(go.Bar(
+            y=spd_sorted["company"],
+            x=spd_sorted["divergence"],
+            orientation="h",
+            marker_color=colors,
+            text=[f"{d:+.2f}" for d in spd_sorted["divergence"]],
+            textposition="auto",
+            textfont=dict(color="#e6edf3", size=11),
+            hovertemplate="<b>%{y}</b><br>Signal: %{customdata[0]:+.2f}<br>Price: %{customdata[1]:+.2f}<br>Divergence: %{x:+.2f}<extra></extra>",
+            customdata=list(zip(spd_sorted["signal_velocity"], spd_sorted["price_momentum"])),
+        ))
+        fig.update_layout(
+            height=max(200, len(spd_sorted) * 32),
+            margin=dict(l=120, r=20, t=10, b=30),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#94a3b8"),
+            xaxis=dict(
+                title="← Market ahead | Signals ahead →",
+                gridcolor="#1e293b",
+                tickfont=dict(color="#94a3b8"),
+                zeroline=True,
+                zerolinecolor="#475569",
+            ),
+            yaxis=dict(tickfont=dict(color="#e6edf3")),
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    # ── Channel Exposure Forecast ──────────────────────────────────
+    cef = derived.get("channel_exposure_forecast")
+    if cef is not None and not cef.empty:
+        st.markdown(
+            "<div style='font-size:0.85rem;font-weight:700;color:#e6edf3;margin-top:14px;margin-bottom:4px;'>"
+            "Ad Channel Exposure Forecast</div>"
+            "<div style='font-size:0.72rem;color:#64748b;margin-bottom:8px;'>"
+            "Company ad revenue weighted by GroupM channel growth forecasts → expected growth from channel mix</div>",
+            unsafe_allow_html=True,
+        )
+        cef_display = cef[["company", "channel_mix_growth_pct", "company_ad_cagr_pct", "alpha_pp"]].copy()
+        cef_display.columns = ["Company", "Channel Mix Growth %", "Actual CAGR %", "Alpha (pp)"]
+        st.dataframe(cef_display, use_container_width=True, hide_index=True)
+
+    # ── Revenue per Employee (latest year) ──────────────────────────
+    rpe = derived.get("revenue_per_employee")
+    if rpe is not None and not rpe.empty:
+        latest_year = rpe["year"].max()
+        latest = rpe[rpe["year"] == latest_year].sort_values("rev_per_employee", ascending=False).head(14)
+        if not latest.empty:
+            st.markdown(
+                f"<div style='font-size:0.85rem;font-weight:700;color:#e6edf3;margin-top:14px;margin-bottom:4px;'>"
+                f"Revenue per Employee ({int(latest_year)})</div>",
+                unsafe_allow_html=True,
+            )
+            fig = go.Figure(go.Bar(
+                x=latest["company"],
+                y=latest["rev_per_employee"] / 1_000_000,
+                marker_color="#3b82f6",
+                text=[f"${v/1_000_000:.2f}M" for v in latest["rev_per_employee"]],
+                textposition="auto",
+                textfont=dict(color="#e6edf3", size=10),
+            ))
+            fig.update_layout(
+                height=280,
+                margin=dict(l=40, r=20, t=10, b=60),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#94a3b8"),
+                xaxis=dict(tickfont=dict(color="#e6edf3", size=10), tickangle=-45),
+                yaxis=dict(title="$M / employee", gridcolor="#1e293b", tickfont=dict(color="#94a3b8")),
+            )
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    # ── Institutional Conviction (compact) ──────────────────────────
+    ic = derived.get("institutional_conviction")
+    if ic is not None and not ic.empty:
+        st.markdown(
+            "<div style='font-size:0.85rem;font-weight:700;color:#e6edf3;margin-top:14px;margin-bottom:4px;'>"
+            "Institutional Conviction Alignment</div>"
+            "<div style='font-size:0.72rem;color:#64748b;margin-bottom:8px;'>"
+            "Cross-referencing holder trends × transcript signals × price direction</div>",
+            unsafe_allow_html=True,
+        )
+        ic_display = ic[["company", "top5_ownership_pct", "holder_trend",
+                         "signal_direction", "price_direction", "alignment"]].copy()
+        ic_display.columns = ["Company", "Top-5 Own %", "Holder Trend",
+                              "Signal Dir.", "Price Dir.", "Alignment"]
+        st.dataframe(ic_display, use_container_width=True, hide_index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -917,6 +1082,17 @@ def _render_mirofish_panel() -> None:
     # ── Results ──────────────────────────────────────────────────────
     if run_clicked:
         progress_bar = st.progress(0, text="Initializing swarm...")
+        live_feed_container = st.container()
+        live_feed_placeholder = live_feed_container.empty()
+        _live_statements: list[dict] = []
+
+        # Role → emoji mapping for visual identity
+        _role_emoji = {
+            "CPG Brand Marketer": "🛒", "Auto CMO": "🚗", "Retail Media Buyer": "🏪",
+            "Agency Investment Director": "💼", "Platform Sell-Side Exec": "📡",
+            "CTV Publisher": "📺", "Institutional Portfolio Manager": "📊",
+            "Macro Strategist": "🌐", "Privacy Regulator": "🔒", "Ad-Tech Skeptic": "🤔",
+        }
 
         def _progress_callback(round_num, total_rounds, metrics, cost):
             pct = round_num / total_rounds
@@ -925,26 +1101,114 @@ def _render_mirofish_panel() -> None:
                 text=f"Round {round_num}/{total_rounds} · consensus: +{metrics['growth_mean']:.1f}% · cost: ${cost:.3f}",
             )
 
-        with st.spinner("Running MiroFish simulation..."):
-            try:
-                report = run_full_mirofish(
-                    horizon_year=horizon_year,
-                    n_agents=n_agents,
-                    n_rounds=n_rounds,
-                    scenario=scenario_text,
-                    progress_callback=_progress_callback,
+        def _statement_callback(stmt, current, total):
+            _live_statements.append(stmt)
+            # Build live feed HTML — show last 6 statements
+            recent = _live_statements[-6:]
+            html_lines = []
+            for s in recent:
+                emoji = _role_emoji.get(s["role"], "🔮")
+                growth_str = f"+{s['growth_estimate']:.1f}%" if s["growth_estimate"] is not None else "—"
+                # Truncate statement for display
+                display_text = s["statement"][:200].split("COMMENT:")[-1].strip() if "COMMENT:" in s["statement"] else s["statement"][:200]
+                html_lines.append(
+                    f"<div style='padding:6px 10px;margin:3px 0;border-radius:8px;"
+                    f"background:rgba(30,41,59,0.8);border-left:3px solid #3b82f6;'>"
+                    f"<span style='font-size:0.72rem;color:#94a3b8;'>"
+                    f"{emoji} {s['role']} · {s['geo_bias']} · R{s['round']}</span>"
+                    f"<span style='float:right;font-size:0.78rem;color:#22c55e;font-weight:700;'>{growth_str}</span>"
+                    f"<div style='font-size:0.78rem;color:#e2e8f0;margin-top:2px;line-height:1.4;'>"
+                    f"{escape(display_text)}</div></div>"
                 )
-                st.session_state["mf_last_report"] = report
-            except Exception as e:
-                st.error(f"MiroFish run failed: {e}")
-                return
+            counter_text = (
+                f"<div style='font-size:0.72rem;color:#64748b;margin-bottom:4px;'>"
+                f"Agent {current}/{total} responding...</div>"
+            )
+            live_feed_placeholder.markdown(
+                counter_text + "".join(html_lines),
+                unsafe_allow_html=True,
+            )
+
+        try:
+            report = run_full_mirofish(
+                horizon_year=horizon_year,
+                n_agents=n_agents,
+                n_rounds=n_rounds,
+                scenario=scenario_text,
+                progress_callback=_progress_callback,
+                statement_callback=_statement_callback,
+            )
+            st.session_state["mf_last_report"] = report
+            st.session_state["mf_last_statements"] = _live_statements
+        except Exception as e:
+            st.error(f"MiroFish run failed: {e}")
+            return
 
         progress_bar.empty()
+        live_feed_placeholder.empty()
 
     # Display report if available
     report = st.session_state.get("mf_last_report")
     if report:
         _render_mirofish_report(report)
+
+    # ── Post-run simulation transcript expander ─────────────────────
+    saved_statements = st.session_state.get("mf_last_statements", [])
+    if saved_statements:
+        _render_simulation_transcript(saved_statements)
+
+
+def _render_simulation_transcript(statements: list[dict]) -> None:
+    """Expandable transcript of all agent statements from the last MiroFish run."""
+    _role_emoji = {
+        "CPG Brand Marketer": "🛒", "Auto CMO": "🚗", "Retail Media Buyer": "🏪",
+        "Agency Investment Director": "💼", "Platform Sell-Side Exec": "📡",
+        "CTV Publisher": "📺", "Institutional Portfolio Manager": "📊",
+        "Macro Strategist": "🌐", "Privacy Regulator": "🔒", "Ad-Tech Skeptic": "🤔",
+    }
+
+    # Group by round
+    rounds: dict[int, list[dict]] = {}
+    for s in statements:
+        r = s.get("round", 0)
+        rounds.setdefault(r, []).append(s)
+
+    total_agents = len(statements)
+    n_rounds = max(rounds.keys()) if rounds else 0
+
+    with st.expander(f"📜 View Simulation Transcript ({total_agents} statements · {n_rounds} rounds)", expanded=False):
+        for round_num in sorted(rounds.keys()):
+            st.markdown(
+                f"<div style='font-size:0.78rem;color:#3b82f6;font-weight:700;"
+                f"margin:12px 0 6px 0;padding:4px 8px;background:rgba(59,130,246,0.08);"
+                f"border-radius:4px;'>ROUND {round_num}</div>",
+                unsafe_allow_html=True,
+            )
+            for s in rounds[round_num]:
+                emoji = _role_emoji.get(s.get("role", ""), "🔮")
+                growth_str = f"+{s['growth_estimate']:.1f}%" if s.get("growth_estimate") is not None else "—"
+                geo = s.get("geo_bias", "")
+                role = s.get("role", "Unknown")
+
+                # Extract comment from structured output
+                raw_text = s.get("statement", "")
+                if "COMMENT:" in raw_text:
+                    comment = raw_text.split("COMMENT:")[-1].strip()
+                else:
+                    comment = raw_text[:500]
+
+                st.markdown(
+                    f"<div style='padding:8px 12px;margin:3px 0;border-radius:6px;"
+                    f"background:rgba(30,41,59,0.6);border-left:3px solid #334155;'>"
+                    f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
+                    f"<span style='font-size:0.72rem;color:#94a3b8;'>"
+                    f"{emoji} <b>{escape(role)}</b> · {escape(geo)}</span>"
+                    f"<span style='font-size:0.78rem;color:#22c55e;font-weight:700;'>{growth_str}</span>"
+                    f"</div>"
+                    f"<div style='font-size:0.78rem;color:#cbd5e1;margin-top:3px;line-height:1.5;'>"
+                    f"{escape(comment)}</div></div>",
+                    unsafe_allow_html=True,
+                )
 
 
 def _render_mirofish_report(report: dict) -> None:

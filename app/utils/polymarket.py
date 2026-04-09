@@ -614,11 +614,140 @@ def warm_polymarket_cache() -> None:
         try:
             # Check disk cache first — if fresh, no API call needed
             cached = _disk_get("polymarket_deep_pool_20k")
-            if cached:
-                return
-            _gamma_paginated(limit=20000)
+            if not cached:
+                _gamma_paginated(limit=20000)
+            # Persist snapshot to SQLite (only inserts when odds change)
+            try:
+                pool = _fetch_deep_pool()
+                if pool:
+                    persist_polymarket_snapshot(pool)
+            except Exception:
+                pass
         except Exception:
             pass
 
     t = threading.Thread(target=_warm, daemon=True)
     t.start()
+
+
+# ── SQLite snapshot persistence ───────────────────────────────────────────────
+
+def _snapshot_db_path() -> Path:
+    candidates = [
+        Path(__file__).resolve().parent.parent.parent / "earningscall_intelligence.db",
+        Path("/tmp/replit_revival_data/earningscall_intelligence.db"),
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return candidates[0]
+
+
+def persist_polymarket_snapshot(markets: list[dict[str, Any]] | None = None) -> int:
+    """
+    Write all current markets into polymarket_snapshots.
+    Uses UNIQUE(market_id, yes_price, no_price) → only inserts when odds change.
+    Returns number of new rows inserted.
+    """
+    import sqlite3
+
+    if markets is None:
+        try:
+            markets = _fetch_deep_pool()
+        except Exception:
+            markets = fetch_polymarket_top(1000)
+
+    db = _snapshot_db_path()
+    if not db.exists():
+        return 0
+
+    conn = sqlite3.connect(str(db))
+    # Ensure table exists
+    try:
+        from pathlib import Path as _P
+        schema_path = _P(__file__).resolve().parent.parent.parent / "scripts" / "intelligence_db_schema.py"
+        if schema_path.exists():
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("schema", str(schema_path))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            mod.ensure_schema(conn)
+    except Exception:
+        pass
+
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    inserted = 0
+    for m in markets:
+        company = match_company(m.get("question", ""))
+        tags_str = json.dumps(m.get("tags", []))
+        try:
+            conn.execute(
+                """INSERT OR IGNORE INTO polymarket_snapshots
+                   (market_id, snapshot_ts, question, slug, yes_price, no_price,
+                    volume_total, volume_24h, liquidity, end_date, matched_company, tags, active)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    m.get("market_id", ""),
+                    ts,
+                    m.get("question", ""),
+                    m.get("slug", ""),
+                    m.get("yes_price"),
+                    m.get("no_price"),
+                    m.get("volume_total"),
+                    m.get("volume_24h"),
+                    m.get("liquidity"),
+                    m.get("end_date_raw", m.get("end_date", "")),
+                    company or "",
+                    tags_str,
+                    1 if m.get("active", True) else 0,
+                ),
+            )
+            inserted += conn.total_changes  # approximate
+        except Exception:
+            continue
+    conn.commit()
+    total = conn.execute("SELECT COUNT(*) FROM polymarket_snapshots").fetchone()[0]
+    conn.close()
+    return total
+
+
+def query_polymarket_for_company(company: str, limit: int = 50) -> list[dict]:
+    """Query stored Polymarket snapshots for a company (latest odds per market)."""
+    import sqlite3
+    db = _snapshot_db_path()
+    if not db.exists():
+        return []
+    conn = sqlite3.connect(str(db))
+    rows = conn.execute(
+        """SELECT market_id, question, yes_price, no_price, volume_total, end_date,
+                  snapshot_ts, matched_company
+           FROM polymarket_snapshots
+           WHERE matched_company = ?
+           ORDER BY volume_total DESC
+           LIMIT ?""",
+        (company, limit),
+    ).fetchall()
+    conn.close()
+    return [
+        {"market_id": r[0], "question": r[1], "yes_price": r[2], "no_price": r[3],
+         "volume_total": r[4], "end_date": r[5], "snapshot_ts": r[6], "matched_company": r[7]}
+        for r in rows
+    ]
+
+
+def query_polymarket_history(market_id: str) -> list[dict]:
+    """Get price history for a single market (all snapshots where odds changed)."""
+    import sqlite3
+    db = _snapshot_db_path()
+    if not db.exists():
+        return []
+    conn = sqlite3.connect(str(db))
+    rows = conn.execute(
+        """SELECT snapshot_ts, yes_price, no_price, volume_total
+           FROM polymarket_snapshots
+           WHERE market_id = ?
+           ORDER BY snapshot_ts ASC""",
+        (market_id,),
+    ).fetchall()
+    conn.close()
+    return [{"ts": r[0], "yes_price": r[1], "no_price": r[2], "volume": r[3]} for r in rows]

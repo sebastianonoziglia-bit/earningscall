@@ -162,6 +162,30 @@ DDL = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_mirofish_scope ON mirofish_runs(scope, scope_key);",
     "CREATE INDEX IF NOT EXISTS idx_mirofish_horizon ON mirofish_runs(horizon_year);",
+    # ── Polymarket snapshots ─────────────────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS polymarket_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        market_id TEXT NOT NULL,
+        snapshot_ts TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+        question TEXT,
+        slug TEXT,
+        yes_price REAL,
+        no_price REAL,
+        volume_total REAL,
+        volume_24h REAL,
+        liquidity REAL,
+        end_date TEXT,
+        matched_company TEXT,
+        tags TEXT,
+        active INTEGER DEFAULT 1
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_poly_market_id ON polymarket_snapshots(market_id);",
+    "CREATE INDEX IF NOT EXISTS idx_poly_ts ON polymarket_snapshots(snapshot_ts);",
+    "CREATE INDEX IF NOT EXISTS idx_poly_company ON polymarket_snapshots(matched_company);",
+    # Dedupe index: only insert when yes/no actually changed
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_poly_dedup ON polymarket_snapshots(market_id, yes_price, no_price);",
 ]
 
 

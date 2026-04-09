@@ -420,12 +420,15 @@ Scenario: {scenario}
 
 {"Other market participants are saying:" + chr(10) + feed_text if feed_text else "This is the opening round — no prior statements from others."}
 
-Round {round_num}: Give your 2-3 sentence forecast reaction for {horizon}. State:
-1. Your total ad spend growth estimate (a single number like +X.X%)
-2. Which 1-2 channels gain or lose share, and why
-3. Your biggest risk or tailwind
+Round {round_num}: Give your forecast reaction for {horizon}.
 
-Be specific and numerical. Respond ONLY with your forecast statement, no preamble."""
+FORMAT — respond with EXACTLY this structure:
+GROWTH: +X.X%
+CHANNELS: Search=+X, Social=+X, Video/CTV=+X, Display=+X, OOH=+X, Print=+X, Radio=+X, Other Digital=+X
+COMMENT: 2-3 sentences with your biggest risk or tailwind and reasoning.
+
+Rules for CHANNELS line: rate each from -5 (very bearish) to +5 (very bullish). Use 0 for neutral.
+Respond ONLY in this format, no preamble."""
 
 
 def _get_llm_client():
@@ -538,6 +541,7 @@ def run_ad_simulation(
     rounds: int = 5,
     scenario: str = "baseline",
     progress_callback: Any = None,
+    statement_callback: Any = None,
 ) -> dict[str, Any]:
     """Phase 3 — Run K rounds of agent reactions.
 
@@ -582,7 +586,7 @@ def run_ad_simulation(
             statement = f"[{agent['role']}|{agent['geo_bias']}] {response.strip()}"
             round_statements.append(statement)
             agent["memory"].append({"round": r, "statement": response.strip()})
-            all_statements.append({
+            stmt_record = {
                 "round": r,
                 "agent_id": agent["id"],
                 "role": agent["role"],
@@ -591,7 +595,15 @@ def run_ad_simulation(
                 "statement": response.strip(),
                 "growth_estimate": growth,
                 "cost": cost,
-            })
+            }
+            all_statements.append(stmt_record)
+
+            # Fire per-statement callback for live feed
+            if statement_callback:
+                try:
+                    statement_callback(stmt_record, len(all_statements), len(agents) * rounds)
+                except Exception:
+                    pass
 
         if aborted:
             break
@@ -662,22 +674,36 @@ def generate_ad_report(
         growth_mu = baseline
         growth_sigma = 0.0
 
-    # ── Aggregate agent channel mentions ─────────────────────────────
-    channel_mentions: dict[str, list[str]] = {g: [] for g in CHANNEL_GROUPS}
+    # ── Aggregate agent channel ratings (structured parsing) ────────
+    # Parse the CHANNELS: line from each agent's structured response.
+    # Format: "CHANNELS: Search=+3, Social=-1, Video/CTV=+2, ..."
+    # Each rating is -5..+5; we normalize to -1..+1 by dividing by 5.
+    import re as _re
+    channel_ratings: dict[str, list[float]] = {g: [] for g in CHANNEL_GROUPS}
     for stmt in all_statements:
-        text = str(stmt.get("statement", "")).lower()
-        for group in CHANNEL_GROUPS:
-            if group.lower() in text:
-                sentiment = "bullish" if any(w in text for w in ["gain", "grow", "increase", "surge", "benefit"]) else "bearish"
-                channel_mentions[group].append(sentiment)
+        text = str(stmt.get("statement", ""))
+        # Find CHANNELS: line
+        channels_match = _re.search(r"CHANNELS:\s*(.+?)(?:\n|$)", text, _re.IGNORECASE)
+        if channels_match:
+            pairs_text = channels_match.group(1)
+            # Parse key=value pairs like "Search=+3"
+            for pair in _re.finditer(r"(\w[\w/]*)\s*=\s*([+-]?\d+(?:\.\d+)?)", pairs_text):
+                ch_name = pair.group(1).strip()
+                rating = float(pair.group(2))
+                # Match to closest channel group
+                for group in CHANNEL_GROUPS:
+                    if ch_name.lower().replace("/", "").replace(" ", "") in group.lower().replace("/", "").replace(" ", "") or \
+                       group.lower().replace("/", "").replace(" ", "") in ch_name.lower().replace("/", "").replace(" ", ""):
+                        channel_ratings[group].append(max(-5.0, min(5.0, rating)))
+                        break
 
     channel_deltas: dict[str, float] = {}
-    for group, mentions in channel_mentions.items():
-        if mentions:
-            bullish = sum(1 for m in mentions if m == "bullish")
-            bearish = sum(1 for m in mentions if m == "bearish")
-            # Normalize to -1..+1 range
-            channel_deltas[group] = (bullish - bearish) / len(mentions)
+    for group, ratings in channel_ratings.items():
+        if ratings:
+            # Average of all agent ratings for this channel, normalized to -1..+1
+            channel_deltas[group] = round(sum(ratings) / (len(ratings) * 5.0), 3)
+        else:
+            channel_deltas[group] = 0.0
 
     # ── Build the LLM report prompt ──────────────────────────────────
     # Sample diverse agent statements for the report
@@ -836,6 +862,7 @@ def run_full_mirofish(
     scenario: str = "baseline",
     xlsx_path: str = "",
     progress_callback: Any = None,
+    statement_callback: Any = None,
 ) -> dict[str, Any]:
     """Run the full MiroFish pipeline: graph → agents → simulation → report.
 
@@ -852,6 +879,7 @@ def run_full_mirofish(
         rounds=n_rounds,
         scenario=scenario,
         progress_callback=progress_callback,
+        statement_callback=statement_callback,
     )
     sim["scenario_label"] = scenario
     report = generate_ad_report(

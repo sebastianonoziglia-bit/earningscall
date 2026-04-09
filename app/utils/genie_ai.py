@@ -227,7 +227,7 @@ def build_genie_messages(
     quarter = quarter_focus if re.fullmatch(r"Q[1-4]", quarter_focus, flags=re.IGNORECASE) else ""
 
     context = build_genie_context_from_db(company=company, year=year, quarter=quarter)
-    transcript_excerpt = str(context.get("transcript", "") or "")[:3000]
+    transcript_excerpt = str(context.get("transcript", "") or "")[:8000]
 
     # ── Forward signals context (scored and verified) ──────────────────────
     forward_signals_block = ""
@@ -272,12 +272,44 @@ def build_genie_messages(
     # across all companies using call_ai().
 
     # ── Polymarket prediction feed context ────────────────────────────────
+    # Priority: company-specific bets from SQLite DB (full history), then
+    # dashboard feed as fallback.
     polymarket_block = ""
+    _poly_lines: list[str] = []
+
+    # 1) Company-specific bets from DB (up to 40)
+    if company:
+        try:
+            from utils.polymarket import query_polymarket_for_company
+            _db_bets = query_polymarket_for_company(company, limit=40)
+            for _pb in _db_bets:
+                _pq = str(_pb.get("question", ""))
+                _py = _pb.get("yes_price")
+                _pn = _pb.get("no_price")
+                _pvol = _pb.get("volume_total")
+                _pend = str(_pb.get("end_date", ""))
+                _yes_str = f"YES {_py:.0f}%" if _py is not None else "—"
+                _no_str = f"NO {_pn:.0f}%" if _pn is not None else "—"
+                _vol_str = f"${_pvol/1e6:.1f}M" if _pvol and _pvol >= 1e6 else (f"${_pvol/1e3:.0f}K" if _pvol else "")
+                _poly_lines.append(
+                    f"- [{company}] \"{_pq}\" → {_yes_str} / {_no_str}"
+                    + (f" | Vol: {_vol_str}" if _vol_str else "")
+                    + (f" | Ends: {_pend}" if _pend else "")
+                )
+        except Exception:
+            pass
+
+    # 2) General top bets from dashboard feed (fill up to 50 total)
     poly_feed = dashboard_state.get("polymarket_feed")
     if poly_feed:
-        _poly_lines = []
-        for _pb in poly_feed[:20]:
+        _seen_qs = {line.split('"')[1] for line in _poly_lines if '"' in line}
+        for _pb in poly_feed[:50]:
+            if len(_poly_lines) >= 50:
+                break
             _pq = str(_pb.get("question", ""))
+            if _pq in _seen_qs:
+                continue
+            _seen_qs.add(_pq)
             _py = _pb.get("yes_price")
             _pn = _pb.get("no_price")
             _pvol = str(_pb.get("volume_fmt", ""))
@@ -290,14 +322,30 @@ def build_genie_messages(
                 + (f" | Vol: {_pvol}" if _pvol else "")
                 + (f" | Ends: {_pend}" if _pend else "")
             )
-        if _poly_lines:
-            polymarket_block = (
-                "\n\n=== LIVE POLYMARKET PREDICTION FEED ===\n"
-                "Active prediction market bets (real-money probabilities).\n"
-                "Use these as evidence of market consensus when discussing outlook.\n"
-                + "\n".join(_poly_lines)
-                + "\n=== END POLYMARKET FEED ===\n"
+
+    if _poly_lines:
+        polymarket_block = (
+            f"\n\n=== POLYMARKET PREDICTION FEED ({len(_poly_lines)} bets) ===\n"
+            "Active prediction market bets (real-money probabilities).\n"
+            "Use these as evidence of market consensus when discussing outlook.\n"
+            + "\n".join(_poly_lines)
+            + "\n=== END POLYMARKET FEED ===\n"
+        )
+
+    # ── Intelligence Layer derived metrics ────────────────────────────────
+    intelligence_block = ""
+    try:
+        from utils.intelligence_layer import compute_all_derived_metrics
+        _derived = compute_all_derived_metrics()
+        _genie_summary = _derived.get("_genie_summary", "")
+        if _genie_summary:
+            intelligence_block = (
+                "\n\n=== INTELLIGENCE LAYER (Cross-source derived metrics) ===\n"
+                + _genie_summary
+                + "=== END INTELLIGENCE LAYER ===\n"
             )
+    except Exception:
+        pass
 
     db_context_prompt = (
         "You are a financial analyst assistant. Use the following data to answer the user question. "
@@ -307,6 +355,7 @@ def build_genie_messages(
         f"Transcript excerpt: {transcript_excerpt}"
         + forward_signals_block
         + polymarket_block
+        + intelligence_block
     )
 
     # Inject depth mode into system prompt for thought map quality

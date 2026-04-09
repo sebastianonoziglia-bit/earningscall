@@ -410,6 +410,192 @@ def ingest_forward_signals(conn: sqlite3.Connection, repo_root: Path) -> int:
     return total
 
 
+def _ad_column_to_company() -> dict[str, str]:
+    """Map Company_advertising_revenue column names to canonical company names."""
+    return {
+        "Google_Ads": "Alphabet",
+        "Meta_Ads": "Meta Platforms",
+        "Amazon_Ads": "Amazon",
+        "Spotify_Ads": "Spotify",
+        "*WBD_Ads": "Warner Bros Discovery",
+        "*Microsoft_Ads": "Microsoft",
+        "Paramount": "Paramount Global",
+        "*Apple": "Apple",
+        "*Disney": "Disney",
+        "*Comcast": "Comcast",
+        "Netflix*": "Netflix",
+        "Twitter/X": "Twitter",
+        "TikTok": "TikTok",
+        "Snapchat": "Snapchat",
+    }
+
+
+_COMPANY_TICKER_MAP = {
+    "Alphabet": "GOOGL",
+    "Amazon": "AMZN",
+    "Apple": "AAPL",
+    "Comcast": "CMCSA",
+    "Disney": "DIS",
+    "Meta Platforms": "META",
+    "Microsoft": "MSFT",
+    "Netflix": "NFLX",
+    "Paramount Global": "PARA",
+    "Roku": "ROKU",
+    "Spotify": "SPOT",
+    "Warner Bros Discovery": "WBD",
+    "Samsung": "005930.KS",
+    "Tencent": "TCEHY",
+    "MFE": "MFEA.MI",
+}
+
+
+def ingest_company_metrics(conn: sqlite3.Connection, repo_root: Path) -> int:
+    """Populate company_metrics from Google Sheets workbook.
+
+    Merges three sheets:
+      - Company_metrics_earnings_values → revenue, operating_income, net_income, etc.
+      - Company_Employees → employee_count
+      - Company_advertising_revenue → advertising_revenue
+    """
+    app_dir = repo_root / "app"
+    if str(app_dir) not in sys.path:
+        sys.path.insert(0, str(app_dir))
+
+    try:
+        from utils.workbook_source import resolve_financial_data_xlsx
+    except ImportError:
+        print("Warning: could not import workbook_source — skipping company_metrics")
+        return 0
+
+    wb_path = resolve_financial_data_xlsx()
+    if not wb_path:
+        print("Warning: no workbook available — skipping company_metrics")
+        return 0
+
+    # ── Load financial metrics ───────────────────────────────────────
+    try:
+        metrics_df = pd.read_excel(wb_path, sheet_name="Company_metrics_earnings_values")
+    except Exception as exc:
+        print(f"Warning: failed to read Company_metrics_earnings_values: {exc}")
+        return 0
+
+    metrics_df.columns = [str(c).strip() for c in metrics_df.columns]
+    col_map = {
+        "Company": "company",
+        "Year": "year",
+        "Revenue": "revenue",
+        "Operating Income": "operating_income",
+        "Net Income": "net_income",
+        "Cost Of Revenue": "cost_of_revenue",
+        "R&D": "r_and_d",
+        "Capex": "capex",
+        "Total Assets": "total_assets",
+        "Market Cap.": "market_cap",
+        "Cash Balance": "cash_balance",
+        "Debt": "debt",
+    }
+    metrics_df = metrics_df.rename(columns=col_map)
+    for col in col_map.values():
+        if col not in metrics_df.columns:
+            metrics_df[col] = None
+    metrics_df["company"] = metrics_df["company"].apply(_normalize_company)
+    metrics_df["year"] = pd.to_numeric(metrics_df["year"], errors="coerce")
+    metrics_df = metrics_df.dropna(subset=["company", "year"])
+    metrics_df["year"] = metrics_df["year"].astype(int)
+
+    # ── Load employees ───────────────────────────────────────────────
+    try:
+        emp_df = pd.read_excel(wb_path, sheet_name="Company_Employees")
+        emp_df.columns = [str(c).strip() for c in emp_df.columns]
+        emp_df = emp_df.rename(columns={"Company": "company", "Year": "year", "Employee Count": "employee_count"})
+        emp_df["company"] = emp_df["company"].apply(_normalize_company)
+        emp_df["year"] = pd.to_numeric(emp_df["year"], errors="coerce")
+        emp_df = emp_df.dropna(subset=["company", "year"])
+        emp_df["year"] = emp_df["year"].astype(int)
+    except Exception as exc:
+        print(f"Warning: failed to read Company_Employees: {exc}")
+        emp_df = pd.DataFrame(columns=["company", "year", "employee_count"])
+
+    # ── Load ad revenue (wide format → melt) ─────────────────────────
+    try:
+        ad_df = pd.read_excel(wb_path, sheet_name="Company_advertising_revenue")
+        ad_df.columns = [str(c).strip() for c in ad_df.columns]
+        ad_col_map = _ad_column_to_company()
+        ad_rows: list[dict] = []
+        for _, row in ad_df.iterrows():
+            year_val = pd.to_numeric(pd.Series([row.get("Year")]), errors="coerce").iloc[0]
+            if pd.isna(year_val):
+                continue
+            for col_name, comp_name in ad_col_map.items():
+                val = row.get(col_name)
+                if pd.notna(val):
+                    ad_rows.append({
+                        "company": _normalize_company(comp_name),
+                        "year": int(year_val),
+                        "advertising_revenue": float(val) * 1000,  # $B → $M to match metrics sheet
+                    })
+        ad_melted = pd.DataFrame(ad_rows) if ad_rows else pd.DataFrame(columns=["company", "year", "advertising_revenue"])
+    except Exception as exc:
+        print(f"Warning: failed to read Company_advertising_revenue: {exc}")
+        ad_melted = pd.DataFrame(columns=["company", "year", "advertising_revenue"])
+
+    # ── Merge all three sources ──────────────────────────────────────
+    merged = metrics_df.copy()
+    if not emp_df.empty:
+        merged = merged.merge(emp_df[["company", "year", "employee_count"]], on=["company", "year"], how="left")
+    else:
+        merged["employee_count"] = None
+    if not ad_melted.empty:
+        merged = merged.merge(ad_melted[["company", "year", "advertising_revenue"]], on=["company", "year"], how="left")
+    else:
+        merged["advertising_revenue"] = None
+
+    # Add ticker
+    merged["ticker"] = merged["company"].map(_COMPANY_TICKER_MAP)
+
+    # ── Upsert into SQLite ───────────────────────────────────────────
+    conn.execute("DELETE FROM company_metrics")
+    total = 0
+    for _, row in merged.iterrows():
+        conn.execute(
+            """INSERT INTO company_metrics
+               (company, ticker, year, quarter, revenue, cost_of_revenue,
+                operating_income, net_income, capex, r_and_d, total_assets,
+                market_cap, cash_balance, debt, employee_count, advertising_revenue)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(company, year, quarter) DO UPDATE SET
+                 ticker=excluded.ticker, revenue=excluded.revenue,
+                 cost_of_revenue=excluded.cost_of_revenue,
+                 operating_income=excluded.operating_income,
+                 net_income=excluded.net_income, capex=excluded.capex,
+                 r_and_d=excluded.r_and_d, total_assets=excluded.total_assets,
+                 market_cap=excluded.market_cap, cash_balance=excluded.cash_balance,
+                 debt=excluded.debt, employee_count=excluded.employee_count,
+                 advertising_revenue=excluded.advertising_revenue""",
+            (
+                str(row["company"]),
+                str(row.get("ticker") or ""),
+                int(row["year"]),
+                "",  # quarter — annual data, no quarter
+                float(row["revenue"]) if pd.notna(row.get("revenue")) else None,
+                float(row["cost_of_revenue"]) if pd.notna(row.get("cost_of_revenue")) else None,
+                float(row["operating_income"]) if pd.notna(row.get("operating_income")) else None,
+                float(row["net_income"]) if pd.notna(row.get("net_income")) else None,
+                float(row["capex"]) if pd.notna(row.get("capex")) else None,
+                float(row["r_and_d"]) if pd.notna(row.get("r_and_d")) else None,
+                float(row["total_assets"]) if pd.notna(row.get("total_assets")) else None,
+                float(row["market_cap"]) if pd.notna(row.get("market_cap")) else None,
+                float(row["cash_balance"]) if pd.notna(row.get("cash_balance")) else None,
+                float(row["debt"]) if pd.notna(row.get("debt")) else None,
+                float(row["employee_count"]) if pd.notna(row.get("employee_count")) else None,
+                float(row["advertising_revenue"]) if pd.notna(row.get("advertising_revenue")) else None,
+            ),
+        )
+        total += 1
+    conn.commit()
+    return total
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build SQLite earningscall intelligence database from extracted CSV files")
     parser.add_argument("--db", default="earningscall_intelligence.db", help="Output SQLite database path")
@@ -436,6 +622,7 @@ def main() -> None:
         kpis_count = ingest_kpis(conn, (repo_root / args.kpis_csv).resolve())
         highlights_count = ingest_highlights(conn, (repo_root / args.highlights_csv).resolve())
         forward_count = ingest_forward_signals(conn, repo_root)
+        metrics_count = ingest_company_metrics(conn, repo_root)
     finally:
         conn.close()
 
@@ -445,6 +632,7 @@ def main() -> None:
     print(f"Loaded transcript KPIs: {kpis_count}")
     print(f"Loaded transcript highlights: {highlights_count}")
     print(f"Loaded forward signals: {forward_count}")
+    print(f"Loaded company metrics: {metrics_count}")
 
 
 if __name__ == "__main__":
