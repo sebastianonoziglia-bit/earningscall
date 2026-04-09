@@ -223,7 +223,12 @@ def _format_percent(value: float | None, digits: int = 1) -> str:
     return f"{float(value):.{digits}f}%"
 
 
-def _latest_local_workbook() -> Path:
+def _latest_local_workbook() -> Path | None:
+    """Find the workbook path — local file or Google Sheets download.
+
+    Returns None instead of raising if nothing is found, so callers can
+    degrade gracefully (empty DataFrames) rather than crash the page.
+    """
     repo_root = _repo_root()
     candidates = [
         repo_root / "app" / "attached_assets" / "Earnings + stocks  copy.xlsx",
@@ -240,9 +245,9 @@ def _latest_local_workbook() -> Path:
         resolved = resolve_financial_data_xlsx([])
     except Exception:
         resolved = ""
-    if resolved:
+    if resolved and Path(resolved).exists():
         return Path(resolved)
-    raise FileNotFoundError("No workbook found for Oracle engine")
+    return None
 
 
 def _sheet_mtime(path: Path) -> int:
@@ -427,6 +432,8 @@ def _read_annual_metrics_cached(path_str: str, mtime_ns: int) -> pd.DataFrame:
 
 def load_annual_metrics_frame() -> pd.DataFrame:
     workbook_path = _latest_local_workbook()
+    if workbook_path is None:
+        return pd.DataFrame()
     return _read_annual_metrics_cached(str(workbook_path), _sheet_mtime(workbook_path)).copy()
 
 
@@ -456,6 +463,8 @@ def _read_region_mix_cached(path_str: str, mtime_ns: int) -> pd.DataFrame:
 
 def load_region_mix_frame() -> pd.DataFrame:
     workbook_path = _latest_local_workbook()
+    if workbook_path is None:
+        return pd.DataFrame()
     return _read_region_mix_cached(str(workbook_path), _sheet_mtime(workbook_path)).copy()
 
 
@@ -486,6 +495,8 @@ def _read_daily_prices_cached(path_str: str, mtime_ns: int) -> pd.DataFrame:
 
 def load_daily_prices_frame() -> pd.DataFrame:
     workbook_path = _latest_local_workbook()
+    if workbook_path is None:
+        return pd.DataFrame()
     return _read_daily_prices_cached(str(workbook_path), _sheet_mtime(workbook_path)).copy()
 
 
@@ -1239,7 +1250,7 @@ def build_oracle_snapshot(use_polymarket: bool = True) -> dict[str, Any]:
     metadata = {
         "as_of_date": date.today().isoformat(),
         "forecast_horizon": FORECAST_HORIZON,
-        "workbook_path": str(_latest_local_workbook()),
+        "workbook_path": str(_latest_local_workbook() or "not found"),
         "signals_path": str(_signals_path()) if _signals_path().exists() else "",
         "signal_rows": int(signals_df.shape[0]) if signals_df is not None else 0,
         "prediction_rows": int(predictions.shape[0]) if predictions is not None else 0,

@@ -694,7 +694,7 @@ def main() -> None:
             <p>Only repo-backed sources are used here: the local workbook, the transcript signal CSVs, and the local SQLite intelligence DB for materialized Oracle output.</p>
             <ul class="oracle-aside-list">
               <li>`earningscall_transcripts/scored_signals.csv` for forward-looking transcript velocity</li>
-              <li>`app/attached_assets/Earnings + stocks  copy.xlsx` for fundamentals and daily prices</li>
+              <li>Google Sheets workbook (auto-downloaded) for fundamentals and daily prices</li>
               <li>`earningscall_intelligence.db` for Oracle snapshot storage</li>
             </ul>
           </div>
@@ -709,9 +709,22 @@ def main() -> None:
     with controls_right:
         use_polymarket = st.toggle("Use live Polymarket overlay", value=True, key="oracle_use_polymarket")
 
-    with st.spinner("Materializing Oracle prediction layer..."):
-        snapshot = get_oracle_snapshot(use_polymarket=use_polymarket)
-    persist_oracle_snapshot(snapshot)
+    try:
+        with st.spinner("Materializing Oracle prediction layer..."):
+            snapshot = get_oracle_snapshot(use_polymarket=use_polymarket)
+    except Exception as exc:
+        st.error(
+            f"Oracle engine failed to build predictions.\n\n"
+            f"**Error:** `{type(exc).__name__}: {exc}`\n\n"
+            "This usually means the Google Sheets workbook couldn't be downloaded, "
+            "or `scored_signals.csv` is missing. Check the Space logs for details."
+        )
+        return
+
+    try:
+        persist_oracle_snapshot(snapshot)
+    except Exception:
+        pass  # SQLite write failure is non-fatal — predictions still render
 
     predictions = snapshot.get("predictions", pd.DataFrame()).copy()
     factors = snapshot.get("factors", pd.DataFrame()).copy()
