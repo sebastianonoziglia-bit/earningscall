@@ -2919,6 +2919,14 @@ total_tracked_b = total_tracked_musd / 1e3 if total_tracked_musd else 0.0
 big_tech_names = ["Alphabet", "Meta Platforms", "Amazon", "Apple", "Microsoft"]
 big_tech_b = sum(float(ad_lookup.get(c, {}).get("ad_revenue_musd", 0.0)) for c in big_tech_names) / 1e3
 other_b = max(total_tracked_b - big_tech_b, 0.0)
+
+# Ad revenue YoY for tracked companies
+ad_lookup_prev = _load_ad_revenue_by_company(excel_path, source_stamp, effective_year - 1) if excel_path else {}
+total_tracked_prev_musd = float(sum(float(v.get("ad_revenue_musd", 0.0)) for v in ad_lookup_prev.values()))
+total_tracked_prev_b = total_tracked_prev_musd / 1e3 if total_tracked_prev_musd else 0.0
+ad_rev_yoy = _yoy(total_tracked_musd, total_tracked_prev_musd)
+# Percentage of global ad spend
+ad_rev_pct_of_global = (total_tracked_b / groupm_b * 100) if groupm_b and groupm_b > 0 and total_tracked_b > 0 else None
 global_ad_denom_raw = groupm_b if groupm_b else total_tracked_b
 global_ad_denom = global_ad_denom_raw
 # Safety guard for mixed units ($M vs $B): keep denominator in billions.
@@ -2969,18 +2977,24 @@ if mcap_yoy is not None:
         )
 
 narrative_html = " ".join(narrative_parts) if narrative_parts else "Narrative unavailable for the selected year."
-kpi1_val = f"${groupm_b:.0f}B" if groupm_b else "&#8212;"
+# KPI Card 1: Tracked Revenue
+kpi1_val = f"${rev_b/1e3:.1f}T" if rev_b and rev_b >= 1000 else (f"${rev_b:.0f}B" if rev_b else "&#8212;")
 kpi1_yoy = ""
-if groupm_yoy is not None:
-    _c = "#22c55e" if groupm_yoy >= 0 else "#ef4444"
-    _a = "&#9650;" if groupm_yoy >= 0 else "&#9660;"
-    kpi1_yoy = f"<span style='color:{_c};font-weight:700;font-size:0.88rem;'>{_a} {abs(groupm_yoy):.1f}%</span>"
-kpi2_val = f"${rev_b/1e3:.1f}T" if rev_b and rev_b >= 1000 else (f"${rev_b:.0f}B" if rev_b else "&#8212;")
-kpi2_yoy = ""
 if rev_yoy is not None:
     _c = "#22c55e" if rev_yoy >= 0 else "#ef4444"
     _a = "&#9650;" if rev_yoy >= 0 else "&#9660;"
-    kpi2_yoy = f"<span style='color:{_c};font-weight:700;font-size:0.88rem;'>{_a} {abs(rev_yoy):.1f}%</span>"
+    kpi1_yoy = f"<span style='color:{_c};font-weight:700;font-size:0.88rem;'>{_a} {abs(rev_yoy):.1f}%</span>"
+# KPI Card 2: Advertising Revenue (tracked companies)
+kpi2_val = f"${total_tracked_b:.0f}B" if total_tracked_b else "&#8212;"
+kpi2_yoy = ""
+if ad_rev_yoy is not None:
+    _c = "#22c55e" if ad_rev_yoy >= 0 else "#ef4444"
+    _a = "&#9650;" if ad_rev_yoy >= 0 else "&#9660;"
+    kpi2_yoy = f"<span style='color:{_c};font-weight:700;font-size:0.88rem;'>{_a} {abs(ad_rev_yoy):.1f}%</span>"
+kpi2_sub = ""
+if ad_rev_pct_of_global is not None and groupm_b:
+    kpi2_sub = f"<div style='color:#8b949e;font-size:0.65rem;margin-top:4px;'>{ad_rev_pct_of_global:.0f}% of ${groupm_b:.0f}B global ad spend</div>"
+# KPI Card 3: Combined Market Cap
 kpi3_val = f"${mcap_b/1e3:.1f}T" if mcap_b and mcap_b >= 1000 else (f"${mcap_b:.0f}B" if mcap_b else "&#8212;")
 kpi3_yoy = ""
 if mcap_yoy is not None:
@@ -3031,15 +3045,16 @@ st.components.v1.html(
     f"<div class='hl-wrap'>{_hero_logos_html}</div>"
     "<div style='display:flex;gap:16px;margin-bottom:40px;flex-wrap:wrap;'>"
     f"<div class='kpi-card' style='animation-delay:0.3s;flex:1;min-width:150px;background:rgba(255,255,255,0.05);border:1px solid rgba(74,174,255,0.15);border-radius:10px;padding:20px 16px;'>"
-    f"<div style='color:#a8b3c0;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;'>Global Ad Spend</div>"
+    f"<div style='color:#a8b3c0;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;'>Tracked Revenue</div>"
     f"<div style='color:#4aaeff;font-size:2rem;font-weight:900;font-family:monospace;line-height:1.1;'>{kpi1_val}</div>"
     f"<div style='margin-top:4px;'>{kpi1_yoy}</div>"
-    f"<div style='color:#8b949e;font-size:0.68rem;margin-top:6px;'>{effective_year_groupm} &middot; Global Aggregates</div></div>"
+    f"<div style='color:#8b949e;font-size:0.68rem;margin-top:6px;'>{effective_year} &middot; {_hero_logo_count} companies</div></div>"
     f"<div class='kpi-card' style='animation-delay:0.6s;flex:1;min-width:150px;background:rgba(255,255,255,0.05);border:1px solid rgba(74,174,255,0.15);border-radius:10px;padding:20px 16px;'>"
-    f"<div style='color:#a8b3c0;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;'>Tracked Revenue</div>"
+    f"<div style='color:#a8b3c0;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;'>Advertising Revenue</div>"
     f"<div style='color:#4aaeff;font-size:2rem;font-weight:900;font-family:monospace;line-height:1.1;'>{kpi2_val}</div>"
     f"<div style='margin-top:4px;'>{kpi2_yoy}</div>"
-    f"<div style='color:#8b949e;font-size:0.68rem;margin-top:6px;'>{effective_year} &middot; {_hero_logo_count} companies</div></div>"
+    f"{kpi2_sub}"
+    f"<div style='color:#8b949e;font-size:0.68rem;margin-top:6px;'>{effective_year} &middot; tracked companies only</div></div>"
     f"<div class='kpi-card' style='animation-delay:0.9s;flex:1;min-width:150px;background:rgba(255,255,255,0.05);border:1px solid rgba(74,174,255,0.15);border-radius:10px;padding:20px 16px;'>"
     f"<div style='color:#a8b3c0;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;'>Combined Market Cap</div>"
     f"<div style='color:#4aaeff;font-size:2rem;font-weight:900;font-family:monospace;line-height:1.1;'>{kpi3_val}</div>"
@@ -4693,25 +4708,18 @@ st.markdown("</div>", unsafe_allow_html=True)
 _deep_dive("editorial", "Deep dive into platforms")
 _separator()
 # --- Concentration: animated stacked bar 2010→latest ---
-_CONC_SEG_ORDER = ["Alphabet", "Meta", "Amazon", "Apple + MSFT",
-                   "Search (other)", "Social (other)", "Display (other)", "Video (other)", "Other Digital",
-                   "TV (Free + Pay)", "Print", "Radio", "OOH", "Cinema"]
-_CONC_SEG_COLORS = {
-    # Companies — distinct, vivid
+# Companies vs "The Rest of Advertising" — one block for all non-tracked ad spend
+_CONC_COMPANY_COLORS = {
     "Alphabet": "#4285f4", "Meta": "#e040fb", "Amazon": "#ff9900",
-    "Apple + MSFT": "#34d399",
-    # Digital channels — grey gradient (lightest = biggest)
-    "Search (other)": "#6b7280", "Social (other)": "#5b616b",
-    "Display (other)": "#4b5058", "Video (other)": "#3b3f46",
-    "Other Digital": "#2d3138",
-    # Traditional media — darker greys
-    "TV (Free + Pay)": "#252830", "Print": "#1e2028",
-    "Radio": "#181a20", "OOH": "#131518", "Cinema": "#0e1012",
+    "TikTok": "#010101", "Microsoft": "#00a4ef", "Apple": "#34d399",
+    "Spotify": "#1db954", "Netflix": "#e50914", "Snapchat": "#fffc00",
+    "Twitter/X": "#1da1f2", "Disney": "#113ccf", "WBD": "#0047ab",
+    "Comcast": "#2563eb", "Paramount": "#0033a0",
 }
-_CONC_DIG_PATTERNS = ["Search", "Social", "Display", "Video", "Digital OOH", "Other Desktop", "Other Mobile"]
-
+# Build dynamic segment order: companies with ad revenue (sorted desc) + The Rest
 _conc_all_years: dict = {}
 _conc_anim_start = 2010
+_all_conc_companies: set = set()
 for _ay in range(_conc_anim_start, (effective_year or 2024) + 1):
     if _ay not in _global_adv_totals.index:
         continue
@@ -4719,86 +4727,47 @@ for _ay in range(_conc_anim_start, (effective_year or 2024) + 1):
     if _ay_total <= 0:
         continue
     _ay_ar = _ad_by_year.get(_ay, {})
-    _ay_alpha = _safe_float(_ay_ar.get("Alphabet", 0))
-    _ay_meta  = _safe_float(_ay_ar.get("Meta", 0))
-    _ay_amzn  = _safe_float(_ay_ar.get("Amazon", 0))
-    _ay_apple = _safe_float(_ay_ar.get("Apple", 0))
-    _ay_msft  = _safe_float(_ay_ar.get("Microsoft", 0))
-    _ay_named = _ay_alpha + _ay_meta + _ay_amzn + _ay_apple + _ay_msft
-    _ay_df = global_adv_df[global_adv_df["year"] == _ay] if not global_adv_df.empty else pd.DataFrame()
-    _ay_by_type = (_ay_df.groupby("metric_type")["value"].sum() / 1_000.0).to_dict() if not _ay_df.empty else {}
-    # Granular digital breakdown
-    _ay_search_total = sum(_ay_by_type.get(k, 0) for k in ["Search Desktop Worldwide", "Search Mobile Worldwide"])
-    _ay_social_total = sum(_ay_by_type.get(k, 0) for k in ["Social Desktop Worldwide", "Social Mobile Worldwide"])
-    _ay_display_total = sum(_ay_by_type.get(k, 0) for k in ["Display Desktop Worldwide", "Display Mobile Worldwide"])
-    _ay_video_total = sum(_ay_by_type.get(k, 0) for k in ["Video Desktop Worldwide", "Video Mobile Worldwide"])
-    _ay_dig_other_raw = sum(_ay_by_type.get(k, 0) for k in ["Other Desktop Worldwide", "Other Mobile Worldwide", "Digital OOH Worldwide"])
-    # Subtract named company ad revenue from the appropriate digital categories
-    # Alphabet is mostly search, Meta is mostly social, Amazon is mostly display/other
-    _ay_search_other = max(0.0, _ay_search_total - _ay_alpha)
-    _ay_social_other = max(0.0, _ay_social_total - _ay_meta)
-    _ay_display_other = max(0.0, _ay_display_total - _ay_amzn)
-    _ay_video_other = _ay_video_total
-    _ay_remaining_dig = max(0.0, _ay_dig_other_raw - (_ay_apple + _ay_msft))
-    _ay_vals: dict = {
-        "Alphabet": _ay_alpha, "Meta": _ay_meta, "Amazon": _ay_amzn,
-        "Apple + MSFT": _ay_apple + _ay_msft,
-        "Search (other)": _ay_search_other if _ay_search_other > 0.3 else 0.0,
-        "Social (other)": _ay_social_other if _ay_social_other > 0.3 else 0.0,
-        "Display (other)": _ay_display_other if _ay_display_other > 0.3 else 0.0,
-        "Video (other)": _ay_video_other if _ay_video_other > 0.3 else 0.0,
-        "Other Digital": _ay_remaining_dig if _ay_remaining_dig > 0.3 else 0.0,
-        "TV (Free + Pay)": sum(_ay_by_type.get(k, 0) for k in ["Free TV Worldwide", "Pay TV Worldwide"]),
-        "Print":  sum(_ay_by_type.get(k, 0) for k in ["Newspaper Worldwide", "Magazine Worldwide"]),
-        "Radio":  _ay_by_type.get("Radio Worldwide", 0.0),
-        "OOH":    _ay_by_type.get("Traditional OOH Worldwide", 0.0),
-        "Cinema": _ay_by_type.get("Cinema Worldwide", 0.0),
-    }
+    _ay_company_vals: dict = {}
+    _ay_company_sum = 0.0
+    for _co_name, _co_rev in _ay_ar.items():
+        _co_rev_f = _safe_float(_co_rev)
+        if _co_rev_f > 0:
+            _ay_company_vals[_co_name] = round(_co_rev_f, 1)
+            _ay_company_sum += _co_rev_f
+            _all_conc_companies.add(_co_name)
+    _ay_rest = max(0.0, _ay_total - _ay_company_sum)
+    _ay_company_vals["The Rest of Advertising"] = round(_ay_rest, 1)
     _conc_all_years[_ay] = {
         "total": round(_ay_total, 1),
-        "vals": {c: round(_ay_vals[c], 1) for c in _CONC_SEG_ORDER},
+        "vals": _ay_company_vals,
     }
+
+# Build segment order: largest companies first (by latest year), then The Rest
+_latest_conc_yr_data = _conc_all_years.get(effective_year, _conc_all_years.get(max(_conc_all_years.keys()) if _conc_all_years else 2024, {}))
+_latest_conc_vals = _latest_conc_yr_data.get("vals", {}) if _latest_conc_yr_data else {}
+_CONC_SEG_ORDER = sorted(
+    [c for c in _all_conc_companies if _latest_conc_vals.get(c, 0) > 0],
+    key=lambda c: _latest_conc_vals.get(c, 0), reverse=True
+) + ["The Rest of Advertising"]
+_CONC_SEG_COLORS = {**_CONC_COMPANY_COLORS, "The Rest of Advertising": "#2a2d35"}
+# Ensure all years have all segments (0 for missing)
+for _ay_data in _conc_all_years.values():
+    for _seg in _CONC_SEG_ORDER:
+        _ay_data["vals"].setdefault(_seg, 0.0)
 
 _conc_yr = effective_year
 _conc_ad = _ad_by_year.get(_conc_yr, {})
-_conc_alpha    = _safe_float(_conc_ad.get("Alphabet", 0))
-_conc_meta     = _safe_float(_conc_ad.get("Meta", 0))
-_conc_amzn     = _safe_float(_conc_ad.get("Amazon", 0))
-_conc_apple    = _safe_float(_conc_ad.get("Apple", 0))
-_conc_msft     = _safe_float(_conc_ad.get("Microsoft", 0))
-_conc_apple_msft = _conc_apple + _conc_msft
-_conc_named    = _conc_alpha + _conc_meta + _conc_amzn + _conc_apple_msft
+_conc_named = sum(_safe_float(v) for v in _conc_ad.values())
 # Total from Global_Adv_Aggregates (best available whole-market figure)
 _conc_total = groupm_b if groupm_b and groupm_b > 0 else (_conc_named * 2.0)
-
-# Metric-type breakdown for _conc_yr from global_adv_df (already loaded)
-_conc_by_type: dict = {}
-if not global_adv_df.empty:
-    _cyr_df = global_adv_df[global_adv_df["year"] == _conc_yr]
-    _conc_by_type = (_cyr_df.groupby("metric_type")["value"].sum() / 1_000.0).to_dict()
-
-# Digital residual = all digital metric-types minus named-company revenues
-_digital_keys = [k for k in _conc_by_type if any(
-    x in k for x in ["Search", "Social", "Display", "Video", "Digital OOH", "Other Desktop", "Other Mobile"]
-)]
-_digital_total = sum(_conc_by_type[k] for k in _digital_keys)
-_digital_other = max(0.0, _digital_total - _conc_named)
-
-# Non-digital categories
-_trad_cats = [
-    ("TV (Free + Pay)", ["Free TV Worldwide", "Pay TV Worldwide"],        "#444444"),
-    ("Print",           ["Newspaper Worldwide", "Magazine Worldwide"],    "#333333"),
-    ("Radio",           ["Radio Worldwide"],                              "#282828"),
-    ("OOH",             ["Traditional OOH Worldwide"],                    "#1e1e1e"),
-    ("Cinema",          ["Cinema Worldwide"],                             "#161616"),
-]
 
 _conc_top_share = (_conc_named / _conc_total * 100) if _conc_total > 0 else 0
 _conc_all_years_json = json.dumps(_conc_all_years)
 _conc_seg_colors_json = json.dumps(_CONC_SEG_COLORS)
 _conc_seg_order_json = json.dumps(_CONC_SEG_ORDER)
 
-_section("THE CONCENTRATION", "Most of it went to very few hands.", f"Of ${_conc_total:.0f}B spent globally on advertising in {_conc_yr}, 4 companies captured {_conc_top_share:.0f}% of the market.")
+_n_conc_companies = len([c for c in _CONC_SEG_ORDER if c != "The Rest of Advertising"])
+_section("THE CONCENTRATION", "Most of it went to very few hands.", f"Of ${_conc_total:.0f}B spent globally on advertising in {_conc_yr}, {_n_conc_companies} companies we track captured {_conc_top_share:.0f}%.")
 st.markdown("<div data-ae-section='1' style='width:100%;'>", unsafe_allow_html=True)
 st.components.v1.html(f"""
 <style>
@@ -4847,7 +4816,7 @@ html,body{{margin:0;padding:0;background:#020810;}}
   writing-mode:vertical-rl;transform:rotate(180deg);}}
 </style>
 <div id="conc-root">
-  <div class="wc-sub">Of <span id="conc-sub-total">${_conc_total:.0f}B</span> spent globally on advertising in <span id="conc-sub-yr">{_conc_yr}</span>, 4 companies captured <span id="conc-sub-pct">{_conc_top_share:.0f}%</span> of the market.</div>
+  <div class="wc-sub">Of <span id="conc-sub-total">${_conc_total:.0f}B</span> spent globally on advertising in <span id="conc-sub-yr">{_conc_yr}</span>, tracked companies captured <span id="conc-sub-pct">{_conc_top_share:.0f}%</span>.</div>
   <div class="conc-controls">
     <button id="conc-play">&#9654; Play</button>
     <span class="conc-year" id="conc-yr-label">{_conc_yr}</span>
@@ -4906,8 +4875,8 @@ function updateYear(idx) {{
 
   const total = data.total;
   const vals = data.vals || {{}};
-  const named4 = ['Alphabet','Meta','Amazon','Apple + MSFT'];
-  const namedSum = named4.reduce((s,c) => s + (vals[c]||0), 0);
+  const restVal = vals['The Rest of Advertising'] || 0;
+  const namedSum = total - restVal;
   subPct.textContent = total > 0 ? (namedSum/total*100).toFixed(0)+'%' : '—';
 
   /* Update bar widths */

@@ -3579,6 +3579,140 @@ else:
 
 st.markdown("</div>", unsafe_allow_html=True)
 
+# ═══════════════════════════════════════════════════════════════════════
+# GENIE MODE: Simple (default) vs Advanced (full chat + thought map)
+# ═══════════════════════════════════════════════════════════════════════
+if "genie_mode" not in st.session_state:
+    st.session_state["genie_mode"] = "simple"
+
+st.markdown("---")
+_mode_cols = st.columns([0.6, 0.2, 0.2])
+with _mode_cols[0]:
+    st.markdown(
+        "<div style='font-size:1.3rem;font-weight:800;color:#e6edf3;font-family:Syne,sans-serif;'>"
+        "Genie Intelligence</div>",
+        unsafe_allow_html=True,
+    )
+with _mode_cols[1]:
+    if st.button("📊 Insights", key="genie_mode_simple",
+                 type="primary" if st.session_state["genie_mode"] == "simple" else "secondary",
+                 use_container_width=True):
+        st.session_state["genie_mode"] = "simple"
+        st.rerun()
+with _mode_cols[2]:
+    if st.button("💬 Advanced Chat", key="genie_mode_advanced",
+                 type="primary" if st.session_state["genie_mode"] == "advanced" else "secondary",
+                 use_container_width=True):
+        st.session_state["genie_mode"] = "advanced"
+        st.rerun()
+
+if st.session_state["genie_mode"] == "simple":
+    # ── SIMPLE MODE: Pre-computed insights and quick-ask templates ──
+    st.markdown(
+        "<p style='font-size:0.85rem;color:#94a3b8;margin-bottom:16px;'>"
+        "Key insights auto-generated from earnings transcripts, financial metrics, and market data.</p>",
+        unsafe_allow_html=True,
+    )
+
+    # Pre-analysis: auto-generate key insights per selected company
+    _insight_companies = selected_companies[:5] if "selected_companies" in dir() and selected_companies else ["Alphabet", "Meta Platforms", "Amazon"]
+    _insight_cols = st.columns(min(3, len(_insight_companies)))
+
+    for _ic_idx, _ic_company in enumerate(_insight_companies[:3]):
+        with _insight_cols[_ic_idx % len(_insight_cols)]:
+            st.markdown(
+                f"<div style='background:rgba(255,255,255,0.04);border:1px solid rgba(74,174,255,0.15);"
+                f"border-radius:10px;padding:16px;margin-bottom:12px;'>"
+                f"<div style='font-size:0.75rem;color:#4aaeff;text-transform:uppercase;letter-spacing:0.1em;"
+                f"margin-bottom:6px;'>{_ic_company}</div>",
+                unsafe_allow_html=True,
+            )
+
+            # Revenue insight
+            _ic_rev = None
+            if "dashboard_state" in dir():
+                try:
+                    _ep = dashboard_state.get("excel_path", "")
+                    if _ep:
+                        from utils.revenue_simulator import estimate_revenue
+                        _ic_est = estimate_revenue(_ic_company, _ep)
+                        if _ic_est.get("full_year_estimate"):
+                            _fy = _ic_est["full_year_estimate"]
+                            _gr = _ic_est.get("growth_rate", 0)
+                            _fy_str = f"${_fy/1000:.0f}B" if _fy > 1000 else f"${_fy:.0f}M"
+                            _gr_str = f"{_gr*100:+.1f}%" if _gr else ""
+                            _ic_rev = f"Est. {datetime.now().year} revenue: <strong style='color:#e6edf3;'>{_fy_str}</strong> ({_gr_str})"
+                except Exception:
+                    pass
+
+            if _ic_rev:
+                st.markdown(f"<div style='font-size:0.82rem;color:#94a3b8;margin-bottom:6px;'>{_ic_rev}</div>", unsafe_allow_html=True)
+
+            # Forward signals insight
+            _ic_signals = []
+            if "dashboard_state" in dir():
+                _all_sigs = dashboard_state.get("forward_signals", [])
+                _ic_signals = [s for s in _all_sigs if s.get("company", "").lower().startswith(_ic_company.lower()[:5])][:2]
+
+            if _ic_signals:
+                for _sig in _ic_signals:
+                    _sq = str(_sig.get("signal", ""))[:120]
+                    st.markdown(
+                        f"<div style='font-size:0.75rem;color:#8899aa;border-left:2px solid #4aaeff;"
+                        f"padding-left:8px;margin:4px 0;'>\"{_sq}\"</div>",
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.markdown(
+                    "<div style='font-size:0.75rem;color:#64748b;font-style:italic;'>No recent signals</div>",
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # Quick-ask templates
+    st.markdown(
+        "<div style='font-size:0.9rem;font-weight:700;color:#e6edf3;margin:20px 0 8px;'>Quick Questions</div>",
+        unsafe_allow_html=True,
+    )
+    _quick_questions = [
+        "Which company has the strongest revenue growth momentum?",
+        "What are the key risks mentioned in recent earnings calls?",
+        "Compare ad revenue trajectories of Alphabet vs Meta",
+        "What does the signal-to-price divergence tell us?",
+        "Which companies are gaining institutional investor conviction?",
+        "Summarize the latest Polymarket predictions for tech stocks",
+    ]
+    _qq_cols = st.columns(2)
+    for _qq_idx, _qq in enumerate(_quick_questions):
+        with _qq_cols[_qq_idx % 2]:
+            if st.button(f"→ {_qq}", key=f"qq_{_qq_idx}", use_container_width=True):
+                # Switch to advanced mode and pre-fill the question
+                st.session_state["genie_mode"] = "advanced"
+                st.session_state["genie_prefill_question"] = _qq
+                st.rerun()
+
+    # Oracle summary (if available)
+    try:
+        from utils.intelligence_layer import compute_all_derived_metrics, generate_genie_summary
+        _genie_derived = compute_all_derived_metrics()
+        if _genie_derived:
+            _genie_summary = generate_genie_summary(_genie_derived)
+            if _genie_summary:
+                with st.expander("🧠 Intelligence Layer Summary", expanded=False):
+                    st.markdown(
+                        f"<pre style='font-size:0.75rem;color:#94a3b8;white-space:pre-wrap;'>{_genie_summary}</pre>",
+                        unsafe_allow_html=True,
+                    )
+    except Exception:
+        pass
+
+    st.stop()  # Don't render the advanced chat below
+
+# ═══════════════════════════════════════════════════════════════════════
+# ADVANCED MODE: Full chat + thought map (existing behavior)
+# ═══════════════════════════════════════════════════════════════════════
+
 # ── Depth selector for thought map ──
 from utils.thought_map import render_depth_selector
 st.markdown(

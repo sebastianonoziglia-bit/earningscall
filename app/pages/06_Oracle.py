@@ -821,6 +821,16 @@ def main() -> None:
     st.markdown("</div>", unsafe_allow_html=True)
 
     # ──────────────────────────────────────────────────────────────────
+    # Revenue Simulator — YTD quarterly revenue estimation
+    # ──────────────────────────────────────────────────────────────────
+    _render_revenue_simulator()
+
+    # ──────────────────────────────────────────────────────────────────
+    # Country Ad Spend Predictor
+    # ──────────────────────────────────────────────────────────────────
+    _render_country_predictor()
+
+    # ──────────────────────────────────────────────────────────────────
     # Intelligence Layer — Cross-source derived metrics
     # ──────────────────────────────────────────────────────────────────
     _render_intelligence_section()
@@ -832,6 +842,259 @@ def main() -> None:
 
     with st.expander("Oracle Snapshot Metadata", expanded=False):
         st.json(metadata)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Revenue Simulator Section
+# ═══════════════════════════════════════════════════════════════════════
+
+def _render_revenue_simulator() -> None:
+    """YTD revenue estimation — extrapolates quarterly run rate + signal momentum."""
+    try:
+        from utils.revenue_simulator import estimate_all_companies
+        from utils.workbook_source import resolve_financial_data_xlsx, get_workbook_source_stamp
+    except ImportError:
+        return
+
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="margin-top:10px;margin-bottom:6px;">
+          <span style="font-size:1.5rem;">📊</span>
+          <span style="font-size:1.1rem;font-weight:800;color:#e6edf3;margin-left:6px;">
+            Revenue Simulator
+          </span>
+          <span style="font-size:0.75rem;color:#94a3b8;margin-left:12px;">
+            Current-year revenue estimation · Quarterly extrapolation + signal momentum
+          </span>
+        </div>
+        <p style="font-size:0.82rem;color:#94a3b8;margin-top:0;margin-bottom:14px;">
+          Estimates current year revenue from last reported quarters, adjusted by
+          earnings call signal momentum. Select quarters to see partial-year estimates.
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    ctrl_col1, ctrl_col2 = st.columns([0.3, 0.7])
+    with ctrl_col1:
+        q_choice = st.radio(
+            "Estimate through",
+            options=["Full Year", "Q1", "Q2", "Q3"],
+            horizontal=True,
+            key="rev_sim_quarter",
+        )
+
+    through_q = {"Full Year": None, "Q1": 1, "Q2": 2, "Q3": 3}.get(q_choice)
+
+    try:
+        excel_path = resolve_financial_data_xlsx()
+        source_stamp = get_workbook_source_stamp()
+        results = estimate_all_companies(excel_path, source_stamp, through_quarter=through_q)
+    except Exception as e:
+        st.warning(f"Revenue simulator error: {e}")
+        return
+
+    if not results:
+        st.info("No quarterly data available for revenue estimation.")
+        return
+
+    # Build comparison table
+    rows = []
+    for r in results:
+        est_val = r.get("ytd_revenue") if through_q else r.get("full_year_estimate")
+        prior = r.get("prior_year_revenue")
+        growth = r.get("growth_rate")
+        sig_adj = r.get("signal_adjustment", 0)
+        conf = r.get("confidence", 0)
+
+        if est_val and est_val > 0:
+            # Show values in $B if over 1000 ($M)
+            if est_val > 1000:
+                est_str = f"${est_val/1000:.1f}B"
+            else:
+                est_str = f"${est_val:.0f}M"
+            prior_str = f"${prior/1000:.1f}B" if prior and prior > 1000 else (f"${prior:.0f}M" if prior else "—")
+            growth_str = f"{growth*100:+.1f}%" if growth is not None else "—"
+            sig_str = f"{sig_adj*100:+.1f}pp" if sig_adj else "—"
+
+            rows.append({
+                "Company": r["company"],
+                "Estimate": est_str,
+                "Prior Year": prior_str,
+                "Growth Rate": growth_str,
+                "Signal Adj.": sig_str,
+                "Confidence": f"{conf}%",
+            })
+
+    if rows:
+        label = f"through {q_choice}" if through_q else "Full Year"
+        with ctrl_col2:
+            st.markdown(f"<div style='font-size:0.8rem;color:#64748b;margin-bottom:4px;'>Estimated revenue {label}</div>", unsafe_allow_html=True)
+
+        df_display = pd.DataFrame(rows)
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+    # Quarterly breakdown for top companies
+    with st.expander("Quarterly Breakdown", expanded=False):
+        for r in results[:6]:
+            qb = r.get("quarterly_breakdown", [])
+            if not qb:
+                continue
+            q_parts = []
+            for q in qb:
+                tag = "✓" if q["is_actual"] else "est."
+                rev = q["revenue"]
+                rev_str = f"${rev/1000:.1f}B" if rev > 1000 else f"${rev:.0f}M"
+                q_parts.append(f"Q{q['q']}: {rev_str} ({tag})")
+            st.markdown(f"**{r['company']}** — {' · '.join(q_parts)}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Country Ad Spend Predictor Section
+# ═══════════════════════════════════════════════════════════════════════
+
+def _render_country_predictor() -> None:
+    """Country-level ad spend forecasting with channel breakdown."""
+    try:
+        from utils.country_ad_predictor import predict_country_ad_spend, get_available_countries
+        from utils.workbook_source import resolve_financial_data_xlsx
+    except ImportError:
+        return
+
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="margin-top:10px;margin-bottom:6px;">
+          <span style="font-size:1.5rem;">🌍</span>
+          <span style="font-size:1.1rem;font-weight:800;color:#e6edf3;margin-left:6px;">
+            Country Ad Spend Predictor
+          </span>
+          <span style="font-size:0.75rem;color:#94a3b8;margin-left:12px;">
+            Channel-level growth models · Historical data extrapolation
+          </span>
+        </div>
+        <p style="font-size:0.82rem;color:#94a3b8;margin-top:0;margin-bottom:14px;">
+          Forecasts advertising spend by country and channel using historical growth patterns (2019-2024).
+          Blends log-linear regression with dampened extrapolation for robust multi-year projections.
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    try:
+        excel_path = resolve_financial_data_xlsx()
+    except Exception:
+        st.info("Workbook not available for country predictions.")
+        return
+
+    countries = get_available_countries(excel_path)
+    if not countries:
+        st.info("No country advertising data available.")
+        return
+
+    ctrl1, ctrl2 = st.columns([0.4, 0.6])
+    with ctrl1:
+        default_countries = ["United States", "United Kingdom", "China", "Japan", "Germany"]
+        defaults = [c for c in default_countries if c in countries]
+        selected = st.multiselect(
+            "Select countries",
+            options=countries,
+            default=defaults[:3],
+            key="country_pred_select",
+        )
+    with ctrl2:
+        forecast_yrs = st.slider("Forecast years", min_value=1, max_value=5, value=2, key="country_pred_yrs")
+
+    if not selected:
+        return
+
+    for country in selected:
+        try:
+            pred = predict_country_ad_spend(country, excel_path, forecast_yrs)
+        except Exception:
+            continue
+
+        if pred.get("method") == "unavailable":
+            continue
+
+        st.markdown(f"### {pred['country']}")
+
+        # Growth rates by channel
+        growth = pred.get("growth_rates", {})
+        total_growth = growth.get("Total", 0)
+        conf = pred.get("confidence", 0)
+        st.markdown(
+            f"<div style='font-size:0.8rem;color:#94a3b8;'>"
+            f"Overall CAGR: <strong style='color:#e6edf3;'>{total_growth:+.1f}%</strong> · "
+            f"Confidence: {conf}%</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Build chart: historical + forecast
+        historical = pred.get("historical", {})
+        forecast = pred.get("forecast", {})
+        all_years = sorted(list(historical.keys()) + list(forecast.keys()))
+        categories = [c for c in growth.keys() if c != "Total"]
+
+        if all_years and categories:
+            fig = go.Figure()
+            cat_colors = {
+                "Digital": "#3b82f6", "Television": "#ef4444",
+                "OOH": "#f59e0b", "Press": "#6b7280",
+                "Radio": "#8b5cf6", "Cinema": "#ec4899",
+            }
+            for cat in categories:
+                hist_vals = [historical.get(y, {}).get(cat, 0) for y in all_years if y in historical]
+                fore_vals = [forecast.get(y, {}).get(cat, 0) for y in all_years if y in forecast]
+                hist_years = [y for y in all_years if y in historical]
+                fore_years = [y for y in all_years if y in forecast]
+
+                color = cat_colors.get(cat, "#64748b")
+                # Historical (solid)
+                if hist_vals:
+                    fig.add_trace(go.Bar(
+                        name=cat,
+                        x=hist_years,
+                        y=hist_vals,
+                        marker_color=color,
+                        legendgroup=cat,
+                        showlegend=True,
+                    ))
+                # Forecast (hatched/lighter)
+                if fore_vals:
+                    fig.add_trace(go.Bar(
+                        name=f"{cat} (forecast)",
+                        x=fore_years,
+                        y=fore_vals,
+                        marker_color=color,
+                        marker_opacity=0.5,
+                        marker_line=dict(color=color, width=1),
+                        legendgroup=cat,
+                        showlegend=False,
+                    ))
+
+            fig.update_layout(
+                barmode="stack",
+                height=320,
+                margin=dict(l=60, r=20, t=10, b=40),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#94a3b8"),
+                xaxis=dict(tickfont=dict(color="#e6edf3")),
+                yaxis=dict(title="$M", gridcolor="#1e293b", tickfont=dict(color="#94a3b8")),
+                legend=dict(
+                    orientation="h", y=-0.15,
+                    font=dict(color="#94a3b8", size=10),
+                ),
+            )
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+        # Channel growth table
+        with st.expander(f"Channel growth rates — {pred['country']}", expanded=False):
+            gr_rows = [{"Channel": k, "CAGR %": f"{v:+.1f}%"} for k, v in growth.items() if k != "Total"]
+            if gr_rows:
+                st.dataframe(pd.DataFrame(gr_rows), use_container_width=True, hide_index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════
