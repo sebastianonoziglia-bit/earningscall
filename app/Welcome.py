@@ -4764,18 +4764,10 @@ _bubble_logo_aliases = {
     "Comcast Peacock": "Comcast",
     "Amazon Prime Video": "Amazon",
 }
-_bubble_logo_map = {}
-for _hc in _human_companies:
-    _hname = _hc.get("name", "")
-    _logo_key = _bubble_logo_aliases.get(_hname, _hname)
-    if _logo_key:
-        _b64 = _resolve_logo(_logo_key, logos_original)
-        if _b64:
-            _bubble_logo_map[_hname] = _b64
-try:
-    _logos_json_str = json.dumps(_bubble_logo_map, default=str)
-except Exception:
-    _logos_json_str = "{}"
+# NOTE: logos are NOT injected into the bubble iframe — base64 logos are 25MB+
+# which exceeds browser data-URI limits and kills the iframe. The JS has a
+# built-in letter-badge fallback that works perfectly without logos.
+_logos_json_str = "{}"
 try:
     _attn_html = _build_attn_html(_ad_json_str, _global_adv_json_str, _human_json, logos_json=_logos_json_str)
 except Exception as _attn_err:
