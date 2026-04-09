@@ -68,6 +68,13 @@ PAGE_MANIFEST: list[tuple[str, str, str, str]] = [
     ("country",   "app/pages/05_Country.py",    "Country Deep Dive",
      "Interactive D3.js country globe, channel distribution bars, ad/GDP trend, "
      "ad spend yearly bars."),
+
+    ("oracle",    "app/pages/06_Oracle.py",     "Oracle",
+     "Living constellation visualization, prediction dials (Top Oracle Dials), "
+     "layer breakdown chart, prediction table, revenue simulator with quarterly "
+     "extrapolation, country ad spend predictor with channel growth models, "
+     "intelligence layer metrics (divergence, channel exposure, institutional "
+     "conviction, revenue per employee), MiroFish swarm simulator."),
 ]
 
 # ── Visualisation detection keywords ──────────────────────────────────────

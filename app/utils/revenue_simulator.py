@@ -47,10 +47,10 @@ def _safe_float(v) -> float | None:
 
 
 def _load_quarterly_data(excel_path: str) -> pd.DataFrame:
-    """Load quarterly revenue from Company_Quarterly_segments_valu sheet."""
+    """Load quarterly revenue from Company_Quarterly_KPI sheet."""
     import re
     try:
-        df = pd.read_excel(excel_path, sheet_name="Company_Quarterly_segments_valu")
+        df = pd.read_excel(excel_path, sheet_name="Company_Quarterly_KPI")
     except Exception:
         return pd.DataFrame()
     if df is None or df.empty:
@@ -78,6 +78,10 @@ def _load_quarterly_data(excel_path: str) -> pd.DataFrame:
         rev_candidates = [c for c in df.columns if "revenue" in c]
     if rev_candidates:
         df["_revenue"] = pd.to_numeric(df[rev_candidates[0]], errors="coerce")
+        # Revenue is in raw USD — convert to $M for consistency
+        df["_revenue"] = df["_revenue"] / 1_000_000
+        # Drop anomalous rows (> $500B/quarter = $500,000M is unrealistic)
+        df.loc[df["_revenue"] > 500_000, "_revenue"] = np.nan
     else:
         df["_revenue"] = np.nan
     return df

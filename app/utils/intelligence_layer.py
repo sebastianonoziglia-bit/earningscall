@@ -292,6 +292,29 @@ def _load_ad_revenue() -> pd.DataFrame:
         df["ad_revenue_b"] = pd.to_numeric(df["advertising_revenue"], errors="coerce") / 1000.0
         return df
 
+    # Fallback: Google Sheets workbook
+    try:
+        from utils.workbook_source import resolve_financial_data_xlsx
+        xlsx_path = resolve_financial_data_xlsx()
+        if xlsx_path:
+            wdf = pd.read_excel(xlsx_path, sheet_name="Company_advertising_revenue")
+            if wdf is not None and not wdf.empty:
+                wdf.columns = [str(c).strip() for c in wdf.columns]
+                # Expect: year column + company columns with ad revenue in $B
+                year_col = next((c for c in wdf.columns if c.lower().strip() == "year"), None)
+                if year_col:
+                    value_cols = [c for c in wdf.columns if c != year_col]
+                    melted = wdf.melt(id_vars=[year_col], value_vars=value_cols,
+                                      var_name="company", value_name="ad_revenue_b")
+                    melted["company"] = melted["company"].apply(canonical_company)
+                    melted["year"] = pd.to_numeric(melted[year_col], errors="coerce")
+                    melted["ad_revenue_b"] = pd.to_numeric(melted["ad_revenue_b"], errors="coerce")
+                    melted = melted.dropna(subset=["year", "ad_revenue_b"])
+                    if not melted.empty:
+                        return melted
+    except Exception:
+        pass
+
     return pd.DataFrame()
 
 

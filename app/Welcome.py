@@ -3034,7 +3034,8 @@ st.components.v1.html(
     ".hl-logo:hover{opacity:1!important;transform:scale(1.25)!important;animation:none;"
     "background:rgba(255,255,255,0.08);border-color:var(--hl-brand);box-shadow:0 0 18px color-mix(in srgb,var(--hl-brand) 40%,transparent);}"
     ".hl-logo img{width:28px;height:28px;object-fit:contain;pointer-events:none;}"
-    ".kpi-card{opacity:0;animation:kpiFadeIn 0.6s ease forwards;}"
+    ".kpi-card{opacity:0;animation:kpiFadeIn 0.6s ease forwards;transition:transform 0.25s ease,box-shadow 0.25s ease,border-color 0.25s ease;}"
+    ".kpi-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,0.3);border-color:rgba(74,174,255,0.4)!important;}"
     "</style>"
     "<div style='background:transparent;padding:72px 48px 64px;font-family:DM Sans,sans-serif;'>"
     "<div style='color:#4aaeff;font-size:0.72rem;letter-spacing:0.3em;text-transform:uppercase;margin-bottom:20px;'>The Attention Economy</div>"
@@ -3044,18 +3045,18 @@ st.components.v1.html(
     + "</div>"
     f"<div class='hl-wrap'>{_hero_logos_html}</div>"
     "<div style='display:flex;gap:16px;margin-bottom:40px;flex-wrap:wrap;'>"
-    f"<div class='kpi-card' style='animation-delay:0.3s;flex:1;min-width:150px;background:rgba(255,255,255,0.05);border:1px solid rgba(74,174,255,0.15);border-radius:10px;padding:20px 16px;'>"
+    f"<div class='kpi-card' style='animation-delay:0.3s;flex:1;min-width:150px;background:rgba(255,255,255,0.05);border:1px solid rgba(74,174,255,0.15);border-radius:16px;padding:20px 16px;'>"
     f"<div style='color:#a8b3c0;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;'>Tracked Revenue</div>"
     f"<div style='color:#4aaeff;font-size:2rem;font-weight:900;font-family:monospace;line-height:1.1;'>{kpi1_val}</div>"
     f"<div style='margin-top:4px;'>{kpi1_yoy}</div>"
     f"<div style='color:#8b949e;font-size:0.68rem;margin-top:6px;'>{effective_year} &middot; {_hero_logo_count} companies</div></div>"
-    f"<div class='kpi-card' style='animation-delay:0.6s;flex:1;min-width:150px;background:rgba(255,255,255,0.05);border:1px solid rgba(74,174,255,0.15);border-radius:10px;padding:20px 16px;'>"
+    f"<div class='kpi-card' style='animation-delay:0.6s;flex:1;min-width:150px;background:rgba(255,255,255,0.05);border:1px solid rgba(74,174,255,0.15);border-radius:16px;padding:20px 16px;'>"
     f"<div style='color:#a8b3c0;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;'>Advertising Revenue</div>"
     f"<div style='color:#4aaeff;font-size:2rem;font-weight:900;font-family:monospace;line-height:1.1;'>{kpi2_val}</div>"
     f"<div style='margin-top:4px;'>{kpi2_yoy}</div>"
     f"{kpi2_sub}"
     f"<div style='color:#8b949e;font-size:0.68rem;margin-top:6px;'>{effective_year} &middot; tracked companies only</div></div>"
-    f"<div class='kpi-card' style='animation-delay:0.9s;flex:1;min-width:150px;background:rgba(255,255,255,0.05);border:1px solid rgba(74,174,255,0.15);border-radius:10px;padding:20px 16px;'>"
+    f"<div class='kpi-card' style='animation-delay:0.9s;flex:1;min-width:150px;background:rgba(255,255,255,0.05);border:1px solid rgba(74,174,255,0.15);border-radius:16px;padding:20px 16px;'>"
     f"<div style='color:#a8b3c0;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;'>Combined Market Cap</div>"
     f"<div style='color:#4aaeff;font-size:2rem;font-weight:900;font-family:monospace;line-height:1.1;'>{kpi3_val}</div>"
     f"<div style='margin-top:4px;'>{kpi3_yoy}</div>"
@@ -4789,8 +4790,9 @@ html,body{{margin:0;padding:0;background:#020810;}}
 #conc-slider{{flex:1;accent-color:#4aaeff;cursor:pointer;height:3px;}}
 /* above-bar callout area */
 #conc-above{{position:relative;width:100%;height:0;overflow:visible;}}
-.cab{{position:absolute;border-radius:6px;padding:6px 10px;white-space:nowrap;pointer-events:none;
-  box-shadow:0 2px 8px rgba(0,0,0,.5);transform:translateX(-50%);transition:left 0.5s ease,opacity 0.3s;}}
+.cab{{position:absolute;border-radius:10px;padding:6px 10px;white-space:nowrap;pointer-events:auto;cursor:default;
+  box-shadow:0 2px 8px rgba(0,0,0,.5);transform:translateX(-50%);transition:left 0.5s ease,opacity 0.3s,z-index 0s;z-index:1;}}
+.cab:hover{{z-index:100;transform:translateX(-50%) scale(1.08);box-shadow:0 4px 16px rgba(0,0,0,.7);}}
 .cab-cat{{font-size:9px;font-weight:700;color:rgba(255,255,255,.82);text-transform:uppercase;letter-spacing:.04em;}}
 .cab-amt{{font-size:13px;font-weight:800;color:#fff;margin-top:1px;}}
 .cab-pct{{font-size:10px;color:rgba(255,255,255,.68);margin-top:1px;}}
@@ -4799,10 +4801,10 @@ html,body{{margin:0;padding:0;background:#020810;}}
 .bar-container{{width:100%;height:130px;display:flex;position:relative;z-index:2;
   border-radius:8px;overflow:hidden;border:1px solid #2a2a2a;}}
 .bar-segment{{height:100%;position:relative;border-right:1px solid rgba(255,255,255,0.12);opacity:0.88;
-  flex-shrink:0;overflow:hidden;transition:width 0.7s cubic-bezier(.4,0,.2,1);}}
+  flex-shrink:0;overflow:hidden;transition:width 0.7s cubic-bezier(.4,0,.2,1),opacity 0.2s,transform 0.2s;z-index:1;}}
 .bar-segment:first-child{{border-radius:8px 0 0 8px;}}
 .bar-segment:last-child{{border-right:none;border-radius:0 8px 8px 0;}}
-.bar-segment:hover{{filter:brightness(1.12);}}
+.bar-segment:hover{{opacity:1;z-index:10;filter:brightness(1.15);box-shadow:0 0 16px rgba(255,255,255,0.15);}}
 .seg-label{{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
   padding:0 11px;pointer-events:none;overflow:hidden;}}
 .seg-label-cat{{font-size:9px;font-weight:700;color:rgba(255,255,255,.82);text-transform:uppercase;
@@ -4909,7 +4911,7 @@ function updateYear(idx) {{
   }}).filter(x => x.pct > 0 && x.pct < 8.0);
 
   if (smallSegs.length > 0) {{
-    aboveH = 90;
+    aboveH = Math.max(90, Math.min(180, smallSegs.length * 28 + 50));
     aboveEl.style.height = aboveH + 'px';
     /* compute cumulative positions */
     let cum = 0;
@@ -4920,15 +4922,29 @@ function updateYear(idx) {{
       positions[cat] = cum + pct / 2;
       cum += pct;
     }});
+    /* Collision avoidance: stagger overlapping callout cards vertically */
+    const cardW = 100; /* approx card width in px */
+    const containerW = aboveEl.offsetWidth || 800;
+    let prevRight = -999;
+    let row = 0;
     smallSegs.forEach(item => {{
       const cx = positions[item.cat] / 100;
+      const leftPx = cx * containerW;
+      /* If this card overlaps the previous one, bump it to next row */
+      if (leftPx - cardW/2 < prevRight + 6) {{
+        row++;
+      }} else {{
+        row = 0;
+      }}
+      prevRight = leftPx + cardW/2;
+      const bottomPx = 8 + row * 42;
       const line = document.createElement('div'); line.className = 'cab-line';
       line.style.left = (cx*100)+'%'; line.style.height = aboveH+'px';
       line.style.background = SEG_COLORS[item.cat];
       aboveEl.appendChild(line);
       const card = document.createElement('div'); card.className = 'cab';
       card.style.background = SEG_COLORS[item.cat];
-      card.style.bottom = '8px'; card.style.left = (cx*100)+'%';
+      card.style.bottom = bottomPx+'px'; card.style.left = (cx*100)+'%';
       const cc = document.createElement('div'); cc.className = 'cab-cat'; cc.textContent = item.cat;
       const ca = document.createElement('div'); ca.className = 'cab-amt'; ca.textContent = fmtAmt(item.v);
       const cp = document.createElement('div'); cp.className = 'cab-pct'; cp.textContent = fmtPct(item.pct);

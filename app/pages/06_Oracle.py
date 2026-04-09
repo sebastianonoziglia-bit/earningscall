@@ -536,8 +536,116 @@ def _inject_page_css() -> None:
             text-transform: uppercase;
             color: #64748b;
           }
+
+          /* ── Command Center ─────────────────────────────── */
+          .oracle-cmd-header {
+            margin: 24px 0 14px 0;
+            font: 800 1.1rem/1 "Poppins", sans-serif;
+            letter-spacing: -0.02em;
+            color: #e2e8f0;
+          }
+          .oracle-cmd-subtext {
+            font: 0.78rem/1.5 "DM Sans", sans-serif;
+            color: #64748b;
+            margin: 0 0 18px 0;
+          }
+          .oracle-cmd-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: 6px;
+          }
+          .oracle-cmd-card {
+            position: relative;
+            padding: 18px 16px 16px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            background: linear-gradient(160deg, rgba(30,41,59,0.7), rgba(15,23,42,0.85));
+            cursor: pointer;
+            transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+          }
+          .oracle-cmd-card:hover {
+            border-color: rgba(59, 130, 246, 0.45);
+            background: linear-gradient(160deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95));
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+          }
+          .oracle-cmd-card.active {
+            border-color: #3b82f6;
+            background: linear-gradient(160deg, rgba(30,41,59,0.95), rgba(15,23,42,1));
+            box-shadow: 0 0 0 1px rgba(59,130,246,0.3), 0 12px 32px rgba(0,0,0,0.3);
+          }
+          .oracle-cmd-card.active::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+          }
+          .oracle-cmd-icon {
+            font-size: 1.6rem;
+            line-height: 1;
+            margin-bottom: 10px;
+          }
+          .oracle-cmd-title {
+            margin: 0 0 4px 0;
+            font: 700 0.88rem/1.2 "Poppins", sans-serif;
+            color: #f1f5f9;
+          }
+          .oracle-cmd-desc {
+            margin: 0;
+            font: 0.72rem/1.45 "DM Sans", sans-serif;
+            color: #94a3b8;
+          }
+          .oracle-cmd-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font: 600 0.6rem/1.4 "Poppins", sans-serif;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+          }
+          .oracle-tool-active-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 0 10px 0;
+            border-bottom: 1px solid rgba(148,163,184,0.1);
+            margin-bottom: 16px;
+          }
+          .oracle-tool-active-header .tool-icon {
+            font-size: 1.4rem;
+          }
+          .oracle-tool-active-header .tool-name {
+            font: 700 1rem/1 "Poppins", sans-serif;
+            color: #f1f5f9;
+          }
+          .oracle-tool-active-header .tool-tag {
+            font: 600 0.62rem/1 "Poppins", sans-serif;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: rgba(59,130,246,0.12);
+            color: #60a5fa;
+          }
           @media (max-width: 1080px) {
             .oracle-hero-copy {
+              grid-template-columns: 1fr;
+            }
+            .oracle-cmd-grid {
+              grid-template-columns: 1fr 1fr;
+            }
+          }
+          @media (max-width: 640px) {
+            .oracle-cmd-grid {
               grid-template-columns: 1fr;
             }
           }
@@ -629,28 +737,29 @@ def _build_layer_chart(predictions: pd.DataFrame, metric: str) -> go.Figure:
     fig.update_layout(
         barmode="group",
         height=max(430, len(scoped) * 36),
-        margin=dict(l=10, r=10, t=40, b=10),
+        margin=dict(l=160, r=20, t=40, b=40),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#e6edf3"),
+        font=dict(color="#1e293b"),
         title=dict(
-            text=f"Layer Breakdown · {metric}",
-            font=dict(size=16, color="#e6edf3"),
+            text=f"Layer Breakdown \u00b7 {metric}",
+            font=dict(size=16, color="#0f172a"),
         ),
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
-            font=dict(color="#e6edf3", size=11),
+            font=dict(color="#334155", size=11),
         ),
         xaxis=dict(
             range=[-1.15, 1.15],
             gridcolor="rgba(148,163,184,0.18)",
             zerolinecolor="rgba(148,163,184,0.3)",
-            tickfont=dict(color="#e6edf3"),
-            title=dict(text="Bearish ← Score → Bullish", font=dict(color="#94a3b8", size=11)),
+            tickfont=dict(color="#334155"),
+            title=dict(text="Bearish \u2190 Score \u2192 Bullish", font=dict(color="#64748b", size=11)),
         ),
         yaxis=dict(
             gridcolor="rgba(0,0,0,0)",
-            tickfont=dict(color="#e6edf3", size=12),
+            tickfont=dict(color="#0f172a", size=12),
+            automargin=True,
         ),
     )
     return fig
@@ -812,38 +921,109 @@ def main() -> None:
         st.caption("Signal = transcript momentum · Market = price consensus/Polymarket · Fundamental = financial trajectory · ◆ = weighted composite")
 
     # ══════════════════════════════════════════════════════════════════
-    # Tabbed Analysis Menu — choose what to analyze
+    # Oracle Prediction Dials + Table (always visible — core page content)
+    # ══════════════════════════════════════════════════════════════════
+    st.markdown("<div class='oracle-section-label' style='margin-top:12px;'>Oracle Dials</div>", unsafe_allow_html=True)
+    _render_prediction_cards(filtered)
+
+    st.markdown("<div class='oracle-section-label' style='margin-top:14px;'>Prediction Table</div>", unsafe_allow_html=True)
+    table_frame = _build_table_frame(filtered.sort_values(["confidence", "composite_score"], ascending=[False, False]), factors)
+    st.markdown("<div class='oracle-table-shell'>", unsafe_allow_html=True)
+    st.dataframe(table_frame, use_container_width=True, hide_index=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════
+    # Command Center — Apple-style tool selector
     # ══════════════════════════════════════════════════════════════════
     st.markdown("---")
-    oracle_tabs = st.tabs([
-        "🎯 Predictions",
-        "📊 Revenue Simulator",
-        "🌍 Country Ad Spend",
-        "🧠 Intelligence Layer",
-        "🐟 MiroFish Simulator",
-    ])
 
-    with oracle_tabs[0]:
-        st.markdown("<div class='oracle-section-label' style='margin-top:6px;'>Oracle Dials</div>", unsafe_allow_html=True)
-        _render_prediction_cards(filtered)
+    _TOOL_REGISTRY = [
+        {
+            "key": "revenue_sim",
+            "icon": "📊",
+            "title": "Revenue Simulator",
+            "desc": "Estimate current-year revenue by company from quarterly run rates + signal momentum",
+            "badge": "Live",
+        },
+        {
+            "key": "country_ad",
+            "icon": "🌍",
+            "title": "Country Ad Spend",
+            "desc": "Forecast advertising spend by country and channel using historical growth models",
+            "badge": "Forecast",
+        },
+        {
+            "key": "intelligence",
+            "icon": "🧠",
+            "title": "Intelligence Layer",
+            "desc": "Cross-source derived metrics \u2014 signal divergence, channel exposure, institutional conviction",
+            "badge": "Derived",
+        },
+        {
+            "key": "mirofish",
+            "icon": "🐟",
+            "title": "MiroFish Simulator",
+            "desc": "Multi-agent swarm forecasting \u2014 AI agents debate ad spend scenarios vs GroupM baseline",
+            "badge": "AI",
+        },
+    ]
 
-        st.markdown("<div class='oracle-section-label' style='margin-top:14px;'>Prediction Table</div>", unsafe_allow_html=True)
-        table_frame = _build_table_frame(filtered.sort_values(["confidence", "composite_score"], ascending=[False, False]), factors)
-        st.markdown("<div class='oracle-table-shell'>", unsafe_allow_html=True)
-        st.dataframe(table_frame, use_container_width=True, hide_index=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+    active_tool = st.session_state.get("oracle_active_tool", None)
 
-    with oracle_tabs[1]:
-        _render_revenue_simulator()
+    # Build command card grid as HTML
+    cards_html_parts = []
+    for t in _TOOL_REGISTRY:
+        active_cls = " active" if t["key"] == active_tool else ""
+        cards_html_parts.append(
+            f'<div class="oracle-cmd-card{active_cls}" data-tool="{t["key"]}">'
+            f'<div class="oracle-cmd-badge">{t["badge"]}</div>'
+            f'<div class="oracle-cmd-icon">{t["icon"]}</div>'
+            f'<div class="oracle-cmd-title">{t["title"]}</div>'
+            f'<p class="oracle-cmd-desc">{t["desc"]}</p>'
+            f'</div>'
+        )
 
-    with oracle_tabs[2]:
-        _render_country_predictor()
+    st.markdown(
+        '<div class="oracle-cmd-header">Analysis Tools</div>'
+        '<p class="oracle-cmd-subtext">Select a tool to open it inline. Each tool combines multiple data sources for deeper analysis.</p>'
+        '<div class="oracle-cmd-grid">' + "".join(cards_html_parts) + '</div>',
+        unsafe_allow_html=True,
+    )
 
-    with oracle_tabs[3]:
-        _render_intelligence_section()
+    # Streamlit buttons (hidden-ish, laid out as columns) to capture clicks
+    btn_cols = st.columns(len(_TOOL_REGISTRY), gap="small")
+    for i, t in enumerate(_TOOL_REGISTRY):
+        with btn_cols[i]:
+            is_active = (t["key"] == active_tool)
+            label = f"\u2715 Close {t['title']}" if is_active else f"{t['icon']} {t['title']}"
+            if st.button(label, key=f"cmd_{t['key']}", use_container_width=True):
+                if is_active:
+                    st.session_state["oracle_active_tool"] = None
+                else:
+                    st.session_state["oracle_active_tool"] = t["key"]
+                st.rerun()
 
-    with oracle_tabs[4]:
-        _render_mirofish_panel()
+    # ── Render active tool ────────────────────────────────────────────
+    if active_tool:
+        tool_meta = next((t for t in _TOOL_REGISTRY if t["key"] == active_tool), None)
+        if tool_meta:
+            st.markdown(
+                f'<div class="oracle-tool-active-header">'
+                f'<span class="tool-icon">{tool_meta["icon"]}</span>'
+                f'<span class="tool-name">{tool_meta["title"]}</span>'
+                f'<span class="tool-tag">{tool_meta["badge"]}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if active_tool == "revenue_sim":
+            _render_revenue_simulator()
+        elif active_tool == "country_ad":
+            _render_country_predictor()
+        elif active_tool == "intelligence":
+            _render_intelligence_section()
+        elif active_tool == "mirofish":
+            _render_mirofish_panel()
 
     # Metadata at the very bottom
     with st.expander("Oracle Snapshot Metadata", expanded=False):
@@ -863,21 +1043,9 @@ def _render_revenue_simulator() -> None:
         return
 
     st.markdown(
-        """
-        <div style="margin-top:10px;margin-bottom:6px;">
-          <span style="font-size:1.5rem;">📊</span>
-          <span style="font-size:1.1rem;font-weight:800;color:#e6edf3;margin-left:6px;">
-            Revenue Simulator
-          </span>
-          <span style="font-size:0.75rem;color:#94a3b8;margin-left:12px;">
-            Current-year revenue estimation · Quarterly extrapolation + signal momentum
-          </span>
-        </div>
-        <p style="font-size:0.82rem;color:#94a3b8;margin-top:0;margin-bottom:14px;">
-          Estimates current year revenue from last reported quarters, adjusted by
-          earnings call signal momentum. Select quarters to see partial-year estimates.
-        </p>
-        """,
+        '<p style="font-size:0.82rem;color:#94a3b8;margin-top:0;margin-bottom:14px;">'
+        'Estimates current year revenue from last reported quarters, adjusted by '
+        'earnings call signal momentum. Select quarters to see partial-year estimates.</p>',
         unsafe_allow_html=True,
     )
 
@@ -968,21 +1136,9 @@ def _render_country_predictor() -> None:
         return
 
     st.markdown(
-        """
-        <div style="margin-top:10px;margin-bottom:6px;">
-          <span style="font-size:1.5rem;">🌍</span>
-          <span style="font-size:1.1rem;font-weight:800;color:#e6edf3;margin-left:6px;">
-            Country Ad Spend Predictor
-          </span>
-          <span style="font-size:0.75rem;color:#94a3b8;margin-left:12px;">
-            Channel-level growth models · Historical data extrapolation
-          </span>
-        </div>
-        <p style="font-size:0.82rem;color:#94a3b8;margin-top:0;margin-bottom:14px;">
-          Forecasts advertising spend by country and channel using historical growth patterns (2019-2024).
-          Blends log-linear regression with dampened extrapolation for robust multi-year projections.
-        </p>
-        """,
+        '<p style="font-size:0.82rem;color:#94a3b8;margin-top:0;margin-bottom:14px;">'
+        'Forecasts advertising spend by country and channel using historical growth patterns (2019-2024). '
+        'Blends log-linear regression with dampened extrapolation for robust multi-year projections.</p>',
         unsafe_allow_html=True,
     )
 
@@ -1121,21 +1277,9 @@ def _render_intelligence_section() -> None:
         return
 
     st.markdown(
-        """
-        <div style="margin-top:10px;margin-bottom:6px;">
-          <span style="font-size:1.5rem;">🧠</span>
-          <span style="font-size:1.1rem;font-weight:800;color:#e6edf3;margin-left:6px;">
-            Intelligence Layer
-          </span>
-          <span style="font-size:0.75rem;color:#94a3b8;margin-left:12px;">
-            Cross-source derived metrics · Auto-computed from Supabase + signals
-          </span>
-        </div>
-        <p style="font-size:0.82rem;color:#94a3b8;margin-top:0;margin-bottom:14px;">
-          Combines transcript signals, stock prices, institutional holdings, ad revenue, and GroupM
-          channel forecasts to produce metrics no single source provides.
-        </p>
-        """,
+        '<p style="font-size:0.82rem;color:#94a3b8;margin-top:0;margin-bottom:14px;">'
+        'Combines transcript signals, stock prices, institutional holdings, ad revenue, and GroupM '
+        'channel forecasts to produce metrics no single source provides.</p>',
         unsafe_allow_html=True,
     )
 
@@ -1261,21 +1405,9 @@ def _render_mirofish_panel() -> None:
         return
 
     st.markdown(
-        """
-        <div style="margin-top:10px;margin-bottom:6px;">
-          <span style="font-size:1.8rem;">🐟</span>
-          <span style="font-size:1.2rem;font-weight:800;color:#e6edf3;margin-left:6px;">
-            MiroFish Ad-Spend Simulator
-          </span>
-          <span style="font-size:0.75rem;color:#94a3b8;margin-left:12px;">
-            Multi-agent swarm forecasting · Powered by DeepSeek
-          </span>
-        </div>
-        <p style="font-size:0.82rem;color:#94a3b8;margin-top:0;margin-bottom:14px;">
-          Spawns AI agents with ad-industry personas that react to your workbook data,
-          debate across rounds, and produce a crowd-consensus forecast vs GroupM baseline.
-        </p>
-        """,
+        '<p style="font-size:0.82rem;color:#94a3b8;margin-top:0;margin-bottom:14px;">'
+        'Spawns AI agents with ad-industry personas that react to your workbook data, '
+        'debate across rounds, and produce a crowd-consensus forecast vs GroupM baseline.</p>',
         unsafe_allow_html=True,
     )
 
@@ -1331,6 +1463,40 @@ def _render_mirofish_panel() -> None:
         height=68,
         key="mf_scenario_input",
     )
+
+    # ── Advanced Configuration ─────────────────────────────────────
+    with st.expander("⚙ Advanced Configuration", expanded=False):
+        adv_c1, adv_c2, adv_c3 = st.columns(3, gap="medium")
+        with adv_c1:
+            agent_temp = st.slider(
+                "Agent creativity",
+                min_value=0.1, max_value=1.5, value=0.8, step=0.1,
+                help="Higher = more diverse agent opinions. Lower = more conservative consensus.",
+                key="mf_agent_temp",
+            )
+        with adv_c2:
+            geo_weight = st.select_slider(
+                "Geographic diversity",
+                options=["Low", "Medium", "High"],
+                value="Medium",
+                help="Low = US-heavy agent pool. High = global distribution.",
+                key="mf_geo_weight",
+            )
+        with adv_c3:
+            include_tools = st.multiselect(
+                "Feed into simulation",
+                options=["Revenue Simulator", "Country Forecasts", "Intelligence Layer"],
+                default=[],
+                help="Inject pre-computed metrics from other tools into agent context.",
+                key="mf_include_tools",
+            )
+
+        st.markdown(
+            '<div style="font-size:0.72rem;color:#475569;margin-top:4px;">'
+            'Agent creativity controls LLM temperature. Geographic diversity adjusts the regional '
+            'bias distribution of spawned agents. Tool injection feeds derived metrics into agent prompts for richer analysis.</div>',
+            unsafe_allow_html=True,
+        )
 
     # Cost estimate
     est_cost = estimate_run_cost(n_agents, n_rounds)
