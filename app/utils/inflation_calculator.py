@@ -23,7 +23,7 @@ def _parse_percent_series(series: pd.Series) -> pd.Series:
     return pd.to_numeric(s, errors="coerce")
 
 
-@st.cache_data(ttl=3600 * 24)
+@st.cache_data(ttl=3600 * 24, show_spinner=False)
 def _load_usd_inflation_table_cached(path: str, source_stamp: int) -> pd.DataFrame:
     try:
         df = pd.read_excel(path, sheet_name="USD Inflation").copy()
@@ -52,7 +52,7 @@ def load_usd_inflation_table() -> pd.DataFrame:
     return _load_usd_inflation_table_cached(path, source_stamp)
 
 
-@st.cache_data(ttl=3600 * 24)
+@st.cache_data(ttl=3600 * 24, show_spinner=False)
 def get_price_index(method_col: str = "Official Headline CPI") -> pd.Series:
     """
     Compute a synthetic price index from annual inflation rates.

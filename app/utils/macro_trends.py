@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 from utils.database_service import get_db_connection
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_macro_trends():
     """
     Identify and return the top 5 macro trends across all companies in 2024

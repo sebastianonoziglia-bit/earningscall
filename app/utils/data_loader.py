@@ -30,7 +30,7 @@ AD_MACRO_CATEGORIES = {
     'Radio': ['Radio']
 }
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def _read_country_sheet_cached(excel_path: str, source_stamp: int):
     try:
         return pd.read_excel(excel_path, sheet_name='Country_Advertising_Data_FullVi')
@@ -186,7 +186,7 @@ def read_excel_data():
     }
     return df
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def load_advertising_data(filters):
     """Load advertising data based on filters with optimized caching"""
     try:
@@ -221,7 +221,7 @@ def load_advertising_data(filters):
         logger.error(f"Error loading advertising data: {str(e)}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def get_available_filters():
     """Cache the available filters"""
     _ensure_loader_state()

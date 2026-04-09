@@ -407,7 +407,7 @@ def stream_genie_response(messages: list[dict]) -> str:
     return full_response
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def build_genie_context_from_db(company, year, quarter) -> dict:
     try:
         repo_root = Path(__file__).resolve().parents[2]

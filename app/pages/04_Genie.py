@@ -204,24 +204,24 @@ if 'data_cache' not in st.session_state:
     st.session_state.data_cache = {}
 
 # Optimize caching for financial data - increased TTL and using hash_funcs
-@st.cache_resource(ttl=3600*24, hash_funcs={FinancialDataProcessor: lambda _: None})
+@st.cache_resource(ttl=3600*24, hash_funcs={FinancialDataProcessor: lambda _: None}, show_spinner=False)
 def get_data_processor():
     data_processor = FinancialDataProcessor()
     data_processor.load_data()
     return data_processor
 
 
-@st.cache_resource(ttl=3600 * 24)
+@st.cache_resource(ttl=3600 * 24, show_spinner=False)
 def get_subscriber_processor():
     return SubscriberDataProcessor()
 
 # Cache filter options with longer TTL and prevent recomputation
-@st.cache_data(ttl=3600*24)
+@st.cache_data(ttl=3600*24, show_spinner=False)
 def get_cached_filters():
     return get_available_filters()
 
 # Cache year range computation with specific key
-@st.cache_data(ttl=3600*24)
+@st.cache_data(ttl=3600*24, show_spinner=False)
 def get_available_years(companies_tuple, data_processor_id):
     all_years = []
     for company in companies_tuple:
@@ -230,7 +230,7 @@ def get_available_years(companies_tuple, data_processor_id):
     return sorted(list(set(all_years)))
 
 
-@st.cache_data(ttl=3600 * 24)
+@st.cache_data(ttl=3600 * 24, show_spinner=False)
 def get_advertising_years():
     try:
         df = read_excel_data()
@@ -242,7 +242,7 @@ def get_advertising_years():
         return []
 
 
-@st.cache_data(ttl=3600 * 24)
+@st.cache_data(ttl=3600 * 24, show_spinner=False)
 def get_inflation_years():
     try:
         df = load_usd_inflation_table()
@@ -254,7 +254,7 @@ def get_inflation_years():
         return []
 
 
-@st.cache_data(ttl=3600 * 24)
+@st.cache_data(ttl=3600 * 24, show_spinner=False)
 def get_m2_years():
     try:
         df = get_m2_annual_data(1900, datetime.now().year + 2)
@@ -266,7 +266,7 @@ def get_m2_years():
         return []
 
 
-@st.cache_data(ttl=3600 * 24)
+@st.cache_data(ttl=3600 * 24, show_spinner=False)
 def get_fed_funds_years():
     try:
         df = get_fed_funds_annual_data(1900, datetime.now().year + 2, method="average")
@@ -349,7 +349,7 @@ def _quarter_focus_to_number(label: str):
     return int(match.group(1)) if match else None
 
 
-@st.cache_data(ttl=3600 * 6)
+@st.cache_data(ttl=3600 * 6, show_spinner=False)
 def _load_quarterly_company_metrics_sheet(excel_path: str) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -382,7 +382,7 @@ def _load_quarterly_company_metrics_sheet(excel_path: str) -> pd.DataFrame:
     return q_df
 
 
-@st.cache_data(ttl=3600 * 6)
+@st.cache_data(ttl=3600 * 6, show_spinner=False)
 def _get_quarterly_years_for_companies(excel_path: str, companies: tuple) -> list:
     q_df = _load_quarterly_company_metrics_sheet(excel_path)
     if q_df.empty or not companies:
@@ -413,7 +413,7 @@ def _normalize_company_folder(folder_name: str) -> str:
     return _COMPANY_NAME_NORMALIZE.get(folder_name, folder_name.replace("_", " ").strip())
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_local_transcripts_index() -> dict:
     """Scan earningscall_transcripts/ folder and return {(company, year, quarter): path}."""
     index: dict = {}
@@ -430,7 +430,7 @@ def _load_local_transcripts_index() -> dict:
     return index
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _read_local_transcript(company: str, year: int, quarter: str) -> str:
     """Read a single transcript from local files."""
     idx = _load_local_transcripts_index()
@@ -448,7 +448,7 @@ def _read_local_transcript(company: str, year: int, quarter: str) -> str:
         return ""
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _get_transcript_index(excel_path: str) -> dict:
     """
     Build a lightweight index of available transcripts.
@@ -482,7 +482,7 @@ def _get_transcript_index(excel_path: str) -> dict:
     return {f"{c} {y} {q}": True for (c, y, q) in local_idx.keys()}
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _search_transcript(excel_path: str, company: str, year: int, quarter: str) -> str:
     """Fetch a specific transcript. Tries Google Sheet, falls back to local files."""
     # Try Google Sheet first
@@ -509,7 +509,7 @@ def _search_transcript(excel_path: str, company: str, year: int, quarter: str) -
     return _read_local_transcript(company, int(year), str(quarter).upper().strip())
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _get_active_overview_auto_insights(excel_path: str) -> list[dict]:
     """
     Load active Overview_Auto_Insights rows for Genie system context.
@@ -553,7 +553,7 @@ def _get_active_overview_auto_insights(excel_path: str) -> list[dict]:
         cleaned_rows.append(entry)
     return cleaned_rows
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _extract_forward_signals(excel_path: str, company: str = "", max_signals: int = 200) -> list:
     FORWARD_TRIGGERS = [
         "we expect","we anticipate","we are targeting","we plan to","we intend to",
@@ -715,7 +715,7 @@ MACRO_CATEGORY_MAPPING = {
 }
 
 # Optimize advertising data loading with specific key
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_cached_advertising_data(countries_tuple, metrics_tuple, year_start, year_end):
     # Determine if we need to fetch detailed metrics based on macro categories
     detailed_metrics = []
@@ -733,7 +733,7 @@ def load_cached_advertising_data(countries_tuple, metrics_tuple, year_start, yea
     return load_advertising_data(filters)
 
 # Update the data processing section to handle None values
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def process_metrics_data(df, country, metric, _year_range):
     if df.empty:
         return None
@@ -907,7 +907,7 @@ def load_recession_periods():
     return pd.DataFrame(columns=["period", "start_year", "end_year", "description"])
 
 
-@st.cache_data(ttl=3600 * 24)
+@st.cache_data(ttl=3600 * 24, show_spinner=False)
 def _get_usd_inflation_series(source: str = "Official") -> dict:
     """
     Return a {year: inflation_rate_pct} dict from the 'USD Inflation' sheet.

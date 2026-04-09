@@ -29,7 +29,7 @@ def _resolve_excel_path() -> Optional[str]:
     return resolve_financial_data_xlsx([])
 
 
-@st.cache_data(ttl=3600 * 24)
+@st.cache_data(ttl=3600 * 24, show_spinner=False)
 def _load_m2_from_excel_cached(path: str, source_stamp: int) -> pd.DataFrame:
     """
     Load M2 data from the Excel sheet 'M2_values' (preferred, no hard-coded data).
@@ -105,7 +105,7 @@ def get_connection():
         port=os.getenv('PGPORT')
     )
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_m2_monthly_data(start_year=1999, end_year=None):
     """
     Get monthly M2 supply data between the specified years
@@ -165,7 +165,7 @@ def get_m2_monthly_data(start_year=1999, end_year=None):
         logger.error(f"Error retrieving M2 monthly data: {e}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_m2_annual_data(start_year=1999, end_year=None):
     """
     Get annual M2 supply data between the specified years
@@ -262,7 +262,7 @@ def get_m2_annual_data(start_year=1999, end_year=None):
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_m2_quarterly_data(start_year=1999, end_year=None):
     """
     Get quarter-end M2 series between the specified years.

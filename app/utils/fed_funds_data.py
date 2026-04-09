@@ -26,7 +26,7 @@ def _pick_column(columns_lower_map: dict[str, str], *candidates: str) -> Optiona
     return None
 
 
-@st.cache_data(ttl=3600 * 24)
+@st.cache_data(ttl=3600 * 24, show_spinner=False)
 def _load_fed_funds_from_excel_cached(path: str, source_stamp: int) -> pd.DataFrame:
 
     sheet_candidates = [
@@ -118,7 +118,7 @@ def _load_fed_funds_from_excel() -> pd.DataFrame:
     return _load_fed_funds_from_excel_cached(path, source_stamp)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_fed_funds_monthly_data(start_year: int = 1950, end_year: Optional[int] = None) -> pd.DataFrame:
     if end_year is None:
         end_year = datetime.now().year
@@ -129,7 +129,7 @@ def get_fed_funds_monthly_data(start_year: int = 1950, end_year: Optional[int] =
     return sub.reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_fed_funds_annual_data(
     start_year: int = 1950,
     end_year: Optional[int] = None,

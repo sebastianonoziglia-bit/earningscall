@@ -80,7 +80,7 @@ def _find_col(df: pd.DataFrame, aliases: list[str]) -> str | None:
     return None
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_workbook_sheet_names(excel_path: str) -> list[str]:
     if not excel_path:
         return []
@@ -91,7 +91,7 @@ def get_workbook_sheet_names(excel_path: str) -> list[str]:
         return []
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_sheet_granularity_library(excel_path: str) -> dict[str, str]:
     names = get_workbook_sheet_names(excel_path)
     if not names:
@@ -104,7 +104,7 @@ def get_sheet_granularity_library(excel_path: str) -> dict[str, str]:
     return out
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner=False)
 def get_available_granularity_options(excel_path: str, include_auto: bool = True) -> list[str]:
     library = get_sheet_granularity_library(excel_path)
     available_types = {str(v).strip().title() for v in library.values()}
@@ -126,7 +126,7 @@ def get_available_granularity_options(excel_path: str, include_auto: bool = True
     return list(dict.fromkeys(options))
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner=False)
 def get_quarter_labels_for_year(
     excel_path: str,
     year: int,
@@ -171,7 +171,7 @@ def get_quarter_labels_for_year(
     return [f"Q{q}" for q in sorted(qset)]
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner=False)
 def get_month_labels_for_year(excel_path: str, year: int) -> list[str]:
     if not excel_path:
         return []
@@ -197,7 +197,7 @@ def get_month_labels_for_year(excel_path: str, year: int) -> list[str]:
     return sorted(scope.dt.strftime("%Y-%m").unique().tolist())
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner=False)
 def get_day_labels_for_year(excel_path: str, year: int) -> list[str]:
     if not excel_path:
         return []

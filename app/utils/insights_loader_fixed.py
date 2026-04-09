@@ -141,7 +141,7 @@ def ensure_segment_performance_insights(company, year, db_insights=None):
             conn.close()
 
 # Cached dictionary to avoid repeated database calls
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_company_insights(company, year):
     """
     Get company insights from the database for a specific company and year.
@@ -200,7 +200,7 @@ def get_company_insights(company, year):
         cur.close()
         conn.close()
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def get_segment_insights(company, year):
     """
     Get segment insights from the database for a specific company and year.

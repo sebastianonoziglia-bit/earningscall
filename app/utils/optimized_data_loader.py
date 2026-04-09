@@ -66,7 +66,7 @@ class OptimizedDataLoader:
         preload_time = time.time() - start_time
         logger.info(f"Preloaded frequently accessed data in {preload_time:.2f} seconds")
 
-@st.cache_resource(ttl=900)  # 15 min — ensures fresh Google Sheet data
+@st.cache_resource(ttl=900, show_spinner=False)  # 15 min — ensures fresh Google Sheet data
 def get_data_processor():
     """Get or initialize the data processor with caching."""
     start_time = time.time()

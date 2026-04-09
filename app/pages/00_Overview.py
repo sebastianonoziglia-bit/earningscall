@@ -539,7 +539,7 @@ components.html(
     height=0,
 )
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_continent_geojson():
     candidates = [
         Path("attached_assets/continents.geojson"),
@@ -1726,7 +1726,7 @@ def get_available_years(data_processor):
 
     return sorted(year_set)
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_country_advertising_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     # Supabase-first. The xlsx path parses a ~large sheet on every cold
     # start; if Supabase has the country_advertising_data table we can
@@ -1797,7 +1797,7 @@ def _coerce_numeric(series: pd.Series) -> pd.Series:
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_groupm_channels_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -1842,7 +1842,7 @@ def _load_groupm_channels_df(excel_path: str, source_stamp: int = 0) -> pd.DataF
     return out
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_groupm_granular_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -1884,7 +1884,7 @@ def _load_groupm_granular_df(excel_path: str, source_stamp: int = 0) -> pd.DataF
     return out
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_groupm_total_ad_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -1926,7 +1926,7 @@ def _coerce_percent_series(series: pd.Series) -> pd.Series:
     )
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_stocks_crypto_timeseries_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     # The "Stocks & Crypto" sheet was removed from the workbook. The DXY
     # and VIX fallbacks below expected this sheet to exist; they now
@@ -1962,7 +1962,7 @@ def _load_stocks_crypto_timeseries_df(excel_path: str, source_stamp: int = 0) ->
     return out.sort_values("date")
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_m2_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -2057,7 +2057,7 @@ def _load_m2_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     return yearly[["Year", "M2_B"]].sort_values("Year").reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_m2_quarterly(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -2123,7 +2123,7 @@ def _load_m2_quarterly(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     return quarterly[["year", "quarter", "m2_usd_bn"]].reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_inflation_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -2174,7 +2174,7 @@ def _load_inflation_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.Data
     return out[["Year", "Inflation_YoY"]].sort_values("Year").reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_company_metrics_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -2231,7 +2231,7 @@ def _load_company_metrics_yearly_df(excel_path: str, source_stamp: int = 0) -> p
     return out
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_employee_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -2264,7 +2264,7 @@ def _load_employee_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataF
     return out[["Company", "Year", "Employees"]]
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_global_ad_vs_gdp_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -2314,7 +2314,7 @@ _COUNTRY_INTERNET_METRICS = {
 _COUNTRY_OOH_METRICS = {"Digital OOH", "Traditional OOH"}
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_country_ad_channel_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     src = _load_country_advertising_df(excel_path, source_stamp)
     if src.empty:
@@ -2354,7 +2354,7 @@ def _load_country_ad_channel_yearly_df(excel_path: str, source_stamp: int = 0) -
     return out
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_country_totals_vs_gdp_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -2476,7 +2476,7 @@ def _get_overview_granularity_options(data_processor: FinancialDataProcessor) ->
     return get_available_granularity_options(excel_path, include_auto=True)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_macro_interest_rates_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     raw, _sheet_used = _read_excel_sheet_flexible(
         excel_path=excel_path,
@@ -2528,7 +2528,7 @@ def _load_macro_interest_rates_df(excel_path: str, source_stamp: int = 0) -> pd.
     return out[cols].sort_values(["Year", "QuarterNum"]).reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_macro_gdp_growth_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     raw, _sheet_used = _read_excel_sheet_flexible(
         excel_path=excel_path,
@@ -2577,7 +2577,7 @@ def _load_macro_gdp_growth_df(excel_path: str, source_stamp: int = 0) -> pd.Data
     return out.sort_values(["Year", "QuarterNum"]).reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_macro_labor_market_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     raw, _sheet_used = _read_excel_sheet_flexible(
         excel_path=excel_path,
@@ -2611,7 +2611,7 @@ def _load_macro_labor_market_df(excel_path: str, source_stamp: int = 0) -> pd.Da
     return out.sort_values(["Year", "QuarterNum"]).reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_macro_currency_index_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     raw, _sheet_used = _read_excel_sheet_flexible(
         excel_path=excel_path,
@@ -2657,7 +2657,7 @@ def _load_macro_currency_index_df(excel_path: str, source_stamp: int = 0) -> pd.
     return out.sort_values(["Year", "QuarterNum"]).reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_macro_tech_valuations_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     raw, _sheet_used = _read_excel_sheet_flexible(
         excel_path=excel_path,
@@ -2705,7 +2705,7 @@ def _load_macro_tech_valuations_df(excel_path: str, source_stamp: int = 0) -> pd
     return out.sort_values(["Year", "QuarterNum"]).reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_company_revenue_by_region_yearly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -2734,7 +2734,7 @@ def _load_company_revenue_by_region_yearly_df(excel_path: str, source_stamp: int
     return out.sort_values(["company", "year", "segment_name"]).reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_macro_wealth_by_generation_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     raw, _sheet_used = _read_excel_sheet_flexible(
         excel_path=excel_path,
@@ -2786,7 +2786,7 @@ def _load_macro_wealth_by_generation_df(excel_path: str, source_stamp: int = 0) 
     ].sort_values(["Year", "Country", "Generation"])
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_hardware_smartphone_shipments_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     raw, _sheet_used = _read_excel_sheet_flexible(
         excel_path=excel_path,
@@ -2866,7 +2866,7 @@ def _parse_hours_minutes(value) -> float:
     return float(hours) + (minutes / 60.0)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_country_avg_internet_time_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     raw, _sheet_used = _read_excel_sheet_flexible(
         excel_path=excel_path,
@@ -2941,7 +2941,7 @@ _STREAMING_SERVICE_TO_COMPANY = {
 }
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_company_quarterly_kpis_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     """Build quarterly KPI frame from per-company 'X Quarterly Segments' sheets.
 
@@ -3042,7 +3042,7 @@ def _load_company_quarterly_kpis_df(excel_path: str, source_stamp: int = 0) -> p
     return out.sort_values(["Company", "Year", "QuarterNum"]).reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_company_minute_dollar_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -3075,7 +3075,7 @@ def _load_company_minute_dollar_df(excel_path: str, source_stamp: int = 0) -> pd
     return out[["Platform", "TotalMinutesT", "RevenueB", "DollarPerMinute"]].sort_values("Platform")
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _load_company_subscribers_quarterly_df(excel_path: str, source_stamp: int = 0) -> pd.DataFrame:
     if not excel_path:
         return pd.DataFrame()
@@ -3344,7 +3344,7 @@ def _read_excel_overview_sheet(excel_path: str, sheet_name: str, source_stamp: i
     return raw
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def _list_workbook_sheet_names(excel_path: str, source_stamp: int = 0) -> list[str]:
     if not excel_path:
         return []

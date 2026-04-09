@@ -678,7 +678,7 @@ def _normalize_text_for_compare(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
-@st.cache_resource(ttl=300)
+@st.cache_resource(ttl=300, show_spinner=False)
 def _get_excel_handle(excel_path: str, source_stamp: int):
     """Open the XLSX file once and cache the ExcelFile handle.
 
@@ -4212,7 +4212,7 @@ except (ValueError, TypeError):
     ])
 
 # ── THE HUMAN SIDE — Platform Globe (dynamic from Company_subscribers_values) ─
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def _load_platform_subscriber_data(excel_path: str, source_stamp: int = 0) -> list:
     """Load latest subscriber counts from Company_subscribers_values sheet."""
     PLATFORM_META = {

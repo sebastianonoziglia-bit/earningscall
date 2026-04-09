@@ -95,6 +95,7 @@ _NAV_ITEMS = [
     {"key": "stocks",    "target": "pages/02_Stocks.py",   "label": "Stocks",    "query": "stocks"},
     {"key": "editorial", "target": "pages/03_Editorial.py","label": "Editorial", "query": "editorial"},
     {"key": "genie",     "target": "pages/04_Genie.py",    "label": "Genie",     "query": "genie"},
+    {"key": "oracle",    "target": "pages/06_Oracle.py",   "label": "Oracle",    "query": "oracle"},
 ]
 
 _QUERY_PAGE_MAP = {
@@ -108,6 +109,7 @@ _QUERY_PAGE_MAP = {
     "genie": "pages/04_Genie.py",
     "financial_genie": "pages/04_Genie.py",
     "financial-genie": "pages/04_Genie.py",
+    "oracle": "pages/06_Oracle.py",
 }
 
 _SUPPORTED_LANGS = {"en", "it", "es"}
